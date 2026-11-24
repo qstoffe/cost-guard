@@ -282,11 +282,11 @@ def _token_metrics(roots, entries, complete, start, now, key):
 class StatsObservation:
     """Share only immutable preparation within one pinned multi-period calculation."""
     def __init__(self, roots, valuation, *, now, zone, workday_calendar='SE', model_name=None, model_bucket=None,
-                 shared_history=False):
+                 shared_history=False, prepared_requests=None):
         self.roots, self.valuation = tuple(roots), valuation
         self.now, self.zone = now, zone
         self.workday_calendar = workday_calendar
-        self._timelines, self._requests = {}, None
+        self._timelines, self._requests = {}, prepared_requests
         self._model_names = {}
         self.model_bucket, self.model_name = model_bucket, model_name
         self.shared_history = shared_history

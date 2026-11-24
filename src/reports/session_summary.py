@@ -108,7 +108,9 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
     epoch = getattr(service.source, "observation_epoch", None)
-    key = summary_key(service, root)
+    # Durable report publication requires full evidence and never reads the
+    # disposable scalar cache. Don't also write a second copy of that row.
+    key = summary_key(service, root) if on_evidence is None else None
     cached = None
     if on_evidence is None and not active and not fresh_snapshot:
         try:
@@ -203,7 +205,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
         *(message for message in item.snapshot.messages if message.model is not None)))
     if on_dependencies is not None:
         on_dependencies(identity_values)
-    if item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
+    if key is not None and item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
         values = encode_summary(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
         values['model_identity_dependencies'] = identity_values

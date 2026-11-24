@@ -39,8 +39,12 @@ def handle(handler, value):
             housekeeping = getattr(owner, 'cache_housekeeping', None)
             if housekeeping and value['visible'] and handler.headers.get('X-CG-Viewed') == '1':
                 if request:
-                    with dispatcher.lock:
-                        result = dispatcher.entries.get(request, {}).get('result')
+                    models = getattr(owner, 'model_snapshots', None)
+                    if models is not None:
+                        result = (models.read() or {}).get('result') if request.kind is ReportKind.NORMAL else None
+                    else:
+                        with dispatcher.lock:
+                            result = dispatcher.entries.get(request, {}).get('result')
                     housekeeping.delivered(owner, '/api/data', {'result': result})
                 elif value['section'] == 'watch':
                     housekeeping.use_watch(owner, history=value.get('history', False))
@@ -53,7 +57,11 @@ def handle(handler, value):
                 raise ValueError('invalid_request')
             archive = getattr(owner, 'history_reports', None)
             if archive and request.kind in ARCHIVED_KINDS:
-                handler.reply(200, archive.lookup(request, owner.live.catalog))
+                live = owner.live
+                driver = live.driver
+                failure = driver.error if driver and driver.terminal else live.source_failure
+                handler.reply(200, archive.lookup(request, owner.history_config,
+                    terminal_error=failure.code.value if failure else None))
                 return True
             startup = getattr(owner, 'source_startup', None)
             if startup is not None:
@@ -61,7 +69,7 @@ def handle(handler, value):
                 if not status['ready']:
                     handler.reply(503, {'error': status['error'], 'retryable': status['retryable']})
                     return True
-            if not dispatcher.identity:
+            if not getattr(owner, 'model_snapshots', None) and not dispatcher.identity:
                 handler.reply(503, {'error': 'source_starting', 'retryable': True})
                 return True
             result = dispatcher.lookup(request, retry=value['retry'])

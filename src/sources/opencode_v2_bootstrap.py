@@ -37,14 +37,11 @@ class BootstrapInventory:
     def priorities(self, epoch, observed_roots):
         if epoch != self.epoch:
             return {}
-        # Match the whole root roster. An API row changed after bootstrap can
-        # still be processed, but must not use the older activity hint.
-        if observed_roots.keys() != self.roots.keys():
-            return {}
-        if any(root.created_at_ms != self.roots[key].created_ms for key, root in observed_roots.items()):
-            return {}
+        # Qualify each hint against the first API observation of this epoch.
+        # An unrelated arrival/deletion does not invalidate matching roots.
         return {key: hint.priority_ms for key, root in observed_roots.items()
-                if (hint := self.roots[key]).priority_ms is not None
+                if (hint := self.roots.get(key)) is not None and hint.priority_ms is not None
+                and root.created_at_ms == hint.created_ms
                 and root.title == hint.title and root.updated_at_ms == hint.updated_ms}
 
 
@@ -87,10 +84,10 @@ def read_inventory(path, epoch, *, seconds=1.0):
                 return None
             roots = {}
             for key, title, created, updated, user_seq, user_at, idle_seq, idle_at in db.execute(_INVENTORY_SQL):
-                if (not isinstance(key, str) or not key or key in roots or not isinstance(title, str)
+                if (not isinstance(key, str) or not key or key in roots or title is not None and not isinstance(title, str)
                         or type(created) is not int or type(updated) is not int):
                     return None
-                roots[key] = RootHint(title, created, updated, _activity_hint(user_seq, user_at, idle_seq, idle_at))
+                roots[key] = RootHint(title or key, created, updated, _activity_hint(user_seq, user_at, idle_seq, idle_at))
             return BootstrapInventory(epoch, roots)
     except (sqlite3.Error, OSError, ValueError):
         return None

@@ -86,14 +86,14 @@ def analyze_snapshot(
         tracked_provider=tracked_provider,
         estimator=estimator,
         now_ms=now_ms,
-        subscription_providers=subscription_providers,
+        entries=entries,
     )
     compactions = completed_compactions(
         snapshot,
         now_ms=now_ms,
         tracked_provider=tracked_provider,
         estimator=estimator,
-        subscription_providers=subscription_providers,
+        entries=entries,
     )
     return RootAnalysisBundle(
         root_session_id=snapshot.root.session_id,

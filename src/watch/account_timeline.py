@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 import sqlite3
 from threading import Lock
-from time import monotonic
+from time import monotonic, thread_time, time_ns
 from uuid import uuid4
 
 from src.analysis.account_timeline import period_start, timeline_window
@@ -19,6 +19,7 @@ from src.application.session_quota import source_scope
 from src.cache.session_scope import snapshot_scope
 from src.domain.session_tree import root_activity
 from src.pricing.catalog import PricingCatalog
+from src.reports.projection_cadence import cpu_cooldown
 from src.reports.web_history_evidence import DOMAIN as ARCHIVED_USAGE
 from src.reports.history_snapshots import load as load_snapshots
 from src.reports.history_cohort import structure
@@ -26,6 +27,7 @@ from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
 from . import account_timeline_warm as warm
 from .account_timeline_archive import ArchivedAccountTimeline
+from .account_timeline_snapshots import AccountTimelineSnapshots
 
 
 ROOTS_PER_TURN = 12
@@ -36,6 +38,8 @@ FOREGROUND_PARTIAL_MS = 400
 BACKGROUND_SLICE_MS = 2_000
 BACKGROUND_REFRESH_MS = 60_000
 BACKGROUND_START_MS = 3_000
+ARCHIVE_BACKGROUND_MS = 5_000
+ARCHIVE_BACKGROUND_CPU_SHARE = 0.05
 ACTIVE_CUE_SECONDS = 4
 REFRESH_MS = 15_000
 NO_PUBLISHED_RATES = PricingCatalog(())
@@ -379,16 +383,19 @@ class TimelineHistory:
 class AccountTimeline:
     """Live schedules at most one small slice; HTTP reads detached summaries only."""
 
-    def __init__(self, factory, reads, repository=None, *, archived_usage=None):
+    def __init__(self, factory, reads, repository=None, *, archived_usage=None, notify=None):
         self.history = (ArchivedAccountTimeline(archived_usage) if archived_usage
                         else TimelineHistory(factory, reads, repository))
         self.archive = archived_usage.archive if archived_usage else None
+        self.snapshots = AccountTimelineSnapshots(self.archive, notify) if self.archive else None
         self.archive_generation = None
         self.unavailable_history = frozenset()
         self.archive_live_roots = frozenset()
         self.archive_pending_history = frozenset()
         self.archive_coverage_confirmed = False
         self.archive_progress_roots = None
+        self.archive_terminal = False
+        self.archive_refresh_due = False
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-account-timeline')
         self.lock = Lock()
         self.scope = None
@@ -412,19 +419,30 @@ class AccountTimeline:
         self.public_ready = False
         self.source = None
         self.due = self.last_started = 0
+        self.archive_background_resume = 0
         self.retry_at = 0
         self.background_start = None
         self.closed = False
 
-    def lookup(self, period, revision=None):
+    def lookup(self, period, revision=None, *, zone=None):
+        if self.snapshots is not None:
+            return self.snapshots.lookup(period, revision, zone=zone, now=time_ns() // 1_000_000)
         with self.lock:
             value = self.seeded.get(period, self.results.get(period))
             marker, current = self.marker, self.frame_revision
             roster, ready = self.public_roster, self.public_ready
             acquiring = ready and period in self.active_periods and monotonic() < self.active_until
         return dict(scope=marker, revision=current, unchanged=value is not None and revision == current,
-                     view=value if revision != current else None, series=roster if value is None else (), ready=ready,
-                     acquiring=acquiring)
+                      view=value if revision != current else None, series=roster if value is None else (), ready=ready,
+                      acquiring=acquiring)
+
+    def _publish_snapshots(self, periods, zone, now):
+        if self.snapshots is not None:
+            # Only this tick's owner mutates the report frames; HTTP readers
+            # observe the previous batch until the next batch is committed.
+            self.snapshots.publish(zone=zone, day=self.day, marker=self.marker, now=now, periods=periods,
+                results={**self.results, **self.seeded}, roster=self.public_roster,
+                ready=self.public_ready, active=self.active_periods, active_until=self.active_until)
 
     def tick(self, *, source, observation, accounts, periods, zone, catalog, prices, migration_gap,
              now_ms, available=True, terminal=False, card_today=None, shared_roots=None,
@@ -469,6 +487,7 @@ class AccountTimeline:
                 self.frame_revision += 1
                 self.due = 0
                 self.retry_at = 0
+                self.archive_background_resume = 0
                 self.initial_periods.clear()
                 self.pending_periods.clear()
                 self.active_periods = frozenset()
@@ -486,8 +505,11 @@ class AccountTimeline:
 
         if self.job is not None and self.job.done():
             try:
-                job_marker, values, more, removed, initial, pending, elapsed = self.job.result()
+                job_marker, values, more, removed, initial, pending, elapsed, cpu = self.job.result()
                 if job_marker == marker and (available or self.archive):
+                    if self.archive is not None:
+                        self.archive_background_resume = now_ms + int(
+                            1000 * cpu_cooldown(cpu, ARCHIVE_BACKGROUND_CPU_SHARE))
                     self.initial_periods, self.pending_periods = initial, pending
                     values = {period: value for period, value in values.items()
                               if period_start('today', value['end_ms'], zone) == day
@@ -534,6 +556,11 @@ class AccountTimeline:
         self.foreground = foreground
         if self.archive:
             revision = self.archive.generation(ARCHIVED_USAGE)
+            settled = (changed_source or terminal != self.archive_terminal
+                       or coverage_confirmed != self.archive_coverage_confirmed
+                       or unavailable_history != self.unavailable_history
+                       or bool(self.archive_live_roots - live_roots)
+                       or bool(self.archive_pending_history and not pending_history))
             if (revision, unavailable_history, live_roots, pending_history, coverage_confirmed, progress_roots) != (
                     self.archive_generation, self.unavailable_history, self.archive_live_roots,
                     self.archive_pending_history, self.archive_coverage_confirmed, self.archive_progress_roots):
@@ -543,7 +570,14 @@ class AccountTimeline:
                 self.archive_pending_history = pending_history
                 self.archive_coverage_confirmed = coverage_confirmed
                 self.archive_progress_roots = progress_roots
-                self.due = 0
+                # A warm idle timeline should notice new data without waiting
+                # a minute, but a burst must not cancel the worker's backoff.
+                if self.due >= self.last_started + BACKGROUND_REFRESH_MS:
+                    interval = 1000 if foreground else ARCHIVE_BACKGROUND_MS
+                    self.due = min(self.due, now_ms + interval)
+            self.archive_terminal = terminal
+            if settled:
+                self.archive_refresh_due = True
         if available and not terminal:
             with self.lock:
                 self._publish_today(periods, roster, card_today, source, zone, catalog, migration_gap, now_ms)
@@ -552,37 +586,46 @@ class AccountTimeline:
             self.fast = False
             with self.lock:
                 self.active_periods = frozenset()
+            self._publish_snapshots(periods, zone, now_ms)
             return marker
         if self.background_start is None:
             self.background_start = now_ms + BACKGROUND_START_MS
         cold = (foreground - self.results.keys()) | (foreground & self.initial_periods)
         fast = cold or foreground & self.pending_periods
-        due = max(self.due, self.retry_at, self.background_start if not foreground else 0)
+        due = max(0 if self.archive_refresh_due else self.due, self.retry_at,
+                  self.background_start if not foreground else 0)
+        if self.archive is not None and pending_history and not foreground and not self.archive_refresh_due:
+            due = max(due, self.archive_background_resume)
         with self.lock:
             self.active_periods = cold if self.job is not None else frozenset()
         self.fast = bool(fast and (self.job is not None or due <= now_ms + FOREGROUND_SLICE_MS))
         minimum = FOREGROUND_SLICE_MS if fast else 1000 if foreground else BACKGROUND_SLICE_MS
         if self.archive is not None:
-            minimum = 1000  # Coalesce archive commits instead of rebuilding for every backfill root.
+            minimum = (ARCHIVE_BACKGROUND_MS if pending_history and not foreground and not self.archive_refresh_due
+                       else 1000)
         if self.job is not None or now_ms < max(due, self.last_started + minimum):
+            self._publish_snapshots(periods, zone, now_ms)
             return marker
         self.last_started = now_ms
+        self.archive_refresh_due = False
 
         def step():
             started = monotonic()
+            cpu = thread_time()
             extra = dict(unavailable_history=unavailable_history, live_roots=live_roots, progress_roots=progress_roots,
                           pending_history=pending_history, source_available=coverage_confirmed) if self.archive else {}
             values, more, removed = self.history.step(source, observation, sorted(periods), roster,
                 zone, catalog, prices, migration_gap, now_ms, foreground=bool(fast), preferred=foreground,
                  shared_roots=shared_roots, require_prices=require_background_prices and not foreground, **extra)
             return (marker, {period: value.to_json() for period, value in values.items()}, more, removed,
-                     self.history.initial_periods.copy(), self.history.pending_periods.copy(),
-                     int((monotonic() - started) * 1000))
+                      self.history.initial_periods.copy(), self.history.pending_periods.copy(),
+                      int((monotonic() - started) * 1000), thread_time() - cpu)
 
         self.job = self.pool.submit(step)
         with self.lock:
             self.active_periods = cold
             self.active_until = monotonic() + ACTIVE_CUE_SECONDS
+        self._publish_snapshots(periods, zone, now_ms)
         return marker
 
     def _publish_today(self, periods, roster, today, source, zone, catalog, migration_gap, now_ms):

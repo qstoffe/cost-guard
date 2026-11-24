@@ -6,8 +6,12 @@ never introduces a private ledger for deleted or pruned sessions.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from dataclasses import dataclass
+from functools import cache
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Callable, Mapping
 
+from src.analysis.models import TraceEntry
 from src.analysis.token_mix import model_token_mixes, priced_token_mix
 from src.analysis.valuation import physical_usage_key, unique_usage
 from src.analysis.timezones import calendar_periods
@@ -25,6 +29,14 @@ if TYPE_CHECKING:
 HistoryProgress = Callable[[str, int | None], None]
 HISTORY_NOTE = ("History includes OpenCode usage data that is still available; "
                 "deleted or pruned history is not reconstructed.")
+
+
+@dataclass(frozen=True, slots=True)
+class TokenMixUsage:
+    entries: tuple[TraceEntry, ...]
+    prompt_of: Mapping[TraceEntry, tuple[str, str]]
+    undated: int
+    archived: bool
 
 
 def _model_key(model: ModelRef) -> str:
@@ -76,44 +88,59 @@ def build_token_mix_history(service: ReportService, progress: HistoryProgress, *
     return history_projection(service, reference, entries, prompt_of, progress, scope=scope)
 
 
-def history_projection(service, reference, entries, prompt_of, progress, *, valuation=None, scope=None,
-                       archived=False):
-    """One CLI/Web semantic owner; callers may reuse revision-verified usage facts."""
-    valuation = valuation or reference.reference_category_valuation
-    progress(WorkProgress("Pricing token categories", "finalizing"), None)
+def prepare_history_usage(entries, prompt_of, *, archived=False):
+    """Reconcile duplicates across the whole population before applying any period."""
     archival_prompts = {key[1:]: value for entry, value in prompt_of.items()
                         if archived and (key := physical_usage_key(entry)) is not None}
     usage = unique_usage(entries, shared_history=archived)
     if archived:
         prompt_of = {entry: value for entry in usage
                      if (value := prompt_of.get(entry) or archival_prompts.get((physical_usage_key(entry) or ())[1:]))}
+    return TokenMixUsage(usage, MappingProxyType(dict(prompt_of)),
+                         sum(entry.completed_at_ms <= 0 for entry in usage), archived)
+
+
+def history_projection(service, reference, entries, prompt_of, progress, *, valuation=None, scope=None,
+                       archived=False):
+    """One CLI/Web semantic owner; callers may reuse revision-verified usage facts."""
+    progress(WorkProgress("Pricing token categories", "finalizing"), None)
+    return prepared_history_projection(service, reference, prepare_history_usage(entries, prompt_of, archived=archived),
+                                       valuation=valuation, scope=scope)
+
+
+def prepared_history_projection(service, reference, prepared, *, valuation=None, scope=None):
+    valuation = valuation or reference.reference_category_valuation
+    usage, prompt_of = prepared.entries, prepared.prompt_of
+    model_key = cache(_model_key)
     period = {}
     undated = 0
     if scope is not None:
         start = dict(calendar_periods(service.timezone_id, service.now_ms))[scope]
-        undated = sum(entry.completed_at_ms <= 0 for entry in usage)
+        undated = prepared.undated
         # Deduplicate physical requests BEFORE scope membership. Child calls use
         # their own canonical event time, not their parent's prompt start.
         usage = [entry for entry in usage if (start is None or
             entry.completed_at_ms >= start) and entry.completed_at_ms <= service.now_ms]
         period = dict(period=scope, start_ms=start, end_ms=service.now_ms)
-    groups = model_token_mixes(usage, prompt_of, valuation, model_key=_model_key)
+    groups = model_token_mixes(usage, prompt_of, valuation, model_key=model_key)
     warnings = tuple(service.selection.warnings)
     if undated:
         warnings += (f"Request time unavailable for {undated} recorded calls; undated usage is included only in All time.",)
     # All-history scope: any V1 gap may make the result incomplete.
     notes = [('History includes verified usage saved locally, including previously observed deleted sessions.'
-              if archived else HISTORY_NOTE), *migration_gap_notes(service.selection.migration_gap)]
+               if prepared.archived else HISTORY_NOTE), *migration_gap_notes(service.selection.migration_gap)]
     # Executed history is not a current-entitlement/model-picker roster.
     # Keep every observed model, including retired models and other routes.
     rows = []
     by_model = {}
     for entry in usage:
-        by_model.setdefault(_model_key(entry.model), []).append(entry)
+        by_model.setdefault(model_key(entry.model), []).append(entry)
 
+    @cache
     def catalog_model(model):
         return None if unverified_alias(model.model, model.provider) else reference.resolve_reference(model.model)
 
+    @cache
     def publisher_key(model):
         matched = catalog_model(model)
         publisher = token_mix_publisher(model, matched) if scope is not None else model_publisher(matched)
@@ -126,7 +153,7 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
         web_name = (matched.model.display_name or matched.model.model) if matched else (
             group.model.recorded_model if unverified_alias(group.model.model, group.model.provider) else
             group.model.display_name or group.model.recorded_model)
-        key = _model_key(group.model)
+        key = model_key(group.model)
         # Model groups can span routes. Never infer their manufacturer from the
         # last request; publisher aggregates below still use each request's facts.
         manufacturers = {publisher_key(entry.model) for entry in by_model[key]}
@@ -135,8 +162,8 @@ def history_projection(service, reference, entries, prompt_of, progress, *, valu
             "—" if publisher == "Unknown / unverified" else publisher, key, observed_totals(by_model[key]), web_name))
     rows.sort(key=lambda row: (-sum(row.mix.costs or ()), -row.calls, row.model))
     # The total reprices the same shown requests directly, never rounded per-model rows.
-    shown_keys = {_model_key(group.model) for group in groups}
-    shown_usage = [entry for entry in usage if _model_key(entry.model) in shown_keys]
+    shown_keys = {model_key(group.model) for group in groups}
+    shown_usage = [entry for entry in usage if model_key(entry.model) in shown_keys]
     by_publisher = {}
     for entry in shown_usage:
         by_publisher.setdefault(publisher_key(entry.model), []).append(entry)

@@ -22,10 +22,12 @@ Source-local areas:
   `diagnostics/cost-guard-diagnostics.zip`; never included in package copies.
 
 Durable Web history is in the installation's ignored
-`cache/cost-guard-web-history-v1.sqlite3`. The separate
+`cache/cost-guard-report-v1.sqlite3`. The separate
 `cache/cost-guard-cache-v3.sqlite3` is a reconstructible analysis cache.
-An in-place Git update keeps the directory. Web upgrades import readable history
-from obsolete cache files and remove those files only after a committed readback.
+The first startup with the new report cache rebuilds history from OpenCode and
+retires recognized obsolete stores without importing their cached history.
+Subsequent in-place updates keep the new cache. Fully ready history survives
+ordinary source deletion; migrations normally retain it and backfill new fields.
 Exit Cost Guard before moving the whole installation so no process is writing
 its SQLite files. A new source-only folder starts cold; it does not search
 other installations or automatically copy private evidence.

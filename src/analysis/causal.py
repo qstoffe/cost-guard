@@ -134,9 +134,11 @@ class _RootTimeline:
 
 def _root_timeline(
     snapshot: SessionSnapshot, subscription_providers: frozenset[str] = frozenset(),
-    tracked_provider: ProviderScope = TRACKED_PROVIDER_DEFAULT,
+    tracked_provider: ProviderScope = TRACKED_PROVIDER_DEFAULT, *,
+    entries: tuple[TraceEntry, ...] | None = None,
 ) -> _RootTimeline:
-    entries = trace_entries(snapshot, subscription_providers=subscription_providers)
+    if entries is None:
+        entries = trace_entries(snapshot, subscription_providers=subscription_providers)
     visible = tuple(_visible_prompt_events(snapshot))
     return _RootTimeline(
         entries=entries,
@@ -608,8 +610,9 @@ def build_prompt_records(
     estimator: CostEstimator | None = None,
     now_ms: int | None = None,
     subscription_providers: frozenset[str] = frozenset(),
+    entries: tuple[TraceEntry, ...] | None = None,
 ) -> tuple[PromptRecord, ...]:
-    timeline = _root_timeline(snapshot, subscription_providers, tracked_provider)
+    timeline = _root_timeline(snapshot, subscription_providers, tracked_provider, entries=entries)
     records = []
     for ref in prompt_references(snapshot, since_ms=since_ms, timeline=timeline):
         record = build_prompt_record(

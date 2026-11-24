@@ -20,14 +20,15 @@ from src.reports.models import SessionUsageRow
 from src.reports.session_summary import session_summary
 from src.reports import web_history_evidence
 from src.sources.errors import SourceError
-from src.watch.models import SessionPreview
 
 from .detail_archive import acquired_detail
 from .history_queue import HistoryQueue
 from .session_active_snapshots import ActiveSnapshotOffers
 from .session_archive import SessionArchive, cached_page, retain_pending_metrics, retain_readable_fields
 from .session_epoch_page import ARRIVAL_SECONDS, epoch_page, recent_live_roots, sort_value
+from .session_previews import archived_previews, live_previews
 from .session_quota import source_scope
+from .session_report_runtime import publish_report_runtime
 from .session_catalog_scope import (
     PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population, in_window, retain_live_arrivals,
 )
@@ -41,9 +42,6 @@ INTERACTIVE_ADMISSION_SECONDS = 0.35
 PROMPT_FRESHNESS_MS = 15_000
 UNCHANGED_ACTIVE_READ_SECONDS = 15
 FINISH_PLACEMENT_MS = 120_000
-# Maximum Mini viewport (10) plus a small scrollback window. The card
-# scheduler still owns bounded source admission; this shortlist is in-memory.
-MINI_PREVIEW_LIMIT = 15
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +61,7 @@ class PromptEvidence:
 
 class SessionCatalog:
     def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000),
-                 timezone_id="UTC", archive=None, legacy_archive=None, archive_upgrade=None):
+                 timezone_id="UTC", archive=None):
         self.clock = clock
         self.clock_ms = clock_ms
         self.lock = Lock()
@@ -115,8 +113,7 @@ class SessionCatalog:
         self.preview_totals = {}
         self.wake_identity = uuid4().hex
         self.wake_revision = 0
-        self.archive = (SessionArchive(archive, legacy_archive, timezone_id=timezone_id, upgrade=archive_upgrade)
-                        if archive is not None else None)
+        self.archive = SessionArchive(archive) if archive is not None else None
         self.history_pending = {}
         self.history_queue = HistoryQueue()
         self.history_turn = False
@@ -133,10 +130,6 @@ class SessionCatalog:
         self.archive_retry_at = 0
         self.archive_target = None
         self.archive_job = None
-        self.legacy_job = None
-        self.legacy_attempts = 0
-        self.legacy_retry_at = 0
-        self.legacy_done = False
         self.archive_stopping = Event()
         self.archive_pool = (ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-archive-restore')
                              if self.archive is not None else None)
@@ -175,24 +168,15 @@ class SessionCatalog:
         if archive is None:
             return
         with self.lock:
-            if self.archive_stopping.is_set():
+            if self.archive_stopping.is_set() or archive.loaded:
                 return
             now = self.clock()
-            if not archive.loaded:
-                if self.archive_job is not None or now < self.archive_retry_at:
-                    return
-                self.archive_attempts += 1
-                self.archive_job = job = self.archive_pool.submit(archive.load)
-                complete = self._archive_complete
-            else:
-                if (archive.legacy is None or self.legacy_done or self.legacy_job is not None
-                        or now < self.legacy_retry_at):
-                    return
-                self.legacy_attempts += 1
-                self.legacy_job = job = self.archive_pool.submit(archive.load_legacy, self.archive_stopping.is_set)
-                complete = self._legacy_complete
+            if self.archive_job is not None or now < self.archive_retry_at:
+                return
+            self.archive_attempts += 1
+            self.archive_job = job = self.archive_pool.submit(archive.load)
         # A completed future calls back immediately; never attach under self.lock.
-        job.add_done_callback(complete)
+        job.add_done_callback(self._archive_complete)
 
     @staticmethod
     def _archive_backoff(attempt):
@@ -215,38 +199,6 @@ class SessionCatalog:
                 self.archive_revision += 1
                 self._restore_archived_rows()
             self._archive_publication()
-
-    def _legacy_complete(self, job):
-        if job.cancelled():
-            return
-        (rows, authorities), retry = job.result()
-        with self.lock:
-            self.legacy_job = None
-            if self.archive_stopping.is_set():
-                return
-            changed = False
-            for key, imported in rows.items():
-                existing = self.archive.rows.get(key)
-                # A batch can complete after a newer live write. Fill gaps but
-                # never replace an acquired row with its legacy counterpart.
-                authority = authorities[key]
-                previous = self.archive.authorities.get(key)
-                if previous is None or self.archive.prefers(authority, previous):
-                    row = retain_readable_fields(imported, existing)
-                    self.archive.authorities[key] = authority
-                else:
-                    row = retain_readable_fields(existing, imported)
-                if row != existing:
-                    changed = True
-                    self.archive.rows[key] = row
-                    if key in self.rows:
-                        self.rows[key] = retain_readable_fields(self.rows[key], row)
-            self.legacy_done = not retry
-            self.legacy_retry_at = self.clock() + self._archive_backoff(self.legacy_attempts)
-            if changed:
-                self.archive_revision += 1
-            if changed or self.legacy_attempts == 1 or self.legacy_done:
-                self._archive_publication()
 
     def _archive_publication(self):
         self._record_history_pending()
@@ -515,64 +467,8 @@ class SessionCatalog:
             self._schedule_history(key, now=now, latest=latest)
         self._publish_report_runtime()
 
-    def _report_pending_value(self, key, live):
-        if key in live or key not in self.roots:
-            return None
-        if self._archive_unavailable(key):
-            return self.activity.get(key), True
-        if key in self.history_pending:
-            previous = self.archive.authorities.get(key)
-            if previous is None or previous[3] != self.archive_target:
-                return self.history_pending[key], False
-        return None
-
-    def _report_live_value(self, key):
-        if key not in self.roots:
-            return None
-        if self._running(key):
-            row, = self._rows((key,))
-            return (row, row.prompt_started_ms, None) if row.prompt_started_ms is not None else None
-        finish = self.recent_finishes.get(key)
-        if finish is not None and key in self.archive.rows:
-            row, = self._rows((key,))
-            return row, None, finish
-        return None
-
     def _publish_report_runtime(self, keys=None):
-        """Writer-side materialization. Report reads never enter the catalog lock."""
-        if not self.archive.loaded:
-            return
-        status = self.state, self.index_terminal
-        live_roots = self.running_roots | self.recent_finishes.keys()
-        live_keys = live_roots | self.report_live.keys() if keys is None else keys
-        live = {}
-        for key in live_keys:
-            value = self._report_live_value(key)
-            if self.report_live.get(key) != value:
-                live[key] = value
-        if keys is None:
-            pending_keys = (self.history_pending.keys() | self.report_pending.keys() |
-                            self.archive_rejections.keys() | self.failures.keys())
-        else:
-            pending_keys = keys
-        waiting = self.active | self.running_roots | self.live_arrivals
-        pending = {}
-        for key in pending_keys:
-            value = self._report_pending_value(key, waiting)
-            if self.report_pending.get(key) != value:
-                pending[key] = value
-        if status == self.report_status and not pending and not live:
-            return
-        if self.archive.update_runtime(state=status[0], terminal=status[1], reset_pending=False,
-                                       pending=pending, live=live):
-            self.report_status = status
-            for published, changes in ((self.report_pending, pending), (self.report_live, live)):
-                for key, value in changes.items():
-                    if value is None:
-                        published.pop(key, None)
-                    else:
-                        published[key] = value
-            self.wake_revision += 1
+        publish_report_runtime(self, keys)
 
     def _schedule_history(self, key, *, now=None, latest=None):
         if key not in self.history_pending:
@@ -722,6 +618,8 @@ class SessionCatalog:
                     self._schedule_history(key)
             self.generation += 1
             self.wake_revision += 1
+            if self.archive is not None:
+                self._publish_report_runtime(finished)
 
     def _record_prompt(self, key, evidence, *, wake=False):
         now = self.clock_ms()
@@ -805,12 +703,16 @@ class SessionCatalog:
                     if self.archive is not None else any(self._eligible(key) for key in targets))
             return self.state == "observed" and bool(targets) and (work or self.clock() - self.checked_at >= 60)
 
-    def history_ready(self):
-        """Only eligible historical roots can advance the scalar lane between Live ticks."""
+    def archive_work_ready(self, scope=None):
+        """Recheck due history and urgent work without renewing source proofs."""
         with self.lock:
             if self.archive is None or self.state != 'observed' or self.index_unavailable:
                 return False
-            return self._next_history() is not None
+            if scope is not None and (self.last_observation.source_epoch != scope[2]
+                                      or self.archive.partition != scope_partition(scope)):
+                return False
+            return self._next_history() is not None or any(
+                self._eligible(key) for key in self._archive_urgent() & self.roots.keys())
 
     def index_failed(self, reason='index_unavailable', *, terminal=False):
         with self.lock:
@@ -926,7 +828,7 @@ class SessionCatalog:
                 return min(priority, key=lambda key: self.attempted.get(key, -100))
         return min(candidates, key=lambda key: (self.attempted.get(key, -100), self.discovery[key]))
 
-    def tick(self, service, *, fresh_snapshots=False):
+    def tick(self, service, *, fresh_snapshots=False, cancelled=None):
         scope = source_scope(service.source) if self.archive is not None else None
         dependencies = dependency_signature((service._dependencies(service._load_catalog()),
                                               service._load_comparison_catalog().diagnostic_signature))
@@ -977,6 +879,8 @@ class SessionCatalog:
                 self._clear_epochs()
                 self.generation += 1
         for number in range(INTERACTIVE_ATTEMPTS):
+            if cancelled is not None and cancelled():
+                break
             extension = number >= PASSIVE_ATTEMPTS
             # Spend the extra budget only while there is eligible expanded
             # navigation demand. The next root rechecks interest/cancellation;
@@ -1110,6 +1014,7 @@ class SessionCatalog:
                                 if saved:
                                     self.archive.rows[key] = retain_readable_fields(row, self.archive.rows.get(key))
                                     self.archive.authorities[key] = actual, dependencies, identity_values, partition, captured_at
+                                    self.report_pending.pop(key, None)  # Removed in the same ready-row commit.
                                     self.archive_rejections.pop(key, None)
                                     self.finalize_roots.discard(key)
                                 elif unqualified:
@@ -1223,25 +1128,6 @@ class SessionCatalog:
                 and not (sort == 'effort' and (self.rows[key].effort_pending or not self.rows[key].effort_qualified))
                 and not (sort == 'ctx' and not self.rows[key].context_qualified))
 
-    def _progress(self, sort, pending, selected, indexed, pinned, candidates, scope=False):
-        keys = candidates if pending or scope else tuple(row.session_id for row in selected)
-        completed = indexed if pending or scope else sum(self._current(key) for key in keys)
-        failed = [key for key in keys if key in self.failures and self.failures[key][1]]
-        waiting = [key for key in keys if key in self.failures]
-        reason = ('source_unavailable' if self.state == 'source_unavailable' else
-                   self.index_failure if self.index_unavailable else
-                  self.failure_reasons.get((failed or waiting)[0], 'source_key_unavailable') if waiting else None)
-        return dict(generation=self.generation, phase='index' if pending else 'page',
-             status='failed' if failed or self.index_terminal else 'pending' if reason or pending or completed < len(keys) else 'ready',
-             retryable=not (failed or self.index_terminal),
-            completed=completed, total=len(keys), reason=reason,
-            failed=len(failed), waiting=sum(key in self.failures for key in keys),
-            pinned=pinned, metrics=dict(self.metrics),
-            revalidating=sum(key in self.rows and not self._key_current(key, sort) for key in keys),
-            work=dict(self.work) if self.work else dict(active=False, sequence=self.work_sequence,
-                stage='waiting_retry' if any(key in self.failures for key in keys) else
-                      'queued' if pending or completed < len(keys) else 'ready'))
-
     def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None, period="today",
              navigation=None, applied=None, cancelled=None, passive=False):
         if period not in PERIODS:
@@ -1262,53 +1148,8 @@ class SessionCatalog:
                 del self.leases[token]
 
     def previews(self, excluded=(), *, limit=5):
-        """Small all-time Live projection; no lease, IO, hydration or proof gate.
-
-        Reuse current shared scalar facts, never a browser's pinned epoch. Metadata
-        is an activity estimate, not prompt completion. Next-context has a separate
-        owner and is deliberately absent from this DTO.
-        """
         with self.lock:
-            limit = max(0, min(MINI_PREVIEW_LIMIT, limit))
-            if self.last_observation is None or not limit:
-                return ()
-            excluded = set(excluded) | self.active
-            now = self.clock_ms()
-            def total_scope(key):
-                return (self.revisions.get(key), self.roots[key].provenance,
-                    self.last_observation.source_epoch, self.dependencies, self.timezone_id)
-            def candidate(key):
-                row = self.rows.get(key)
-                current = (key in self.valid and self.valid[key][0] == self.revisions.get(key)
-                    and not self.failures.get(key, (None, False))[1])
-                if key in excluded or self._running(key):
-                    return None
-                at = row.last_activity_ms if self._activity_current(key) else self.activity.get(key)
-                at = at if type(at) is int and 0 < at <= now else None
-                scope = total_scope(key)
-                previous = None if self.failures.get(key, (None, False))[1] else self.preview_totals.get(key)
-                total = (row.ccost if current and row is not None and row.complete else
-                    previous[1] if previous is not None and previous[0] == scope else None)
-                failure = self.failures.get(key)
-                if total is not None:
-                    total_state = ("retained" if self.state != 'observed' or self.index_unavailable or failure
-                        or not current or not row.complete else "ready")
-                elif self.index_terminal or failure and failure[1]:
-                    total_state = "unavailable"
-                elif failure or self.index_unavailable or self.state == 'source_unavailable':
-                    total_state = "retrying"
-                else:
-                    total_state = "partial" if current else "pending"
-                return SessionPreview(key, self.roots[key].title or "Untitled session", at,
-                    "events" if self._activity_current(key) else "catalog",
-                    total, total is not None, total_state=total_state)
-            # Bounded top-K output/memory; no full-history sort or capture.
-            selected = tuple(nsmallest(limit, (value for key in self.roots
-                if (value := candidate(key)) is not None),
-                key=lambda value: (-(value.activity_ms or 0), value.session_id)))
-            self.preview_totals = {value.session_id: (total_scope(value.session_id), value.total_ccost)
-                for value in selected if value.total_ccost is not None}
-            return selected
+            return live_previews(self, excluded, limit)
 
     def archived_previews(self, *, limit=10):
         """The Watch history worker uses recorded ranks even without a live catalog."""
@@ -1316,9 +1157,4 @@ class SessionCatalog:
             return ()
         with self.lock:
             candidates = tuple(self.archive.rows.values())
-        selected = nsmallest(limit, candidates, key=lambda row: (
-            -(row.activity_latest_ms or row.last_activity_ms or 0), row.session_id))
-        return tuple(SessionPreview(row.session_id, row.title, row.last_activity_ms or row.activity_latest_ms,
-                                    'events' if row.last_activity_ms else 'catalog', row.ccost, row.complete,
-                                    hydration_state='retained', total_state='retained' if row.ccost is not None
-                                    else 'unavailable', empty_history=row.empty_history) for row in selected)
+        return archived_previews(candidates, limit)

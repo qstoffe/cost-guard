@@ -26,6 +26,8 @@ from .dispatch import DataDispatcher, source_identity
 from .cache_housekeeping import CacheHousekeeping
 from .database_sizes import database_sizes
 from .history_reports import HistoryReports
+from .report_cache_events import ReportCacheEvents
+from .session_cache_events import SessionCacheEvents
 from .watch_history import WatchHistory
 
 
@@ -38,6 +40,7 @@ class WebHost:
         self.control = secrets.token_hex(32)
         self.stopping = Event()
         self.stopped = Event()
+        self._maintenance_wake = Event()
         self._lock = Lock()
         self.reason = None
         self.ready = False
@@ -61,15 +64,20 @@ class WebHost:
             previous = store.directory if store else previous_archive_directory
             if directory is not None:
                 archive = WebArchive(directory, previous_directory=previous, retire_previous=previous is not None,
-                    notify_sessions=lambda revision: self.events.publish('sessions_cache', dict(revision=revision)))
+                    retain_writer=True,
+                    notify_sessions=lambda times: self.session_cache_events.committed(times))
             usage = ArchivedUsage(archive) if archive is not None else None
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
         if jobs is None:
-            self.dispatcher = (DataDispatcher(self.jobs, owner_kinds=(ReportKind.NORMAL,))
+            self.dispatcher = (DataDispatcher(self.jobs, owner_kinds=(ReportKind.NORMAL,), archive=archive)
                                if usage else DataDispatcher(self.jobs))
-        self.history_reports = HistoryReports(usage, self.dependencies.prices) if usage else None
-        self.history_accounts = AccountTimeline(None, None, archived_usage=usage) if usage else None
+        self.model_snapshots = self.dispatcher.models if usage else None
+        self.report_cache_events = ReportCacheEvents(self.events) if usage else None
+        notify_reports = self.report_cache_events.committed if usage else None
+        self.history_reports = HistoryReports(usage, self.dependencies.prices, notify=notify_reports) if usage else None
+        self.history_accounts = AccountTimeline(None, None, archived_usage=usage,
+                                               notify=notify_reports) if usage else None
         self.watch_history = WatchHistory(usage, self.dependencies.prices, self.events.publish) if usage else None
         self.history_config = {}
         if usage:
@@ -80,13 +88,17 @@ class WebHost:
                 # authorization, lifecycle cleanup, or reading local history.
                 pass
         self.history_zone = str(self.history_config.get('timezone') or ('Europe/Stockholm' if archive else 'UTC'))
+        self.session_cache_events = SessionCacheEvents(self.events, self.history_zone) if archive else None
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
              timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher and not usage else None,
-              archive=archive,
+               archive=archive,
              timezone_id=self.history_zone) if live_factory else None
+        if archive is not None and previous is not None:
+            archive.bind_exclusive_runtime(sessions=self.live.catalog.archive.run,
+                                           details=self.live.details.snapshots.run)
         self.server = None
         self.thread = None
-        self.cache_housekeeping = CacheHousekeeping(root)
+        self.cache_housekeeping = CacheHousekeeping(root, defer_demand=archive is not None)
         self.log_housekeeping = LogHousekeeping(root)
         from .benchmark import BenchmarkLane
         self.benchmark = BenchmarkLane(root)
@@ -123,6 +135,7 @@ class WebHost:
             if not self.stopping.is_set():
                 self.reason = reason
                 self.stopping.set()
+                self._maintenance_wake.set()
                 self.events.close(reason)
                 if self.live:
                     self.live.stopping.set()
@@ -171,10 +184,20 @@ class WebHost:
             self.ready = True
             self.log_housekeeping.start()
 
-    def _serve(self):
+    def _listen(self):
         try:
             while not self.stopping.is_set():
                 self.server.handle_request()
+        except BaseException as error:
+            self.runtime_failed(error)
+
+    def _serve(self):
+        listener = Thread(target=self._listen, name="cost-guard-http-listener")
+        try:
+            listener.start()
+            while not self.stopping.is_set():
+                self._maintenance_wake.clear()
+                cadence = 0.05
                 previous = self.guard.status
                 status = self.guard.check()
                 if status == "source_changed":
@@ -189,6 +212,7 @@ class WebHost:
                         self.stop('source_changed')
                 if not self.stopping.is_set():
                     if self.history_reports:
+                        self.session_cache_events.roll_calendar()
                         self.live.catalog.archive_maintenance()
                         self.events.publish('history', dict(catalog_hint=self.live.catalog.live_hint(),
                                             detail_hints=self.live.details.archive_hints()))
@@ -201,7 +225,9 @@ class WebHost:
                             foreground=self.dispatcher.history_foreground())
                         self._tick_history_accounts(selection)
                         self.watch_history.tick(self.live.catalog, self.history_zone,
-                            self.history_config.get('ccostDisplayUnit', 'credits'), int(time.time() * 1000))
+                            self.history_config.get('ccostDisplayUnit', 'credits'), int(time.time() * 1000),
+                            foreground=self.dispatcher.watch_foreground(),
+                            price_signature=self.dependencies.reference_signature)
                     if self.source_startup is None or self.source_startup.finished.is_set():
                         if self.dispatcher:
                             driver = self.live.driver if self.live else None
@@ -229,11 +255,18 @@ class WebHost:
                             self.live.caught_up_web.set()
                         else:
                             self.live.caught_up_web.clear()
-                        self.server.timeout = 0.5 if caught_up else 0.05
+                        if caught_up:
+                            cadence = 0.5
+                if not self.stopping.is_set():
+                    self._maintenance_wake.wait(cadence)
         except BaseException as error:
             self.runtime_failed(error)
         finally:
             self.stopping.set()
+            if listener.ident is not None:
+                listener.join(timeout=2)
+                if listener.is_alive():
+                    self.runtime_failed(RuntimeError("web_listener_shutdown_timeout"))
             try:
                 try:
                     try:
@@ -257,7 +290,7 @@ class WebHost:
 
     def start(self):
         self.cache_housekeeping.start()
-        self.server = LoopbackServer(self.jobs, self)
+        self.server = LoopbackServer(self.jobs, self, on_request_done=self._maintenance_wake.set)
         if self.live:
             self.live.start()
         self.thread = Thread(target=self._serve, name="cost-guard-web")
@@ -287,6 +320,7 @@ class WebHost:
             finally:
                 # Preserve actual use queued since the last host-loop flush. The
                 # finite drain fails soft on contention; never acquire source here.
+                self.cache_housekeeping.collect_demand()
                 self.cache_housekeeping.lifecycle.flush_pending()
                 if self.store:
                     self.observations.persist(self, final=True)
@@ -302,12 +336,17 @@ class WebHost:
                 if self.history_accounts:
                     self.history_accounts.close()
             finally:
-                if self.watch_history:
-                    self.watch_history.close()
+                try:
+                    if self.watch_history:
+                        self.watch_history.close()
+                finally:
+                    if self.history_reports:
+                        self.history_reports.archive.close_writer()
 
     def _tick_history_accounts(self, selection):
         accounts, source, observation, captured_at = self.live.account_observation
         available = captured_at is not None and self.live.driver.error is None
+        terminal = self.live.source_failure is not None or (self.live.driver is not None and self.live.driver.terminal)
         catalog = self.live.catalog
         with catalog.lock:
             covered = (available and observation is not None and observation is catalog.last_observation
@@ -320,7 +359,7 @@ class WebHost:
             accounts=accounts if available else (), periods=frozenset(PERIODS),
             zone=self.history_zone,
             catalog=None, prices=self.dependencies.prices, migration_gap=selection.migration_gap if selection else None,
-            now_ms=int(time.time() * 1000), available=available, terminal=not available,
+             now_ms=int(time.time() * 1000), available=available, terminal=terminal,
             foreground=self.dispatcher.account_timeline_foreground(),
             unavailable_history=unavailable, live_roots=live_roots, pending_history=pending,
             coverage_confirmed=covered, progress_roots=progress_roots)
@@ -340,7 +379,7 @@ class WebHost:
             return False
         catalog = self.live.catalog
         with catalog.lock:
-            return (catalog.archive.loaded and catalog.legacy_done and not catalog.history_pending
+            return (catalog.archive.loaded and not catalog.history_pending
                     and not catalog.history_live_roots())
 
     def run_gui(self, gui):

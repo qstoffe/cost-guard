@@ -250,11 +250,11 @@ const AIStatsView = (() => {
       this.updateDatabaseCard(facts);
       ContextHelp.refresh(this.root);
     }
-    update(state, sourceBlocked) {
+    update(state, sourceBlocked, terminal = false) {
       if (typeof ReportLoading !== 'undefined')
         ReportLoading.historyProgress?.(this, this.buttons.get(state.period),
-          state.result?.view.history_progress?.[state.period] ??
-          (this.archive ? {complete: false, terminal: !!state.interrupted || !!state.statsAcquisitionFailed} : undefined));
+          terminal ? {terminal: true} : state.result?.view.history_progress?.[state.period] ??
+          (this.archive ? {complete: false} : undefined));
       // Every card has its shell from first render. Only a complete compatible
       // period observation replaces the last-good cards, including their details.
       const e = ReportView.element;

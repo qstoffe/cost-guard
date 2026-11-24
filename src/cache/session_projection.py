@@ -97,7 +97,19 @@ def save_ready(db, item, partition, algorithm, revision, observed_ms, keys, last
             cost_key=excluded.cost_key, prompt_count=excluded.prompt_count,
             duration_ms=excluded.duration_ms, context_tokens=excluded.context_tokens
         WHERE (excluded.observed_ms, excluded.partition, excluded.revision) >=
-              (ready_sessions.observed_ms, ready_sessions.partition, ready_sessions.revision)''', values)
+               (ready_sessions.observed_ms, ready_sessions.partition, ready_sessions.revision)''', values)
+
+
+def _overlay_window(start_ms, end_ms, finish_cutoff):
+    running = '(start_ms IS NOT NULL AND start_ms<?)'
+    if start_ms is None:
+        return f'({running} OR finish_ms>=?)', (end_ms, finish_cutoff)
+    lower = max(1, start_ms)
+    return (f'''({running} OR (finish_ms>=? AND (
+            (finish_ms>=? AND finish_ms<?) OR
+            (last_activity_ms>=? AND last_activity_ms<?) OR
+            (latest_activity_ms>=? AND latest_activity_ms<?))))''',
+            (end_ms, finish_cutoff, *((lower, end_ms) * 3)))
 
 
 def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms, run=None, finish_cutoff=None):
@@ -110,13 +122,13 @@ def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms, run=None,
         bounds = (max(1, start_ms), end_ms) * 2
     overlay = []
     if run is not None:
-        overlay, runtime, pending = read_runtime(db, run, start_ms, end_ms, finish_cutoff)
+        live_window, live_bounds = _overlay_window(start_ms, end_ms, finish_cutoff)
+        overlay, runtime, pending = read_runtime(db, run, start_ms, end_ms, live_window, live_bounds)
         predicate = f'''({predicate}) AND NOT EXISTS (
             SELECT 1 FROM session_live
-            WHERE run=? AND session_live.item=ready_sessions.item
-              AND ((start_ms IS NOT NULL AND start_ms<?) OR finish_ms>=?)
+            WHERE run=? AND session_live.item=ready_sessions.item AND {live_window}
         )'''
-        bounds += (run, end_ms, finish_cutoff)
+        bounds += (run, *live_bounds)
     historical = db.execute(f'SELECT count(*) FROM ready_sessions WHERE {predicate}', bounds).fetchone()[0]
     total = len(overlay) + historical
     offset = min(offset, max(0, (total - 1) // size) * size)
@@ -137,22 +149,18 @@ def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms, run=None,
     return total, offset, rows, shown, cached, runtime, pending
 
 
-def read_runtime(db, run, start_ms, end_ms, finish_cutoff):
+def read_runtime(db, run, start_ms, end_ms, live_window, live_bounds):
     runtime = db.execute('SELECT state, terminal FROM session_runtime WHERE run=?', (run,)).fetchone()
-    lower = max(1, start_ms or 1)
-    rows = db.execute('''SELECT item, payload, start_ms, finish_ms,
+    rows = db.execute(f'''SELECT item, payload, start_ms, finish_ms,
             EXISTS (SELECT 1 FROM ready_sessions WHERE ready_sessions.item=session_live.item)
-        FROM session_live WHERE run=? AND ((start_ms IS NOT NULL AND start_ms<?) OR
-            (finish_ms>=? AND (? IS NULL OR (finish_ms>=? AND finish_ms<?) OR
-                (last_activity_ms>=? AND last_activity_ms<?) OR
-                (latest_activity_ms>=? AND latest_activity_ms<?))))
+        FROM session_live WHERE run=? AND {live_window}
         ORDER BY start_ms IS NULL, start_ms DESC, finish_ms DESC, item''',
-        (run, end_ms, finish_cutoff, start_ms, lower, end_ms, lower, end_ms, lower, end_ms)).fetchall()
+        (run, *live_bounds)).fetchall()
     condition = 'run=?'
     bounds = (run,)
     if start_ms is not None:
         condition += ' AND (activity_ms IS NULL OR (activity_ms>=? AND activity_ms<?))'
-        bounds += (lower, end_ms)
+        bounds += (max(1, start_ms), end_ms)
     unavailable = db.execute(f'SELECT count(*) FROM session_pending WHERE unavailable=1 AND {condition}',
                              bounds).fetchone()[0]
     complete = db.execute(f'SELECT 1 FROM session_pending WHERE unavailable=0 AND {condition} LIMIT 1',

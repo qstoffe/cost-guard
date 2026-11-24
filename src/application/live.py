@@ -14,8 +14,7 @@ from .session_quota import source_scope
 
 
 class LiveRuntime:
-    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None, archive=None,
-                 legacy_archive=None, archive_upgrade=None, timezone_id='UTC'):
+    def __init__(self, factory, publish, on_failure=None, *, timeline_demand=None, archive=None, timezone_id='UTC'):
         self.factory = factory
         self.publish = publish
         self.on_failure = on_failure
@@ -24,8 +23,7 @@ class LiveRuntime:
         self.thread = None
         self.failure = None
         self.details = SessionDetails(archive=archive)
-        self.catalog = SessionCatalog(archive=archive, legacy_archive=legacy_archive,
-                                      archive_upgrade=archive_upgrade, timezone_id=timezone_id)
+        self.catalog = SessionCatalog(archive=archive, timezone_id=timezone_id)
         self.driver = None
         self.account_observation = (), None, None, None
         self.source_failure = None

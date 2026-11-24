@@ -25,6 +25,7 @@ let snapshotRender = null;
 let settingsView = null;
 let cachedReportTimer = null;
 let cachedReportOwner = null;
+let reportCacheEvents = false;
 let demand = null; // Enabled only after the authenticated host advertises it.
 let tokenMixBinding = null;
 const sourceNotice = document.getElementById('source-compatibility');
@@ -77,7 +78,7 @@ function firstReport(state = current) {
 function scheduleCachedReport() {
   const state = current;
   const recoverCold = automaticHistory(state) && state.failed && state.section !== 'token-mix';
-  if (!historical(state) || !state.result && !recoverCold ||
+  if ((reportCacheEvents && automaticHistory(state)) || !historical(state) || !state.result && !recoverCold ||
       state.loading || state.pageNavigation && state.failed || document.hidden || !reportReadable(state)) {
     clearTimeout(cachedReportTimer); cachedReportTimer = null; cachedReportOwner = null; return;
   }
@@ -100,6 +101,18 @@ function scheduleCachedReport() {
   const delay = Math.max(0, (state.checkedAt || CachedReports.observation(state.result)) + cadence - Date.now());
   cachedReportTimer = setTimeout(check, delay);
 }
+function wakeCachedReport(live, publications, reconnected) {
+  if (!reportCacheEvents || !current || document.hidden) return;
+  const state = current;
+  const chart = state.accountTimeline;
+  if (chart) chart.wake(`${chart.period}:${publications?.accounts?.[chart.period] ?? 0}:${live?.state}`, reconnected);
+  if (!automaticHistory(state) || !reportReadable(state)) return;
+  const hint = `${state.period}:${publications?.[state.section]?.[state.period] ?? 0}:${live?.state}`;
+  if (state.cacheHint === hint && !reconnected) return;
+  state.cacheHint = hint;
+  if (state.loading) state.cachePending = true;
+  else acquire(state, !!state.result);
+}
 function enterCachedReport(state) {
   if (!historical(state)) return;
   if (state.pageNavigation && state.failed) return; // Explicit Retry owns failed paging, not a lookup timer.
@@ -111,12 +124,16 @@ function enterCachedReport(state) {
 }
 function selectStats(state, period) {
   if (state.period === period) return;
+  if (reportCacheEvents) {
+    state.attempt?.controller.abort(); state.attempt = null; state.loading = false; state.active = null;
+    state.cachePending = false;
+  }
   state.period = period;
   state.request = {kind: 'ai-stats', stats_scope: period};
   demand?.update();
   state.result = state.statsResults?.get(period) || null;
   state.statsAcquisitionFailed = false;
-  state.failed = false; state.message = '';
+  state.failed = false; state.dispatchError = null; state.message = '';
   state.actionRequested = true;
   ReportLoading.reset(state);
   if (state.loading) AIStatsView.prioritize(state, api, !!demand);
@@ -128,17 +145,30 @@ function selectTokenMix(state, period) {
   if (state.period === period) return;
   // Retire only this browser attempt, not shared host work or another tab's demand.
   state.attempt?.controller.abort(); state.attempt = null; state.loading = false; state.active = null;
+  state.cachePending = false;
   state.period = period; state.request = {kind: 'token-mix', token_mix_scope: period};
-  state.result = null; state.withheld = false; state.dataRevision = null;
-  state.failed = false; state.message = ''; state.attempted = false;
+  const cached = reportCacheEvents && state.mixBinding === tokenMixBinding && !ReportLoading.interrupted(hostState)
+    ? state.mixResults?.get(period) : null;
+  const usable = cached && TokenMixView.compatible(cached.result, period) &&
+    CachedReports.entry(cached.result, state.section) !== 'withhold';
+  state.result = usable ? cached.result : null;
+  state.dataRevision = usable ? cached.revision : null;
+  state.withheld = false;
+  state.failed = false; state.dispatchError = null; state.message = ''; state.attempted = false;
   state.actionRequested = true;
   ReportLoading.reset(state); demand?.update();
-  show(state); firstReport(state); scheduleCachedReport();
+  show(state);
+  // The last verified frame prevents a blank interval. Still issue a fresh
+  // committed read on every selection, including between cache events.
+  if (state.result && !document.hidden) acquire(state);
+  else firstReport(state);
+  scheduleCachedReport();
 }
 function bindTokenMix(state, admission) {
   const binding = admission.source_identity ? `${admission.source_identity}:${admission.projection_epoch}` : null;
   if (admission.stale || admission.error === 'source_identity_changed' ||
       binding && state.mixBinding && binding !== state.mixBinding) {
+    state.mixResults?.clear();
     state.result = null; state.dataRevision = null; state.withheld = false;
     show(state);
   }
@@ -321,7 +351,8 @@ function show(state) {
       !state.interrupted && !state.statsAcquisitionFailed));
     ReportView.defaultUnit();
      state.stats ||= new AIStatsView.View(period => selectStats(state, period), {archive: archiveHistory});
-    state.stats.update(state, blocked); state.stats.attach(output);
+    state.stats.update(state, blocked, archiveHistory && (!!state.dispatchError || hostState.terminal));
+    state.stats.attach(output);
     return;
   }
   if (state.section === 'token-mix') {
@@ -330,9 +361,10 @@ function show(state) {
     const ready = !!state.result && !state.withheld && TokenMixView.compatible(state.result, state.period) &&
       (!state.mixBinding || state.mixBinding === tokenMixBinding);
     output.setAttribute('aria-busy', String(!ready && !state.failed && !state.interrupted && !historyBlocked()));
-     state.tokenMix.selection(state.period || 'all', ready, archiveHistory ?
-       (ready ? state.result.view.history_progress : {complete: false, terminal: state.failed || !!state.interrupted}) :
-       undefined);
+    const terminal = !!state.dispatchError || hostState.terminal;
+    state.tokenMix.selection(state.period || 'all', ready, archiveHistory ?
+      (terminal ? {terminal: true} : ready ? state.result.view.history_progress : {complete: false}) :
+      undefined);
     if (ready) state.tokenMix.update(state.result);
     state.tokenMix.attach(output);
      if (!ready && !archiveHistory) {
@@ -372,6 +404,7 @@ function show(state) {
         state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update());
         const chart = state.accountTimeline;
         chart.sharedHistory = archiveHistory;
+        chart.cacheEvents = reportCacheEvents;
         if (!archiveHistory && !historyBlocked()) chart.setScope(liveValue?.account_timeline_scope ?? null);
         if (state.accounts.root.lastChild !== chart.root) state.accounts.root.append(chart.root);
         chart.active(!document.hidden && !!csrf && (hostState.writable || archiveReadable()));
@@ -483,7 +516,9 @@ async function acquire(state, background = false, prices = false) {
            if (!admission.result && state.result && !automaticHistory(state) && !state.pageNavigation) { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,
              publication_id: admission.result_id || admission.id};
-           else if (admission.cache_first) {
+            else if (admission.cache_first && !admission.terminal && reportCacheEvents) {
+              keepRetained = true; return; // Wait for a relevant committed publication.
+            } else if (admission.cache_first && !admission.terminal) {
              await attempt.poll(null, 500); continue; // Wait only for the host's local projection.
            }
            else if (mix && state.result && !admission.terminal && TokenMixView.compatible(state.result, state.period)) {
@@ -573,10 +608,15 @@ async function acquire(state, background = false, prices = false) {
             if (initial && !job.result.cache_first && state === current && state.loader?.root.isConnected)
               await ReportLoading.paintCompletion(state, attempt.controller.signal);
           }
-         if (mix) state.percent = 100; // No completion paint on Token Mix's indeterminate loader.
-         state.withheld = state.section !== 'ai-stats' && historical(state) && state.result &&
-          CachedReports.entry(state.result, state.section) === 'withhold';
-        state.pages = {};
+          if (mix) state.percent = 100; // No completion paint on Token Mix's indeterminate loader.
+          state.withheld = state.section !== 'ai-stats' && historical(state) && state.result &&
+           CachedReports.entry(state.result, state.section) === 'withhold';
+          if (mix && reportCacheEvents && state.mixBinding && !state.withheld &&
+              TokenMixView.compatible(state.result, state.period)) {
+            state.mixResults ||= new Map();
+            state.mixResults.set(state.period, {result: state.result, revision});
+          }
+         state.pages = {};
         state.message = historical(state) ? '' : 'Snapshot captured. Navigation and source activity do not update it.';
         break;
       }
@@ -602,8 +642,14 @@ async function acquire(state, background = false, prices = false) {
       // A background lookup alone does not make failed metrics pending again.
       if (state.section === 'ai-stats' && state.failed && !ReportLoading.interrupted(hostState) && !historyBlocked())
         state.statsAcquisitionFailed = true;
-      state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
-      show(state); scheduleCachedReport();
+       state.loading = false; state.priceRefreshing = false; state.active = null; state.attempt = null; state.checkedAt = Date.now();
+       show(state); scheduleCachedReport();
+       if (state.cachePending) {
+         state.cachePending = false;
+         if (state === current && !document.hidden) queueMicrotask(() => {
+           if (state === current && !document.hidden) acquire(state, !!state.result);
+         });
+       }
      }
     for (const event of priceFocusEvents) document.removeEventListener(event, movedPriceFocus);
     if (owned && priceFocus && state === current && document.activeElement === document.body)
@@ -739,7 +785,8 @@ async function connect() {
     try { applySettings(await api('/api/settings')); }
    catch (_) { /* Saved settings are optional here; explicit Settings owns errors. */ }
      const state = await api('/api/status');
-     archiveHistory = state.archive_history === true;
+      archiveHistory = state.archive_history === true;
+      reportCacheEvents = state.report_cache_events === true;
      if (state.data_dispatcher && typeof DataDemand !== 'undefined') {
        // This controller writes only expiring view leases, not source/settings mutations.
        const writable = () => !!csrf && (hostState.writable || archiveReadable());
@@ -754,7 +801,7 @@ async function connect() {
     accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
-      liveConnection = LiveConnection.connect(api, (value, progress, watchHistory, historyHints, reconnected, sessionsCache) => {
+       liveConnection = LiveConnection.connect(api, (value, progress, watchHistory, historyHints, reconnected, sessionsCache, reportsCache) => {
         const firstLiveView = !sourceValue?.view && !!value?.view;
         sourceValue = value?.view || !sourceValue?.view ? value : {...value,
           view: sourceValue.view, source_observed_at_ms: sourceValue.source_observed_at_ms};
@@ -768,9 +815,12 @@ async function connect() {
           current?.catalog?.catchUp();
           if (archiveReadable()) current?.detail?.catchUp();
         }
-        current?.catalog?.wake(sessionsCache ? `sessions:${sessionsCache.revision}` :
+         const sessionsPeriod = current?.catalog?.period;
+         current?.catalog?.wake(sessionsCache ? `sessions:${sessionsPeriod}:${
+           sessionsCache.periods?.[sessionsPeriod] ?? sessionsCache.revision}` :
           historyHints?.catalog_hint ?? value?.catalog_hint);
-        current?.detail?.wake(historyHints?.detail_hints ?? value?.detail_hints);
+         current?.detail?.wake(historyHints?.detail_hints ?? value?.detail_hints);
+         wakeCachedReport(value, reportsCache, reconnected);
         current?.detail?.updateInvocations();
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {

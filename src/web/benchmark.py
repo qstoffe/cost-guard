@@ -40,6 +40,12 @@ class BenchmarkLane:
                 self.snapshot = self._parse(self.cached)
             except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
                 self.cached = None
+        self._publish()
+
+    def _publish(self):
+        # Parsed snapshots are immutable. Swap only after the file commit (or
+        # when control state changes), and never make readers join writer work.
+        self.published = self.snapshot, self.error is not None, self.forced or self.job is not None
 
     def _parse(self, value):
         if value.get('schema') != 1 or value['fetched_at_ms'] > int(self.wall_clock() * 1000):
@@ -47,11 +53,10 @@ class BenchmarkLane:
         return parse_pages(value['pages'], value['fetched_at_ms'])
 
     def view(self, references=(), *, timezone_id='UTC'):
-        with self.lock:
-            self.requested = True
-            value = benchmark_view(self.snapshot, references, now_ms=int(self.wall_clock() * 1000), timezone_id=timezone_id)
-            return dict(**value, source_url=SOURCE_URL, unavailable=self.error is not None,
-                refreshing=self.forced or self.job is not None)
+        self.requested = True
+        snapshot, unavailable, refreshing = self.published
+        value = benchmark_view(snapshot, references, now_ms=int(self.wall_clock() * 1000), timezone_id=timezone_id)
+        return dict(**value, source_url=SOURCE_URL, unavailable=unavailable, refreshing=refreshing)
 
     def refresh(self):
         """Coalesce manual demand, bypassing only automatic freshness/backoff."""
@@ -59,6 +64,7 @@ class BenchmarkLane:
             self.requested = True
             if self.job is None:
                 self.forced = True
+            self._publish()
 
     def tick(self):
         with self.lock:
@@ -90,6 +96,7 @@ class BenchmarkLane:
                 self.forced = False
                 self.started = now
                 self.jobs.tick()
+            self._publish()
 
     def close(self):
         self.jobs.close()

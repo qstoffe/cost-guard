@@ -452,6 +452,9 @@ def check_architecture_imports(root: Path, results: Results) -> None:
         if any(module == "subprocess" or module.startswith("subprocess.") for module in imports):
             results.fail("V1 source architecture", "OpenCode V1 adapter may not start subprocesses")
 
+    # FR 000807 AC9: only the read-only startup inventory adapter may use V2 SQLite.
+    bootstrap = "src/sources/opencode_v2_bootstrap.py"
+    bootstrap_module = "src.sources.opencode_v2_bootstrap"
     for path in sorted((root / "src/sources").glob("opencode_v2*.py")):
         relative = rel(root, path)
         try:
@@ -461,10 +464,13 @@ def check_architecture_imports(root: Path, results: Results) -> None:
         forbidden = sorted(
             module for module in imports
             if module == "subprocess" or module.startswith("subprocess.")
-            or module == "sqlite3" or module.startswith("sqlite3.")
+            or (module == "sqlite3" and relative != bootstrap) or module.startswith("sqlite3.")
         )
         if forbidden:
             results.fail("V2 source architecture", f"{relative} may not use CLI subprocesses or V2 SQLite: {forbidden}")
+        if relative != bootstrap and any(module == bootstrap_module or module.startswith(bootstrap_module + ".")
+                                         for module in imports):
+            results.fail("V2 source architecture", f"{relative} may not import the startup SQLite adapter")
     # Analysis may consume provider-neutral pricing contracts/catalog helpers, but
     # it must never import a concrete pricing provider implementation.
     analysis_root = root / "src" / "analysis"

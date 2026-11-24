@@ -9,7 +9,7 @@ from src.domain import EventKind, MessageRole, SessionSnapshot
 from .billing import CostEstimator, ProviderScope, actual_entry_cost, provider_matches
 from .causal import TRACKED_PROVIDER_DEFAULT, active_compaction_event, trace_entries
 from .context import estimate_text_tokens
-from .models import CompactionRecord
+from .models import CompactionRecord, TraceEntry
 from .duration import execution_duration
 
 
@@ -35,6 +35,7 @@ def completed_compactions(
     estimator: CostEstimator | None = None,
     subscription_providers: frozenset[str] = frozenset(),
     now_ms: int | None = None,
+    entries: tuple[TraceEntry, ...] | None = None,
 ) -> tuple[CompactionRecord, ...]:
     events = {
         event.event_id: event
@@ -47,7 +48,8 @@ def completed_compactions(
     active = active_compaction_event(snapshot)
     if not events:
         return ()
-    entries = trace_entries(snapshot, subscription_providers=subscription_providers)
+    if entries is None:
+        entries = trace_entries(snapshot, subscription_providers=subscription_providers)
     result: list[CompactionRecord] = []
     handled_events: set[str] = set()
     for message in snapshot.messages:
