@@ -2,9 +2,8 @@
 from contextlib import closing
 import sqlite3
 
-from .web_archive import APPLICATION_ID, SCHEMA
-
-
+APPLICATION_ID = 0x43475732  # CGW2, previous store
+SCHEMA = 2
 PREVIOUS_ALGORITHM_SUFFIX = '/previous-appdata'
 
 

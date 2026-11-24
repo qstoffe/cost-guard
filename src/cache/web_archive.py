@@ -2,18 +2,23 @@
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 import json
+import logging
 import sqlite3
 from threading import Lock
 
+from . import session_projection
+from .legacy_report_cache import retire_cache
 from .signature import dependency_signature
 
 
-APPLICATION_ID = 0x43475732  # CGW2
-SCHEMA = 2
+APPLICATION_ID = 0x43475231  # CGR1
+SCHEMA = 1
 EVIDENCE_ENVELOPE = 'web-fact-envelope/1'
 LEGACY_IMPORT = 'import-fr000778'
 REPORT_CHECKPOINTS = 'shared-history'
-WEB_ARCHIVE_FILENAME = 'cost-guard-web-history-v1.sqlite3'
+WEB_ARCHIVE_FILENAME = 'cost-guard-report-v1.sqlite3'
+PREVIOUS_ARCHIVE_FILENAME = 'cost-guard-web-history-v1.sqlite3'
+LOG = logging.getLogger(__name__)
 
 
 def source_partition(generation, instance, epoch=None):
@@ -48,10 +53,21 @@ def history_rank(partition, observed_ms, revision):
 
 
 class WebArchive:
-    def __init__(self, directory):
-        self.path = directory / WEB_ARCHIVE_FILENAME
+    def __init__(self, directory, *, previous_directory=None, retire_previous=False):
+        self.path = (directory / WEB_ARCHIVE_FILENAME).absolute()
+        self._uri = self.path.as_uri()
         self._lock = Lock()
         self._generations = {}
+        self._retire_paths = {}
+        if retire_previous:
+            self._retire_paths[self.path.with_name(PREVIOUS_ARCHIVE_FILENAME)] = dict(
+                application_id=0x43475732, versions=(1, 2))
+            self._retire_paths[self.path.with_name('cost-guard-display-v1.sqlite3')] = dict(
+                application_id=0x43474448, versions=(1,))
+            self._retire_paths[self.path.with_name('cost-guard-cache-v2.sqlite3')] = dict(generation=2)
+            if previous_directory is not None:
+                self._retire_paths[(previous_directory / PREVIOUS_ARCHIVE_FILENAME).absolute()] = dict(
+                    application_id=0x43475732, versions=(1, 2))
 
     def generation(self, domain):
         with self._lock:
@@ -71,45 +87,48 @@ class WebArchive:
 
     @contextmanager
     def _connect(self, *, write=False):
-        uri = self.path.resolve().as_uri()
         mode = 'rw' if write else 'ro'
-        with closing(sqlite3.connect(f'{uri}?mode={mode}', uri=True, timeout=0.1)) as db, db:
+        with closing(sqlite3.connect(f'{self._uri}?mode={mode}', uri=True, timeout=0.1)) as db, db:
+            if not write:
+                db.execute('PRAGMA query_only=ON')
+                db.execute('BEGIN')
             if (db.execute('PRAGMA application_id').fetchone()[0],
                     db.execute('PRAGMA user_version').fetchone()[0]) != (APPLICATION_ID, SCHEMA):
-                raise sqlite3.DatabaseError('unrecognized Web history archive')
+                raise sqlite3.DatabaseError('unrecognized report cache')
             yield db
 
     def initialize(self):
-        if self.path.exists():
-            with closing(sqlite3.connect(self.path, timeout=0.1)) as db:
-                if (db.execute('PRAGMA application_id').fetchone()[0],
-                        db.execute('PRAGMA user_version').fetchone()[0]) == (APPLICATION_ID, SCHEMA):
-                    self._history_index(db)
-                    return
+        self._initialize_schema()
+        if self._retire_paths:
+            self._retire_obsolete()
+
+    def _initialize_schema(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(sqlite3.connect(self.path, timeout=0.1)) as db, db:
-            db.execute('BEGIN IMMEDIATE')
             current_id = db.execute('PRAGMA application_id').fetchone()[0]
             current_version = db.execute('PRAGMA user_version').fetchone()[0]
             if (current_id, current_version) == (APPLICATION_ID, SCHEMA):
-                self._history_index(db)
+                if db.execute('PRAGMA journal_mode').fetchone()[0] != 'wal':
+                    raise sqlite3.DatabaseError('report cache requires WAL')
                 return
             if current_id or current_version or db.execute('SELECT 1 FROM sqlite_schema LIMIT 1').fetchone():
-                if (current_id, current_version) != (APPLICATION_ID, 1):
-                    raise sqlite3.DatabaseError('unrecognized Web history archive')
-                # The upgrade is additive. Existing algorithm tags remain on disk;
-                # the shared projections decide what fields they can still decode.
-            else:
-                db.execute('''CREATE TABLE facts (
-                    partition TEXT NOT NULL,
-                    domain TEXT NOT NULL,
-                    item TEXT NOT NULL,
-                    algorithm TEXT NOT NULL,
-                    revision TEXT NOT NULL,
-                    observed_ms INTEGER NOT NULL,
-                    value TEXT NOT NULL,
-                    PRIMARY KEY (partition, domain, algorithm, item)
-                ) WITHOUT ROWID''')
+                raise sqlite3.DatabaseError('unrecognized report cache')
+            if db.execute('PRAGMA journal_mode=WAL').fetchone()[0] != 'wal':
+                raise sqlite3.DatabaseError('report cache requires WAL')
+            db.execute('BEGIN IMMEDIATE')
+            if (db.execute('PRAGMA application_id').fetchone()[0],
+                    db.execute('PRAGMA user_version').fetchone()[0]) == (APPLICATION_ID, SCHEMA):
+                return
+            db.execute('''CREATE TABLE facts (
+                partition TEXT NOT NULL,
+                domain TEXT NOT NULL,
+                item TEXT NOT NULL,
+                algorithm TEXT NOT NULL,
+                revision TEXT NOT NULL,
+                observed_ms INTEGER NOT NULL,
+                value TEXT NOT NULL,
+                PRIMARY KEY (partition, domain, algorithm, item)
+            ) WITHOUT ROWID''')
             # Keep one cursor per current item, not an unbounded mutation log.
             # Replacing a cursor moves the item forward without duplicating payloads.
             db.execute('''CREATE TABLE fact_cursors (
@@ -123,12 +142,28 @@ class WebArchive:
             db.execute('''CREATE INDEX fact_cursor_range
                           ON fact_cursors (partition, domain, algorithm, cursor)''')
             self._history_index(db)
-            db.execute('''INSERT INTO fact_cursors (partition, domain, algorithm, item)
-                          SELECT partition, domain, algorithm, item FROM facts''')
+            db.execute('CREATE TABLE report_metadata (name TEXT PRIMARY KEY) WITHOUT ROWID')
+            session_projection.create_schema(db)
             db.execute(f'PRAGMA application_id={APPLICATION_ID}')
             db.execute(f'PRAGMA user_version={SCHEMA}')
-            db.commit()
-            db.execute('PRAGMA journal_mode=WAL')
+
+    def _retire_obsolete(self):
+        try:
+            with self._connect() as db:
+                if db.execute("SELECT 1 FROM report_metadata WHERE name='pre-report-cache-retired'").fetchone():
+                    return
+            complete = True
+            for path, identity in self._retire_paths.items():
+                try:
+                    retire_cache(path, **identity)
+                except (OSError, sqlite3.Error):
+                    LOG.warning('obsolete_report_cache_retirement_pending: %s', path.name)
+                    complete = False
+            if complete:
+                with self._connect(write=True) as db:
+                    db.execute("INSERT OR IGNORE INTO report_metadata VALUES ('pre-report-cache-retired')")
+        except (OSError, sqlite3.Error):
+            LOG.warning('obsolete_report_cache_retirement_pending')
 
     def import_checkpoint(self, domain, item):
         with self._connect() as db:
@@ -214,7 +249,18 @@ class WebArchive:
             return False
         return self._publish_batch(partition, domains, retain_conflicts=False)
 
-    def _publish_batch(self, partition, domains, *, retain_conflicts):
+    def publish_session(self, partition, domains, item, keys, last_at, latest_at):
+        if not partition:
+            return False
+        return self._publish_batch(partition, domains, retain_conflicts=False,
+                                   ready_session=(item, keys, last_at, latest_at))
+
+    def ready_sessions_page(self, **page):
+        with self._connect() as db:
+            total, offset, values = session_projection.read_ready(db, **page)
+            return total, offset, tuple(self._historical_facts(values))
+
+    def _publish_batch(self, partition, domains, *, retain_conflicts, ready_session=None):
         values = [(partition, domain, key, EVIDENCE_ENVELOPE, fact.revision, fact.observed_ms,
                     json.dumps(fact.value, ensure_ascii=True, allow_nan=False, separators=(',', ':')))
                    for domain, facts in domains.items() for key, fact in facts.items()]
@@ -248,6 +294,11 @@ class WebArchive:
                     db.execute('''UPDATE facts SET observed_ms=?
                         WHERE partition=? AND domain=? AND item=? AND algorithm=? AND observed_ms<?''',
                         (value[5], *value[:4], value[5]))
+                if ready_session is not None and value[1] == session_projection.SESSIONS_DOMAIN:
+                    item, keys, last_at, latest_at = ready_session
+                    if item == value[2]:
+                        session_projection.save_ready(db, item, partition, value[3], value[4], value[5],
+                                                      keys, last_at, latest_at)
         if changed:
             self.note_publication(changed)
         return True

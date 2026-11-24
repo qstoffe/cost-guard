@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from src.analysis.metric_evidence import EMPTY_HISTORY
 from src.cache.database import CacheDatabase, cache_paths
+from src.cache.session_projection import SESSIONS_DOMAIN, SORT_COLUMNS
 from src.cache.web_archive import ArchiveFact, LEGACY_IMPORT, history_rank
 from src.cache.web_upgrade import import_web_archive, retire, retire_disposable
 from src.reports import web_history_evidence
@@ -20,7 +21,7 @@ from .session_catalog_scope import PAGE_SIZE, catalog_window, in_window, row_in_
 
 
 LOG = logging.getLogger(__name__)
-DOMAIN = 'sessions/1'
+DOMAIN = SESSIONS_DOMAIN
 
 
 class SessionArchive:
@@ -132,13 +133,16 @@ class SessionArchive:
         return decoded, authorities
 
     def save(self, partition, key, revision, row, observed_ms, dependencies, models, usage, detail):
+        from .session_epoch_page import sort_value
+
         try:
-            return self.storage.publish_batch(partition, {
+            return self.storage.publish_session(partition, {
                 DOMAIN: {key: ArchiveFact(revision, observed_ms, dict(
                     row=encode_summary(row), dependencies=dependencies, models=models))},
                 web_history_evidence.DOMAIN: {key: usage},
                 detail_archive.DOMAIN: {key: detail},
-            })
+            }, key, {sort: sort_value(row, sort) for sort in SORT_COLUMNS},
+                row.last_activity_ms, row.activity_latest_ms)
         except (sqlite3.Error, OSError, ValueError):
             LOG.warning('session_archive_write_unavailable')
             return False

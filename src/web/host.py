@@ -8,7 +8,7 @@ import webbrowser
 from src.version import VERSION
 from src.application.live import LiveRuntime
 from src.analysis.account_timeline import PERIODS
-from src.cache.web_archive import WEB_ARCHIVE_FILENAME, WebArchive
+from src.cache.web_archive import WebArchive
 from src.reports import ReportKind
 from src.reports.archived_usage import ArchivedUsage
 from src.log_housekeeping import LogHousekeeping
@@ -54,15 +54,13 @@ class WebHost:
         self.observations = WebObservations()
         self.source_startup = None
         archive = None
-        archive_upgrade = None
         usage = None
         if live_factory is None and jobs is None:
             from .source_startup import SourceStartup
             directory = root / 'cache' if store or previous_archive_directory is not None else archive_directory
-            archive = WebArchive(directory) if directory is not None else None
             previous = store.directory if store else previous_archive_directory
-            if previous is not None:
-                archive_upgrade = root, previous / WEB_ARCHIVE_FILENAME
+            if directory is not None:
+                archive = WebArchive(directory, previous_directory=previous, retire_previous=previous is not None)
             usage = ArchivedUsage(archive) if archive is not None else None
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
@@ -83,8 +81,7 @@ class WebHost:
         self.history_zone = str(self.history_config.get('timezone') or ('Europe/Stockholm' if archive else 'UTC'))
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
              timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher and not usage else None,
-             archive=archive, legacy_archive=root / 'cache' / 'cost-guard-display-v1.sqlite3' if archive else None,
-             archive_upgrade=archive_upgrade,
+              archive=archive,
              timezone_id=self.history_zone) if live_factory else None
         self.server = None
         self.thread = None
