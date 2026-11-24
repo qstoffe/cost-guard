@@ -520,8 +520,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.reply(200, result)
         except ValueError:
             self.reply(400, {"error": "invalid_request"})
-        except KeyError:
-            self.reply(410, {"error": "detail_expired"})
+        except KeyError as error:
+            if error.args == ("detail_read_stale",):
+                self.reply(409, {"error": "detail_read_stale"})
+            else:
+                self.reply(410, {"error": "detail_expired"})
         except RuntimeError:
             self.reply(429, {"error": "detail_busy"})
 

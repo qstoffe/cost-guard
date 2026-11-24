@@ -73,6 +73,7 @@ class FixtureRuntime:
         self.observation_lock = Lock()
         self.detail_mode = None
         self.detail_paused = False
+        self.detail_owner_stopped = False
         self.detail_clock_offset = 0
         self.details.clock = lambda: time.monotonic() + self.detail_clock_offset
         self.detail_capture = DetailCapture(run_owned_fixture, no_progress_seconds=3)
@@ -93,13 +94,13 @@ class FixtureRuntime:
     def observe(self):
         observation = observe_catalog(self.service.source, include_archived_revisions=True)
         self.catalog.observe(observation, unavailable=self.unavailable)
-        if not self.unavailable:
+        if not self.unavailable and not self.detail_owner_stopped:
             self.details.observe_source(observation)
         if self.live_root and not self.unavailable:
             snapshot = self.service.source.snapshots[self.live_root]
             capture, _ = capture_rows(self.service, snapshot.root)
             publish_verified_capture(self.catalog, snapshot, capture)
-        if self.detail_paused:
+        if self.detail_paused or self.detail_owner_stopped:
             pass
         elif self.detail_mode is None:
             self.details.tick(self.service, unavailable=self.unavailable)
@@ -354,9 +355,14 @@ def main():
                     source.snapshots['root-0000'] = replace(
                         make_root_snapshot(0, 1002, month_start_ms=1000), source_revision='quiet-fresh', complete=True)
                     host.live.detail_paused = False
+            elif command == 'detail-stop-owner':
+                with host.live.observation_lock:
+                    host.live.detail_owner_stopped = True
+                    host.live.detail_clock_offset += 121
             elif command in ('detail-blocked', 'detail-recover', 'detail-progress', 'detail-delayed'):
                 host.live.detail_mode = {'detail-blocked': 'blocked', 'detail-recover': 'fast',
                     'detail-progress': 'progress', 'detail-delayed': 'delayed'}[command]
+                host.live.detail_owner_stopped = False
             elif command == 'detail-observe':
                 lane = host.live.detail_capture
                 print(json.dumps(dict(ok=True, started=lane.started_count, retired=lane.retired_count,

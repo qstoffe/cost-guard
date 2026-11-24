@@ -10,8 +10,15 @@ module.exports = async ({evaluate, until, fixture, command}) => {
     window.originalMix=mix().textContent;window.footerCells=[...detail.footer.cells];
     window.footerTargets=footerCells.map(c=>c.firstChild);window.footerText=footerCells.map(c=>c.textContent);
     window.scope=detail.data.value_authority.scope;window.revision=detail.data.revision;
-     detail.activity.tools.node.open=true;
-     window.refreshNotices=[];
+      detail.activity.tools.node.open=true;
+      window.refreshNotices=[];
+      window.outageReads=0;
+      const readValuesDetail=detail.api;
+      detail.api=async(...args)=>{
+        const reply=await readValuesDetail(...args);
+        if(args[1]?.action==='begin' && reply.acquisition?.reason==='source_unavailable')outageReads++;
+        return reply;
+      };
      const sourceStatus=detail.sourceStatus.bind(detail);
      detail.sourceStatus=value=>{sourceStatus(value);refreshNotices.push({
         state:value.state,pending:value.pending,reason:value.acquisition?.reason,status:detail.status.textContent,
@@ -27,7 +34,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   }
   checks.push('Session Detail prompt/Complete-session CCost use compact grouped sections without coverage boilerplate and preserve prompt identifier scope');
   assert.equal(await evaluate(`detail.scroll.nextElementSibling===detail.context.root &&
-    detail.context.root.nextElementSibling===detail.activity.root &&
+    detail.context.root.nextElementSibling===detail.invocations.root &&
+    detail.invocations.root.nextElementSibling===detail.activity.root &&
     detail.root.querySelectorAll('.watch-session-summary').length===1 &&
     !detail.root.textContent.includes('Total CCost:')`),true);
   await fixture('detail-values-partial');
@@ -46,7 +54,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await fixture('detail-values-source');
   await until('detail.data.value_authority.rows.u_next === "known"');
   await fixture('fail');
-  await until('refreshNotices.some(n=>n.reason==="source_unavailable")');
+  await until('outageReads>0');
   assert.equal(await evaluate('detail.status.hidden && !detail.status.textContent'),true,
     'retained detail failures remain silent; shared source health owns outage notices');
   assert.equal(await evaluate('mix().textContent===originalMix'),true);
@@ -178,6 +186,6 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate("detail.context.contextValue.textContent==='N/A' && detail.context.warningIcon.hidden"),true);
   await evaluate('detail.invalidateValues()');
   assert.equal(await evaluate('!detail.body.children.length && !detail.footer.children.length && detail.scroll.hidden'),true);
-  checks.push('single table→Context→Tool Calls order; Watch Context DOM parity for approaching/exceeded/no warning, keyboard/Escape/hover/emulated touch, unavailable/invalidation; 360/1366 light/dark no page overflow; authority loss clears table');
+  checks.push('table→Context→Live Invocations→Tool Calls order; Watch Context DOM parity for approaching/exceeded/no warning, keyboard/Escape/hover/emulated touch, unavailable/invalidation; 360/1366 light/dark no page overflow; authority loss clears table');
   return {checks,layouts};
 };
