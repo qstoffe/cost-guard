@@ -195,28 +195,42 @@ const ReportLoading = (() => {
     }
   }
   function historyProgress(view, button, progress) {
-    if (!button || !progress && !view.historyStatus) return;
-    if (!view.historyStatus) {
-      const root = view.historyStatus = ReportView.element('span', undefined, 'history-period-progress');
-      view.historySpinner = ReportView.element('span', undefined, 'metric-spinner');
-      view.historySpinner.setAttribute('aria-hidden', 'true');
-      view.historyCount = ReportView.element('span');
-      root.append(view.historySpinner, view.historyCount);
+    if (view.historyButton !== button) {
+      view.historyButton?.removeAttribute('aria-busy');
+      view.historySpinner?.remove();
+      view.historyButton = button;
     }
-    view.historyStatus.hidden = !progress || (progress.complete && !progress.unavailable && !progress.restored);
-    if (progress) {
-      // The spinner means work is pending; an unavailable gap is not queued work.
-      view.historySpinner.style.display = progress.complete || progress.recovering ? 'none' : '';
-      const status = [];
-      if (!progress.complete && !progress.recovering) {
-        status.push(progress.cached == null ? 'Cached amount unknown' : `${progress.cached} cached`);
-        if (progress.remaining != null) status.push(`${progress.remaining} remaining`);
+    if (!button || !progress) {
+      button?.removeAttribute('aria-busy');
+      view.historySpinner?.remove();
+      if (view.historyError) view.historyError.hidden = true;
+      return;
+    }
+    if (!view.historySpinner) {
+      view.historySpinner = ReportView.element('span', undefined, 'metric-spinner');
+      view.historySpinner.classList.add('period-spinner');
+      view.historySpinner.setAttribute('aria-hidden', 'true');
+    }
+    const loading = !progress.terminal && (!progress.complete || progress.recovering || progress.restored);
+    if (loading) {
+      button.setAttribute('aria-busy', 'true');
+      if (view.historySpinner.parentNode !== button) button.append(view.historySpinner);
+    } else {
+      button.removeAttribute('aria-busy');
+      view.historySpinner.remove();
+    }
+    if (progress.terminal || progress.complete && progress.unavailable) {
+      if (!view.historyError) {
+        view.historyError = ReportView.element('p', undefined, 'error history-period-error');
+        view.historyError.setAttribute('role', 'status');
+        button.parentElement.after(view.historyError);
       }
-      if (progress.unavailable) status.push(`${progress.unavailable} unavailable`);
-      if (progress.recovering) status.push('Local history temporarily unavailable; retrying');
-      else if (progress.restored) status.push('Checking for updates');
-      ReportView.text(view.historyCount, status.join(' · '));
-      if (button.nextSibling !== view.historyStatus) button.after(view.historyStatus);
+      ReportView.text(view.historyError, progress.terminal ?
+        'History cannot continue. Check the OpenCode connection and settings.' :
+        'Some history is unavailable. Showing the saved results.');
+      view.historyError.hidden = false;
+    } else if (view.historyError) {
+      view.historyError.hidden = true;
     }
   }
   return {sections, reset, observe, waiting, show, paintCompletion, View, Attempt, retryable, interrupted, historyProgress};

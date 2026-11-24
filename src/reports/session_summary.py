@@ -35,28 +35,31 @@ def encode_summary(row):
     return values
 
 
-def decode_summary(values):
+def decode_summary(values, *, provisional=False):
     values = dict(values)
     if set(values) != {field.name for field in fields(SessionUsageRow)}:
         raise ValueError("incomplete_summary")
     for name in ("ccost", "main_ccost", "subagent_ccost"):
+        if provisional and values[name] == 'None':
+            values[name] = None
+            continue
         values[name] = Decimal(values[name])
         if not values[name].is_finite() or values[name] < 0:
             raise ValueError("invalid_summary_cost")
     values["cost_groups"] = decode_cost_groups(values["cost_groups"])
-    if (sum((part.known_ccost for part in values["cost_groups"]), Decimal(0)) != values["ccost"]
+    if not provisional and (sum((part.known_ccost for part in values["cost_groups"]), Decimal(0)) != values["ccost"]
             or values["main_ccost"] + values["subagent_ccost"] != values["ccost"]):
         raise ValueError("inconsistent_session_cost_groups")
     for name in ("contributor_models", "linked_model_selections"):
         values[name] = tuple(values[name])
     for role in ("main_models", "subagent_models"):
         values[role] = decode_models(values[role])
-    if not valid_models(values):
+    if not provisional and not valid_models(values):
         raise ValueError("invalid_model_roles")
     values["effort_contributors"] = tuple(SessionEffort(
         part["provider"], part["model"], EffortEvidence(**part["evidence"]), part["requests"])
         for part in values["effort_contributors"])
-    if not valid_effort(values):
+    if not provisional and not valid_effort(values):
         raise ValueError("invalid_effort_summary")
     issues = tuple(ReferenceCostIssue(**issue) for issue in values["ccost_unavailable"])
     if len(issues) > 6 or any(issue.reason not in REASONS or not all(

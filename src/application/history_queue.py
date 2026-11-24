@@ -24,6 +24,9 @@ class HistoryQueue:
     def remove(self, root):
         self._entries.pop(root, None)
 
+    def __bool__(self):
+        return bool(self._entries)
+
     def next(self, now, *, take=False):
         while self._delayed and self._delayed[0][0] <= now:
             _, entry = heappop(self._delayed)

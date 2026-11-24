@@ -1,7 +1,7 @@
 """Session display persistence and pagination over the ready subset."""
-from collections import OrderedDict
 from dataclasses import replace
 from decimal import Decimal, InvalidOperation
+import json
 import logging
 import sqlite3
 from uuid import uuid4
@@ -17,7 +17,7 @@ from src.reports.session_summary import decode_summary, encode_summary
 
 from . import detail_archive
 from .projection import project
-from .session_catalog_scope import PAGE_SIZE, catalog_window, in_window, row_in_window
+from .session_catalog_scope import PAGE_SIZE, catalog_window
 
 
 LOG = logging.getLogger(__name__)
@@ -34,6 +34,7 @@ class SessionArchive:
         self.authorities = {}
         self.loaded = False
         self.storage_ready = False
+        self.run = uuid4().hex
         self.upgrade = upgrade
         self.previous_pending = upgrade is not None and upgrade[1] is not None
 
@@ -142,10 +143,31 @@ class SessionArchive:
                 web_history_evidence.DOMAIN: {key: usage},
                 detail_archive.DOMAIN: {key: detail},
             }, key, {sort: sort_value(row, sort) for sort in SORT_COLUMNS},
-                row.last_activity_ms, row.activity_latest_ms)
+                row.last_activity_ms, row.activity_latest_ms, run=self.run)
         except (sqlite3.Error, OSError, ValueError):
             LOG.warning('session_archive_write_unavailable')
             return False
+
+    def update_runtime(self, *, state, terminal, reset_pending, pending, live):
+        values = {key: (start, finish, row.last_activity_ms, row.activity_latest_ms,
+                        json.dumps(encode_summary(row), separators=(',', ':')))
+                  if entry is not None else None
+                  for key, entry in live.items()
+                  for row, start, finish in (entry or (None, None, None),)}
+        try:
+            self.storage.update_sessions_runtime(self.run, state=state, terminal=terminal,
+                reset_pending=reset_pending, pending=pending, live=values)
+            return True
+        except (sqlite3.Error, OSError):
+            LOG.warning('session_runtime_write_unavailable')
+            return False
+
+    def close_runtime(self):
+        if self.storage_ready:
+            try:
+                self.storage.close_sessions_runtime(self.run)
+            except (sqlite3.Error, OSError):
+                LOG.warning('session_runtime_close_unavailable')
 
 
 def historical_amount(value):
@@ -228,83 +250,64 @@ def retain_readable_fields(new, old):
     return replace(new, **fields) if fields else new
 
 
-def cached_page(catalog, ordered, *, token, offset, sort, direction, period, navigation):
-    """Current offsets address the latest cached order, not source qualification."""
-    archive = catalog.archive
-    catalog._expire()
-    lease = catalog.leases.get(token)
-    if lease is None:
-        if len(catalog.leases) >= 32:
-            raise RuntimeError('catalog_busy')
-        token = uuid4().hex
-        lease = catalog.leases[token] = dict(epochs=OrderedDict(), cache_epoch=uuid4().hex)
-    lease.update(touched=catalog.clock(), sort=sort, period=period)
-    if 'interest_until' in lease:
-        lease['interest_until'] = catalog.clock() + 90
-    window = catalog_window(period, catalog.timezone_id, catalog.clock_ms())
-    cache_key = (window.identity, catalog.wake_revision, catalog.generation, sort, direction)
-    rows = catalog.orders.get(cache_key)
-    if rows is None:
-        active = catalog.rows.keys() | catalog.running_roots | catalog.recent_finishes.keys() | catalog._new_live_roots()
-        active_rows = catalog._rows(active)
-        retained = (row for key, row in archive.rows.items() if key not in active)
-        available = {row.session_id: row for row in (*retained, *active_rows)
-                     if period == 'all' or row_in_window(row, window, catalog.recent_finishes.get(row.session_id)) or (
-                         row.session_id in catalog.recent_arrivals and row.session_id not in catalog.prompt_activity
-                         and in_window(catalog.activity.get(row.session_id), window))}
-        rows = ordered(available.values(), sort, direction, catalog.recent_finishes)
-        catalog.orders[cache_key] = rows
-        while len(catalog.orders) > 24:
-            catalog.orders.popitem(last=False)
-    offset = min(offset, max(0, (len(rows) - 1) // PAGE_SIZE) * PAGE_SIZE)
-    shown = rows[offset:offset + PAGE_SIZE]
-    lease['visible'] = tuple(row.session_id for row in shown)
-    view = session_view(shown, catalog.timezone_id, catalog.unit)
-    for value, row in zip(view['session_usage'], shown):
-        key = row.session_id
-        saved = key in archive.rows or key in catalog.rows
-        current = key in catalog.roots and catalog._current(key)
+def _display_row(key, data, *, provisional=False):
+    try:
+        row = decode_summary(data, provisional=provisional)
+        return row if row.session_id == key else None
+    except (AttributeError, KeyError, TypeError, ValueError, InvalidOperation):
+        return recover_summary(key, data)
+
+
+def cached_page(archive, *, token, offset, sort, direction, period, navigation, now, zone, unit, finish_grace):
+    """One committed snapshot for ready rows, Live overlays and period coverage."""
+    window = catalog_window(period, zone, now)
+    try:
+        total, offset, facts, live, cached, runtime, pending = archive.storage.sessions_page(
+            offset=offset, size=PAGE_SIZE, sort=sort, direction=direction, start_ms=window.start_ms,
+            end_ms=window.end_ms, run=archive.run, finish_cutoff=now - finish_grace + 1)
+    except (sqlite3.Error, OSError):
+        total, offset, facts, live, cached, runtime, pending = 0, 0, (), (), None, ('cache_recovering', False), (False, 0)
+    shown = []
+    for key, payload, running_since, _, saved in live:
+        row = _display_row(key, json.loads(payload), provisional=running_since is not None)
+        if row is not None:
+            shown.append((replace(row, running=running_since is not None), bool(saved)))
+    for key, fact in facts:
+        row = _display_row(key, fact.value.get('row'))
+        if row is not None:
+            shown.append((replace(row, running=False), True))
+    view = session_view(tuple(row for row, _ in shown), zone, unit)
+    for value, (row, saved) in zip(view['session_usage'], shown):
         value['indexed'] = saved
         value['has_summary'] = saved
-        value['new_arrival'] = key in catalog.recent_arrivals and key not in catalog.prompt_activity and not saved
-        value['activity_state'] = ('ready' if row.running or catalog._activity_current(key)
-            else 'retained' if row.last_activity_ms is not None else 'pending' if not saved else 'unavailable')
-        value['catalog_activity_ms'] = (catalog.activity.get(key) if value['new_arrival'] and
-            in_window(catalog.activity.get(key), window) else None)
-        value['metric_state'] = 'ready' if current else 'retained' if saved else 'pending'
+        value['new_arrival'] = False
+        value['catalog_activity_ms'] = None
+        value['activity_state'] = 'ready' if row.running or row.last_activity_ms is not None else 'unavailable'
+        value['metric_state'] = 'pending' if row.running and not saved else 'ready'
         value['metric_states'] = dict.fromkeys(('model', 'effort', 'ccost', 'prompts', 'duration', 'ctx'),
-                                               value['metric_state'])
-        if not row.context_qualified:
-            value['metric_states']['ctx'] = 'retained' if row.context_tokens is not None else 'pending'
-        if row.model_pending and row.model == 'N/A':
-            value['metric_states']['model'] = 'pending'
+                                                value['metric_state'])
+        if row.running:
+            for key, known in (
+                ('model', not row.model_pending and row.model != 'N/A'), ('effort', row.effort_key is not None),
+                ('ccost', row.ccost is not None), ('prompts', row.prompt_count is not None),
+                ('duration', row.duration_ms is not None), ('ctx', row.context_tokens is not None),
+            ):
+                value['metric_states'][key] = 'ready' if known else 'pending'
         if row.empty_history and saved and not row.running:
             value['metric_absences'] = dict.fromkeys(('model', 'ctx', 'activity'), EMPTY_HISTORY)
-    cached = sum(row.session_id in archive.rows or row.session_id in catalog.rows for row in rows)
-    live = catalog.history_progress_live_roots()
-    refreshes = {key for key in catalog.history_refresh_roots()
-                 if period == 'all' or row_in_window(archive.rows[key], window)}
-    missing = any(key not in live and key not in refreshes and not catalog._activity_current(key)
-        and (at is None or in_window(at, window)) for key, at in catalog.history_pending.items())
-    complete = archive.loaded and catalog.state == 'observed' and not missing
-    unavailable = sum(key not in live and (catalog.activity.get(key) is None or
-                      in_window(catalog.activity.get(key), window))
-                      for key in catalog.unavailable_history())
-    # A storage outage is not proof of a zero-sized archive. The independent
-    # legacy import reports pending until its first attempt can inventory it.
-    restoring = not archive.loaded and catalog.archive_retry_at == 0
-    importing = archive.loaded and archive.legacy is not None and not catalog.legacy_done
-    recovering = (catalog.state == 'source_unavailable' or not archive.loaded and not restoring
-                  or importing and catalog.legacy_retry_at > catalog.clock())
-    progress = dict(cached=cached if archive.loaded or cached else None, complete=bool(complete and not importing),
-                    remaining=None, unavailable=unavailable, recovering=recovering)
-    return dict(cache_first=True, token=token, epoch=lease['cache_epoch'], offset=offset, total=len(rows),
-                  size=PAGE_SIZE, page_reused=True, retained_order=False,
-                  membership_pending=not progress['complete'] or bool(unavailable),
-                candidate_navigation=True, order_state='verified', state='observed', period=period,
-                sort=sort, direction=direction, pending_sort=False, indexed=cached,
-                navigation=navigation, history_progress=progress, view=view,
-                source=dict(identity='shared-history'))
+    state, terminal = runtime or ('loading', False)
+    complete, unavailable = pending
+    progress = dict(cached=cached, complete=state == 'observed' and complete and not terminal,
+                    remaining=None, unavailable=unavailable,
+                    recovering=state in ('source_unavailable', 'cache_recovering') and not terminal,
+                    terminal=bool(terminal))
+    return dict(cache_first=True, cache_events=archive.storage.notify_sessions is not None,
+                token=token or uuid4().hex, epoch=archive.run, offset=offset, total=total,
+                size=PAGE_SIZE, page_reused=True, retained_order=False,
+                membership_pending=not progress['complete'] or bool(unavailable), candidate_navigation=True,
+                order_state='verified', state='observed', period=period, sort=sort, direction=direction,
+                pending_sort=False, indexed=cached, navigation=navigation, history_progress=progress,
+                view=view, source=dict(identity='shared-history'))
 
 
 def session_view(rows, zone, unit):

@@ -401,7 +401,7 @@ const AccountTimelineView = (() => {
       this.buttons.forEach(([id, button]) => button.setAttribute('aria-pressed', String(id === this.period)));
       if (typeof ReportLoading !== 'undefined')
         ReportLoading.historyProgress(this, this.buttons.find(([id]) => id === this.period)?.[1],
-          view?.history_progress);
+          view?.history_progress ?? (this.sharedHistory && !view ? {complete: false} : undefined));
       this.legendFor(roster);
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];
@@ -442,9 +442,9 @@ const AccountTimelineView = (() => {
       const unselected = roster.length && !selectedSeries.length;
       const loading = !view && !unselected && this.initial && this.visible;
       const message = unselected ? 'Select an account to show its usage.' :
-        loading ? 'Preparing chart' : 'No usage history to show.';
+        this.sharedHistory && !view ? '' : loading ? 'Preparing chart' : 'No usage history to show.';
       ReportView.text(this.message, message);
-      this.initialRing.hidden = !loading || !this.working;
+      this.initialRing.hidden = this.sharedHistory || !loading || !this.working;
       this.frame.hidden = !view?.buckets.length;
       this.empty.hidden = !this.frame.hidden && !unselected;
       this.empty.classList.toggle('over-plot', !this.frame.hidden);

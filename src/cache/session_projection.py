@@ -41,6 +41,33 @@ def create_schema(db):
     db.execute('CREATE INDEX ready_sessions_latest_activity ON ready_sessions (latest_activity_ms)')
 
 
+def create_runtime_schema(db):
+    db.execute('''CREATE TABLE session_runtime (
+        run TEXT PRIMARY KEY,
+        state TEXT NOT NULL,
+        terminal INTEGER NOT NULL
+    ) WITHOUT ROWID''')
+    db.execute('''CREATE TABLE session_pending (
+        run TEXT NOT NULL,
+        item TEXT NOT NULL,
+        activity_ms INTEGER,
+        unavailable INTEGER NOT NULL,
+        PRIMARY KEY(run, item)
+    ) WITHOUT ROWID''')
+    db.execute('''CREATE INDEX session_pending_window
+        ON session_pending (run, unavailable, activity_ms)''')
+    db.execute('''CREATE TABLE session_live (
+        run TEXT NOT NULL,
+        item TEXT NOT NULL,
+        start_ms INTEGER,
+        finish_ms INTEGER,
+        last_activity_ms INTEGER,
+        latest_activity_ms INTEGER,
+        payload TEXT NOT NULL,
+        PRIMARY KEY(run, item)
+    ) WITHOUT ROWID''')
+
+
 def _decimal_key(amount):
     """An order-preserving SQLite BLOB without float rounding or Decimal context."""
     if amount is None:
@@ -73,7 +100,7 @@ def save_ready(db, item, partition, algorithm, revision, observed_ms, keys, last
               (ready_sessions.observed_ms, ready_sessions.partition, ready_sessions.revision)''', values)
 
 
-def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms):
+def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms, run=None, finish_cutoff=None):
     column = SORT_COLUMNS[sort]
     order = 'DESC' if direction == -1 else 'ASC'
     if start_ms is None:
@@ -81,8 +108,19 @@ def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms):
     else:
         predicate = '(last_activity_ms >= ? AND last_activity_ms < ?) OR (latest_activity_ms >= ? AND latest_activity_ms < ?)'
         bounds = (max(1, start_ms), end_ms) * 2
-    total = db.execute(f'SELECT count(*) FROM ready_sessions WHERE {predicate}', bounds).fetchone()[0]
+    overlay = []
+    if run is not None:
+        overlay, runtime, pending = read_runtime(db, run, start_ms, end_ms, finish_cutoff)
+        predicate = f'''({predicate}) AND NOT EXISTS (
+            SELECT 1 FROM session_live
+            WHERE run=? AND session_live.item=ready_sessions.item
+              AND ((start_ms IS NOT NULL AND start_ms<?) OR finish_ms>=?)
+        )'''
+        bounds += (run, end_ms, finish_cutoff)
+    historical = db.execute(f'SELECT count(*) FROM ready_sessions WHERE {predicate}', bounds).fetchone()[0]
+    total = len(overlay) + historical
     offset = min(offset, max(0, (total - 1) // size) * size)
+    shown = overlay[offset:offset + size]
     rows = db.execute(f'''SELECT f.item, f.revision, f.observed_ms, f.value, f.partition
         FROM (
             SELECT item, partition, algorithm, {column} AS sort_key
@@ -92,5 +130,60 @@ def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms):
         ) AS page JOIN facts AS f ON f.partition=page.partition AND f.domain=? AND
                                    f.algorithm=page.algorithm AND f.item=page.item
         ORDER BY page.sort_key IS NULL, page.sort_key {order}, page.item''',
-        (*bounds, size, offset, SESSIONS_DOMAIN)).fetchall()
-    return total, offset, rows
+        (*bounds, size - len(shown), max(0, offset - len(overlay)), SESSIONS_DOMAIN)).fetchall()
+    if run is None:
+        return total, offset, rows
+    cached = historical + sum(row[4] for row in overlay)
+    return total, offset, rows, shown, cached, runtime, pending
+
+
+def read_runtime(db, run, start_ms, end_ms, finish_cutoff):
+    runtime = db.execute('SELECT state, terminal FROM session_runtime WHERE run=?', (run,)).fetchone()
+    lower = max(1, start_ms or 1)
+    rows = db.execute('''SELECT item, payload, start_ms, finish_ms,
+            EXISTS (SELECT 1 FROM ready_sessions WHERE ready_sessions.item=session_live.item)
+        FROM session_live WHERE run=? AND ((start_ms IS NOT NULL AND start_ms<?) OR
+            (finish_ms>=? AND (? IS NULL OR (finish_ms>=? AND finish_ms<?) OR
+                (last_activity_ms>=? AND last_activity_ms<?) OR
+                (latest_activity_ms>=? AND latest_activity_ms<?))))
+        ORDER BY start_ms IS NULL, start_ms DESC, finish_ms DESC, item''',
+        (run, end_ms, finish_cutoff, start_ms, lower, end_ms, lower, end_ms, lower, end_ms)).fetchall()
+    condition = 'run=?'
+    bounds = (run,)
+    if start_ms is not None:
+        condition += ' AND (activity_ms IS NULL OR (activity_ms>=? AND activity_ms<?))'
+        bounds += (lower, end_ms)
+    unavailable = db.execute(f'SELECT count(*) FROM session_pending WHERE unavailable=1 AND {condition}',
+                             bounds).fetchone()[0]
+    complete = db.execute(f'SELECT 1 FROM session_pending WHERE unavailable=0 AND {condition} LIMIT 1',
+                          bounds).fetchone() is None
+    return rows, runtime, (complete, unavailable)
+
+
+def update_runtime(db, run, *, state, terminal, reset_pending, pending, live):
+    db.execute('''INSERT INTO session_runtime VALUES (?, ?, ?)
+        ON CONFLICT(run) DO UPDATE SET state=excluded.state, terminal=excluded.terminal''',
+        (run, state, terminal))
+    if reset_pending:
+        db.execute('DELETE FROM session_pending WHERE run=?', (run,))
+    for key, value in pending.items():
+        if value is None:
+            db.execute('DELETE FROM session_pending WHERE run=? AND item=?', (run, key))
+        else:
+            db.execute('''INSERT INTO session_pending VALUES (?, ?, ?, ?)
+                ON CONFLICT(run, item) DO UPDATE SET activity_ms=excluded.activity_ms,
+                    unavailable=excluded.unavailable''', (run, key, *value))
+    for key, value in live.items():
+        if value is None:
+            db.execute('DELETE FROM session_live WHERE run=? AND item=?', (run, key))
+        else:
+            db.execute('''INSERT INTO session_live VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run, item) DO UPDATE SET start_ms=excluded.start_ms, finish_ms=excluded.finish_ms,
+                    last_activity_ms=excluded.last_activity_ms, latest_activity_ms=excluded.latest_activity_ms,
+                    payload=excluded.payload''', (run, key, *value))
+
+
+def close_runtime(db, run):
+    db.execute('DELETE FROM session_live WHERE run=?', (run,))
+    db.execute('DELETE FROM session_pending WHERE run=?', (run,))
+    db.execute('DELETE FROM session_runtime WHERE run=?', (run,))

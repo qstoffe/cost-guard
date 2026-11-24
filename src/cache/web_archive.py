@@ -12,7 +12,7 @@ from .signature import dependency_signature
 
 
 APPLICATION_ID = 0x43475231  # CGR1
-SCHEMA = 1
+SCHEMA = 2
 EVIDENCE_ENVELOPE = 'web-fact-envelope/1'
 LEGACY_IMPORT = 'import-fr000778'
 REPORT_CHECKPOINTS = 'shared-history'
@@ -53,11 +53,13 @@ def history_rank(partition, observed_ms, revision):
 
 
 class WebArchive:
-    def __init__(self, directory, *, previous_directory=None, retire_previous=False):
+    def __init__(self, directory, *, previous_directory=None, retire_previous=False, notify_sessions=None):
         self.path = (directory / WEB_ARCHIVE_FILENAME).absolute()
         self._uri = self.path.as_uri()
         self._lock = Lock()
         self._generations = {}
+        self.notify_sessions = notify_sessions
+        self._sessions_revision = 0
         self._retire_paths = {}
         if retire_previous:
             self._retire_paths[self.path.with_name(PREVIOUS_ARCHIVE_FILENAME)] = dict(
@@ -77,6 +79,9 @@ class WebArchive:
         with self._lock:
             for domain in domains:
                 self._generations[domain] = self._generations.get(domain, 0) + 1
+            if self.notify_sessions is not None and session_projection.SESSIONS_DOMAIN in domains:
+                self._sessions_revision += 1
+                self.notify_sessions(self._sessions_revision)
 
     @staticmethod
     def _history_index(db):
@@ -111,6 +116,12 @@ class WebArchive:
                 if db.execute('PRAGMA journal_mode').fetchone()[0] != 'wal':
                     raise sqlite3.DatabaseError('report cache requires WAL')
                 return
+            if (current_id, current_version) == (APPLICATION_ID, 1):
+                db.execute('BEGIN IMMEDIATE')
+                if db.execute('PRAGMA user_version').fetchone()[0] == 1:
+                    session_projection.create_runtime_schema(db)
+                    db.execute(f'PRAGMA user_version={SCHEMA}')
+                return
             if current_id or current_version or db.execute('SELECT 1 FROM sqlite_schema LIMIT 1').fetchone():
                 raise sqlite3.DatabaseError('unrecognized report cache')
             if db.execute('PRAGMA journal_mode=WAL').fetchone()[0] != 'wal':
@@ -144,6 +155,7 @@ class WebArchive:
             self._history_index(db)
             db.execute('CREATE TABLE report_metadata (name TEXT PRIMARY KEY) WITHOUT ROWID')
             session_projection.create_schema(db)
+            session_projection.create_runtime_schema(db)
             db.execute(f'PRAGMA application_id={APPLICATION_ID}')
             db.execute(f'PRAGMA user_version={SCHEMA}')
 
@@ -249,16 +261,31 @@ class WebArchive:
             return False
         return self._publish_batch(partition, domains, retain_conflicts=False)
 
-    def publish_session(self, partition, domains, item, keys, last_at, latest_at):
+    def publish_session(self, partition, domains, item, keys, last_at, latest_at, *, run=None):
         if not partition:
             return False
         return self._publish_batch(partition, domains, retain_conflicts=False,
-                                   ready_session=(item, keys, last_at, latest_at))
+                                   ready_session=(item, keys, last_at, latest_at, run))
 
     def ready_sessions_page(self, **page):
         with self._connect() as db:
             total, offset, values = session_projection.read_ready(db, **page)
             return total, offset, tuple(self._historical_facts(values))
+
+    def sessions_page(self, **page):
+        with self._connect() as db:
+            total, offset, values, live, cached, runtime, pending = session_projection.read_ready(db, **page)
+            return total, offset, tuple(self._historical_facts(values)), live, cached, runtime, pending
+
+    def update_sessions_runtime(self, run, **values):
+        with self._connect(write=True) as db:
+            db.execute('BEGIN IMMEDIATE')
+            session_projection.update_runtime(db, run, **values)
+        self.note_publication((session_projection.SESSIONS_DOMAIN,))
+
+    def close_sessions_runtime(self, run):
+        with self._connect(write=True) as db:
+            session_projection.close_runtime(db, run)
 
     def _publish_batch(self, partition, domains, *, retain_conflicts, ready_session=None):
         values = [(partition, domain, key, EVIDENCE_ENVELOPE, fact.revision, fact.observed_ms,
@@ -295,10 +322,12 @@ class WebArchive:
                         WHERE partition=? AND domain=? AND item=? AND algorithm=? AND observed_ms<?''',
                         (value[5], *value[:4], value[5]))
                 if ready_session is not None and value[1] == session_projection.SESSIONS_DOMAIN:
-                    item, keys, last_at, latest_at = ready_session
+                    item, keys, last_at, latest_at, run = ready_session
                     if item == value[2]:
                         session_projection.save_ready(db, item, partition, value[3], value[4], value[5],
                                                       keys, last_at, latest_at)
+                        if run is not None:
+                            db.execute('DELETE FROM session_pending WHERE run=? AND item=?', (run, item))
         if changed:
             self.note_publication(changed)
         return True

@@ -47,7 +47,7 @@ const LiveConnection = (() => {
         stop(`STOPPED — NOT LIVE · ${values.terminal.reason}: host stopped. Run the launcher again using the OS launcher.`);
       } else {
         if (validate) health();
-        update(values.live, values.progress, values.watch_history?.view, values.history, reconnected);
+        update(values.live, values.progress, values.watch_history?.view, values.history, reconnected, values.sessions_cache);
       }
     }
     async function sync() {
@@ -117,7 +117,7 @@ const LiveConnection = (() => {
       const opened = sourceFactory('/api/events'); // No reusable secret or query string.
       source = opened;
       const current = () => !stopped && source === opened;
-      for (const kind of ['live', 'progress', 'watch_history', 'history', 'terminal'])
+      for (const kind of ['live', 'progress', 'watch_history', 'history', 'sessions_cache', 'terminal'])
         opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
       opened.addEventListener('resync', () => { if (current()) sync(); });
       opened.addEventListener('authorization_required', () => {

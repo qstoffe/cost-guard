@@ -320,7 +320,7 @@ function show(state) {
     output.setAttribute('aria-busy', String(state.loading && !state.result && !blocked &&
       !state.interrupted && !state.statsAcquisitionFailed));
     ReportView.defaultUnit();
-    state.stats ||= new AIStatsView.View(period => selectStats(state, period));
+     state.stats ||= new AIStatsView.View(period => selectStats(state, period), {archive: archiveHistory});
     state.stats.update(state, blocked); state.stats.attach(output);
     return;
   }
@@ -330,10 +330,12 @@ function show(state) {
     const ready = !!state.result && !state.withheld && TokenMixView.compatible(state.result, state.period) &&
       (!state.mixBinding || state.mixBinding === tokenMixBinding);
     output.setAttribute('aria-busy', String(!ready && !state.failed && !state.interrupted && !historyBlocked()));
-    state.tokenMix.selection(state.period || 'all', ready);
+     state.tokenMix.selection(state.period || 'all', ready, archiveHistory ?
+       (ready ? state.result.view.history_progress : {complete: false, terminal: state.failed || !!state.interrupted}) :
+       undefined);
     if (ready) state.tokenMix.update(state.result);
     state.tokenMix.attach(output);
-    if (!ready) {
+     if (!ready && !archiveHistory) {
       state.mixLoading ||= ReportView.element('div');
       if (state.mixLoading.parentNode !== state.tokenMix.root) state.tokenMix.root.append(state.mixLoading);
       ReportLoading.show(state.mixLoading, state);
@@ -702,7 +704,7 @@ function navigate() {
   }
    if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {
     if (!current.catalog) {
-      current.catalog = new SessionsCatalog.View(api);
+      current.catalog = new SessionsCatalog.View(api, {archive: archiveHistory});
       current.catalog.sourceHealth(historyBlocked() || hostState.sourceBlocked || hostState.sourceOutage, historyBlocked());
     }
     current.catalog.configure(route.params);
@@ -752,7 +754,7 @@ async function connect() {
     accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
-      liveConnection = LiveConnection.connect(api, (value, progress, watchHistory, historyHints, reconnected) => {
+      liveConnection = LiveConnection.connect(api, (value, progress, watchHistory, historyHints, reconnected, sessionsCache) => {
         const firstLiveView = !sourceValue?.view && !!value?.view;
         sourceValue = value?.view || !sourceValue?.view ? value : {...value,
           view: sourceValue.view, source_observed_at_ms: sourceValue.source_observed_at_ms};
@@ -766,7 +768,8 @@ async function connect() {
           current?.catalog?.catchUp();
           if (archiveReadable()) current?.detail?.catchUp();
         }
-        current?.catalog?.wake(historyHints?.catalog_hint ?? value?.catalog_hint);
+        current?.catalog?.wake(sessionsCache ? `sessions:${sessionsCache.revision}` :
+          historyHints?.catalog_hint ?? value?.catalog_hint);
         current?.detail?.wake(historyHints?.detail_hints ?? value?.detail_hints);
         current?.detail?.updateInvocations();
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }

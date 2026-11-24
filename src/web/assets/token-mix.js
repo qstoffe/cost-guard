@@ -148,23 +148,23 @@ const TokenMixView = (() => {
       this.content.append(this.status, this.title, this.summary, this.models.root, this.publishers.root);
       this.root.append(this.selector, this.content);
     }
-    selection(period, ready) {
+    selection(period, ready, progress) {
       this.buttons.forEach(({id, button}) => button.setAttribute('aria-pressed', String(id === period)));
+      if (typeof ReportLoading !== 'undefined')
+        ReportLoading.historyProgress(this, this.buttons.find(item => item.id === period)?.button, progress);
       this.content.hidden = !ready;
     }
     update(result) {
       if (this.result === result) return;
       this.result = result;
       const view = result.view;
-      if (typeof ReportLoading !== 'undefined')
-        ReportLoading.historyProgress?.(this, this.buttons.find(item => item.id === view.token_mix_period?.period)?.button,
-          view.history_progress);
       const coverage = view.token_mix_period?.coverage;
       const hasUsage = !!view.model_token_mix.length || !!view.token_mix?.request_count;
       const unknown = coverage === 'unknown' || !hasUsage && result.source.status === 'partial';
       for (const node of [this.title, this.summary, this.models.root, this.publishers.root])
         node.hidden = unknown;
-      ReportView.text(this.status, unknown ? 'Usage for this period could not be verified yet.' :
+      const pending = view.history_progress && !view.history_progress.complete && !view.history_progress.terminal;
+      ReportView.text(this.status, pending ? '' : unknown ? 'Usage for this period could not be verified.' :
         coverage === 'partial' ? 'Showing verified usage only. Some history could not be checked.' :
           hasUsage ? '' : 'No usage yet.');
       this.status.hidden = !this.status.textContent;

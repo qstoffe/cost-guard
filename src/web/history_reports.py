@@ -1,6 +1,7 @@
 """Own background projection and atomically hand stable results to HTTP readers."""
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import sqlite3
 import time
 from types import SimpleNamespace
 
@@ -64,7 +65,7 @@ class HistoryReports:
                 current, retained = results[key], previous.get(key)
                 if retained is not None:
                     results[key] = self._retain_readable(kind, period, current, retained)
-        if results and not more:
+        if results:
             try:
                 self.archive.publish(REPORT_CHECKPOINTS, VIEWS, {period: ArchiveFact(str(inputs['now']), inputs['now'],
                     dict(stamp=[*format_stamp, snapshot[0]],
@@ -195,7 +196,15 @@ class HistoryReports:
 
     def lookup(self, request, catalog):
         period = request.token_mix_scope if request.kind is ReportKind.TOKEN_MIX else request.stats_scope
-        result = self.publication.get((request.kind.value, period))
+        result = None
+        try:
+            _, entries = self.archive.history_item(VIEWS, period, 0)
+            for _, entry in entries:
+                result = entry.value.get('views', {}).get(request.kind.value)
+                if result is not None:
+                    break
+        except (sqlite3.Error, OSError):
+            pass  # The next publication or reconnect can recover the read.
         return dict(id=None, result_id=None, result=result, cache_first=True, refresh='scheduled',
                     terminal=False, stale=False, error=None,
                     source_identity=REPORT_CHECKPOINTS, projection_epoch=0)
