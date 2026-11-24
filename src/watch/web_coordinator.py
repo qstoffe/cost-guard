@@ -80,7 +80,7 @@ def refill_catalog(owner, catalog, *, completion_only=False):
 
 class WebWatchCoordinator(WatchCoordinator):
     def __init__(self, *, service_factory, session_cost_factory=None, guidance_binding=None,
-                 card_readers=None, catalog_readers=None, detail_capture=None, **kwargs):
+                 card_readers=None, catalog_readers=None, account_readers=None, detail_capture=None, **kwargs):
         super().__init__(**kwargs)
         self.card_workers = CardWorkers(service_factory,
             batch_size=2 if callable(getattr(self.source, 'load_card_snapshots', None)) else 1,
@@ -95,6 +95,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration, self._monotonic,
             costs=self.session_costs, guidance=self.guidance, started_at_ms=self.started_at_ms)
         self.history_factory = service_factory
+        self.account_readers = account_readers
         self.history_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-account-history")
         self.history_job = None
         self.history_due_ms = 0
@@ -262,27 +263,33 @@ class WebWatchCoordinator(WatchCoordinator):
         return self.accounts.wait_delay(6.0 if idle else 3.0)
 
     def _account_history(self, sessions, snapshots, now_ms, active_roots=(), *, expected_source=None, progress=None):
-        service = None
+        readers = self.account_readers
         try:
-            service = self.history_factory(now_ms)
-            with self.reads.using(service.source):
-                source = source_scope(service.source)
-                if expected_source is not None and source != expected_source:
-                    return None
-                if self.daily_history_source != source:
-                    self.daily_history.reset()
-                    self.daily_history_source = source
-                value = acquire_windows(service, self.daily_history, sessions, snapshots, now_ms, active_roots,
-                                        source, closed=lambda: self._closed, progress=progress)
-                if source_scope(service.source) != source:
-                    self.daily_history_source = None
-                    return None
-                return value
+            with readers.borrow() if readers is not None else nullcontext() as reader:
+                service = self.history_factory(now_ms, reader=reader) if reader is not None else self.history_factory(now_ms)
+                try:
+                    binding = self.reads.using(service.source) if reader is None else nullcontext()
+                    with binding:
+                        return self._acquire_account_windows(service, sessions, snapshots, now_ms, active_roots,
+                                                             expected_source, progress)
+                finally:
+                    service.close_accounts()
         except (SourceError, PricingUnavailableError) as error:
             return error
-        finally:
-            if service is not None:
-                service.close_accounts()
+
+    def _acquire_account_windows(self, service, sessions, snapshots, now_ms, active_roots, expected_source, progress):
+        source = source_scope(service.source)
+        if expected_source is not None and source != expected_source:
+            return None
+        if self.daily_history_source != source:
+            self.daily_history.reset()
+            self.daily_history_source = source
+        value = acquire_windows(service, self.daily_history, sessions, snapshots, now_ms, active_roots,
+                                source, closed=lambda: self._closed, progress=progress)
+        if source_scope(service.source) != source:
+            self.daily_history_source = None
+            return None
+        return value
 
     def _accept_account_history(self, value, source, day, *, intermediate=False):
         if value.source != source or value.usage is not None and value.usage.day_start_ms != day:
@@ -416,6 +423,8 @@ class WebWatchCoordinator(WatchCoordinator):
             self.detail_capture.cancel()
         cancel_source(self.source)
         self.reads.cancel()
+        if self.account_readers is not None:
+            self.account_readers.cancel()
         if self.catalog_readers is not None:
             self.catalog_readers.cancel()
         if self.guidance is not None:
@@ -430,6 +439,8 @@ class WebWatchCoordinator(WatchCoordinator):
         finally:
             self.session_costs.close()
             self.history_pool.shutdown(wait=True, cancel_futures=True)
+            if self.account_readers is not None:
+                self.account_readers.close()
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
             self.catalog_pool.shutdown(wait=True, cancel_futures=True)
             if self.catalog_readers is not None:

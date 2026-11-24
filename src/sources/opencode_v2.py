@@ -707,7 +707,19 @@ class OpenCodeV2Source:
 
     @observed("snapshot")
     def load_session_snapshots(self, session_ids: Sequence[str]) -> Mapping[str, SessionSnapshot]:
-        return load_snapshots(self, session_ids)
+        brackets = self._card_trees
+        if brackets is None:
+            return load_snapshots(self, session_ids)
+        with self._connection_lock:
+            self._client()
+            epoch = self._evidence_epoch
+        brackets.reset_batch()
+        snapshots = load_snapshots(self, session_ids, brackets=brackets.bracket)
+        with self._connection_lock:
+            self._current_endpoint()
+            if epoch != self._evidence_epoch:
+                raise SourceConcurrentChangeError('Service epoch changed during batch acquisition', phase='snapshot')
+        return snapshots
 
     @observed('snapshot')
     def load_session_snapshots_for_sampling(self, session_ids: Sequence[str]) -> Mapping[str, SessionSnapshot]:

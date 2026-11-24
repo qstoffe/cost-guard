@@ -120,6 +120,11 @@ class CardTreeBrackets:
         self.trees.clear()
         self.before_hint = self.before_index = None
 
+    def reset_batch(self):
+        # Batch clients can acquire thousands of trees in one job. Directory
+        # lookups need only the current proof, not the earlier batches' trees.
+        self.trees.clear()
+
     def _live_before(self, root_ids):
         if self.before_hint is None:
             return None
