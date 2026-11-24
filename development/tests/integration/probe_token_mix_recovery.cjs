@@ -80,7 +80,7 @@ module.exports = async function probe({evaluate, until, checks}) {
   assert.equal(await evaluate(`current.result.sequence===weekMix.sequence+1 && (${retained})`), true);
   await evaluate(`mixStep='rotated';acquire(current,true)`);
   assert.equal(await evaluate(`current.result.view.token_mix===null &&
-    current.tokenMix.status.textContent==='Usage for this period could not be verified yet.' &&
+    current.tokenMix.status.textContent==='Usage for this period could not be verified.' &&
     current.tokenMix.summary.hidden && current.tokenMix.models.root.hidden && !current.failed`), true);
   await evaluate(`mixStep='terminal';current.result=null;acquire(current)`);
   assert.equal(await evaluate(`current.failed && !current.loading &&
