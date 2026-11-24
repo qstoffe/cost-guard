@@ -211,6 +211,21 @@ class V2TreeBracketTests(unittest.TestCase):
             with self.assertRaises(SourceConcurrentChangeError):
                 reader.load_card_snapshots(('ses_current',))
 
+    def test_account_history_batch_matches_global_snapshots_without_relisting_unrelated_roots(self):
+        with source_with_current_service() as (origin, server, _registration):
+            for key in ('ses_other', 'ses_unrelated'):
+                server.sessions.append(dict(server.sessions[0], id=key))
+                server.messages[key] = []
+            roots = ('ses_current', 'ses_other')
+            expected = origin.load_session_snapshots(roots)
+            reader = self.reader(origin, server)
+
+            actual = reader.load_session_snapshots(roots)
+
+            self.assertEqual(expected, actual)
+            self.assertEqual(0, reader.metrics.counts.get('full_catalog_fetches', 0))
+            self.assertGreater(reader.metrics.counts.get('scoped_catalog_brackets', 0), 0)
+
     def test_only_complete_qualified_global_before_is_reused_and_every_after_is_fresh_scoped(self):
         with source_with_current_service() as (origin, server, _registration):
             reader = self.reader(origin, server)

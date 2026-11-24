@@ -25,10 +25,10 @@ from src.watch.models import SessionPreview
 from .detail_archive import acquired_detail
 from .session_active_snapshots import ActiveSnapshotOffers
 from .session_archive import SessionArchive, cached_page, retain_pending_metrics, retain_readable_fields
-from .session_epoch_page import ARRIVAL_SECONDS, epoch_page, ordered, sort_value
+from .session_epoch_page import ARRIVAL_SECONDS, epoch_page, ordered, recent_live_roots, sort_value
 from .session_quota import source_scope
 from .session_catalog_scope import (
-    PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population, in_window,
+    PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population, in_window, retain_live_arrivals,
 )
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
@@ -104,10 +104,12 @@ class SessionCatalog:
         self.last_page = ()
         self.background_due = 0
         self.observed = None
+        self.observed_ms = None
         self.last_observation = None
         self.orders = OrderedDict()
         self.discovery = {}
         self.recent_arrivals = {}
+        self.live_arrivals = set()
         self.discovery_sequence = 0
         self.preview_totals = {}
         self.wake_identity = uuid4().hex
@@ -140,6 +142,7 @@ class SessionCatalog:
                 self.archive.partition = partition if self.archive.loaded else None
                 self.archive_rejections.clear()
                 self.history_pending.clear()
+                self.live_arrivals.clear()
                 self.rows.clear()
                 self.valid.clear()
                 self.orders.clear()
@@ -356,6 +359,7 @@ class SessionCatalog:
                     self.interrupted = True
                     self.lifecycle_cutoff_ms = self.clock_ms()
                     self.recent_finishes.clear()
+                    self.live_arrivals.clear()
                 self.state = "source_unavailable"
                 return
             if observation is self.last_observation:
@@ -376,16 +380,21 @@ class SessionCatalog:
             self.roots = OrderedDict((root.session_id, root) for root in observation.sessions
                                       if root.parent_session_id is None)
             now = self.clock()
+            now_ms = self.clock_ms()
             self.recent_arrivals = {} if source_changed else {key: at for key, at in self.recent_arrivals.items()
                 if key in self.roots and self.roots[key].provenance == previous_roots[key].provenance
                 and now - at < ARRIVAL_SECONDS}
             if self.observed is not None and not source_changed:
                 added = self.roots.keys() - previous_roots.keys()
                 self.recent_arrivals.update((key, now) for key in added)
+                since_ms = None if self.interrupted or self.archive is None else self.observed_ms
+                self.live_arrivals = retain_live_arrivals(
+                    self.live_arrivals, self.roots, previous_roots, added, since_ms, now_ms)
                 if added:
                     self.background_due = min(self.background_due, now + 15)
             elif source_changed:
                 self.background_due = now
+                self.live_arrivals.clear()
             self.discovery = {key: age for key, age in self.discovery.items() if key in self.roots}
             for key in self.roots:
                 if key not in self.discovery:
@@ -455,6 +464,7 @@ class SessionCatalog:
             self.state = "observed"
             self.interrupted = False
             self.observed = self.clock()
+            self.observed_ms = now_ms
             if self.archive is not None:
                 self._restore_archived_rows()
                 self._record_history_pending()
@@ -464,30 +474,23 @@ class SessionCatalog:
             if self._archive_needs_capture(key) and not self._archive_unavailable(key)}
 
     def _archive_needs_capture(self, key):
-        old = self.archive.authorities.get(key)
-        if old is None:
-            return True
-        if key in self.changed_roots and (old[0] != self.revisions.get(key) or old[3] != self.archive_target):
-            return True
-        if (self.activity.get(key) or 0) > old[4]:
-            return True
-        if old[0] == self.revisions.get(key):
-            return False
-        # A new database can use a different revision encoding for the very
-        # same roots. Existing history is not replayed solely for that reason.
-        return old[3] == self.archive_target
+        return self.archive.needs_capture(key, self.revisions.get(key), self.archive_target,
+                                          self.activity.get(key) or 0, key in self.changed_roots)
 
     def history_live_roots(self):
         return self.active | self.running_roots | self._new_live_roots()
 
+    def history_progress_live_roots(self):
+        """Live additions do not reopen historical acquisition when their UI grace expires."""
+        return self._archive_urgent() | self.live_arrivals | {
+            key for key in self.prompt_activity if self._finish_known(key)}
+
+    def history_refresh_roots(self):
+        return self.archive.refresh_roots(self.history_pending, self.archive_target)
+
     def _new_live_roots(self):
-        # A catalog expansion can discover old sessions in bulk. Treat them
-        # as history, not urgent arrivals that jump the recency queue.
         latest = self.clock_ms()
-        cutoff = latest - ARRIVAL_SECONDS * 1000
-        now = self.clock()
-        return {key for key, discovered in self.recent_arrivals.items()
-                if now - discovered < ARRIVAL_SECONDS and cutoff <= self.activity.get(key, 0) <= latest}
+        return recent_live_roots(self.recent_arrivals, self.activity, self.clock(), latest)
 
     def _archive_signature(self, key):
         return self.archive_target, self.revisions.get(key), self.dependencies

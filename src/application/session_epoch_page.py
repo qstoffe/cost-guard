@@ -17,6 +17,13 @@ ARRIVAL_SLOTS = 5
 ARRIVAL_SECONDS = 120
 
 
+def recent_live_roots(arrivals, activity, now, latest):
+    # Old roots discovered in bulk must not jump the recency queue.
+    cutoff = latest - ARRIVAL_SECONDS * 1000
+    return {key for key, discovered in arrivals.items()
+            if now - discovered < ARRIVAL_SECONDS and cutoff <= activity.get(key, 0) <= latest}
+
+
 def effort_sort(key):
     if key is None:
         return None

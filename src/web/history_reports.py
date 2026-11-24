@@ -180,7 +180,8 @@ class HistoryReports:
             pending = catalog.history_pending.keys() | unavailable
             revisions = {root: catalog.revisions.get(root) for root in pending}
             activity = {root: catalog.activity.get(root) for root in pending}
-            live_roots = frozenset(catalog.history_live_roots())
+            live_roots = frozenset(catalog.history_progress_live_roots())
+            refresh_roots = frozenset(catalog.history_refresh_roots())
         selected = SimpleNamespace(selected=selection.selected if selection else 'OpenCode',
                                     warnings=tuple(selection.warnings) if selection else (),
                                     migration_gap=selection.migration_gap if selection else None)
@@ -188,7 +189,7 @@ class HistoryReports:
         self.last_render[period] = turn
         self.job = self.pool.submit(self._render, dict(identity=REPORT_CHECKPOINTS, selection=selected,
               config=dict(config), now=now, revisions=revisions, activity=activity, available=ready,
-              only=period, unavailable=unavailable, live_roots=live_roots),
+               only=period, unavailable=unavailable, live_roots=live_roots, refresh_roots=refresh_roots),
               stamp(period), {key: value for key, value in self.publication.items() if key[1] == period})
         self.next_turn = turn + RENDER_INTERVAL
 

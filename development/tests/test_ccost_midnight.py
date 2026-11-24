@@ -4,22 +4,93 @@ from datetime import datetime, timezone
 from decimal import Decimal as D
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from development.tests.fixtures.account_midnight import accounts, snapshot, ROUTES, EXPECTED, CATALOG
-from development.tests.fixtures.account_periods import request
+from development.tests.fixtures.account_periods import HOUR, NOW, request, subscription
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.watch_runtime import make_service
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.analysis.valuation import comparison_cost, unique_usage
 from src.application.display import with_display
+from src.application.projection import account
 from src.application.watch_accounts import watch_account
 from src.domain import CostDisposition
 from src.reports.accounts import account_projections
+from src.sources.errors import transport_failure
+from src.watch.observers import observe_catalog
 from src.watch.today_ccost import WatchTodayCCost
 from src.watch.web_coordinator import WebWatchCoordinator
 
 
+class AccountWindowPublicationTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.source = SyntheticMonthSource(0, 0, month_start_ms=NOW)
+        config, selection, service, _ = make_service(tmp.name, self.source, now_ms=NOW)
+        def factory(at):
+            job = make_service(tmp.name, self.source, now_ms=at)[2]
+            job.pricing_provider.catalog = CATALOG
+            return job
+        self.owner = WebWatchCoordinator(selection=selection, report_service=service, config=config,
+                                         service_factory=factory)
+        self.addCleanup(self.owner.close)
+        native = subscription('openai')
+        self.native = replace(native, quotas=(replace(native.quotas[0], remaining_fraction=D('.8')),
+                                              replace(native.quotas[1], reset_at_ms=NOW + 24 * HOUR)))
+        self.owner.accounts.snapshots = (self.native,)
+        self.failed_root = None
+        load = self.source.load_session_snapshot
+        def read(key):
+            if key == self.failed_root:
+                raise transport_failure(TimeoutError(), phase='snapshot')
+            return load(key)
+        self.source.load_session_snapshot = read
+        self.source.load_session_snapshots = lambda ids: {key: read(key) for key in ids}
+
+    def add(self, index, completed, tokens):
+        item = snapshot(index, completed, 'openai', amount=tokens)
+        self.source.snapshots[item.root.session_id] = replace(item, complete=True)
+        return item.root.session_id
+
+    def acquire(self, at):
+        observation = observe_catalog(self.source)
+        with patch.object(self.owner.accounts, 'refresh', return_value=False):
+            self.owner._refresh_quota(observation, now_ms=at)
+            self.owner.history_job.result(timeout=10)
+            self.owner._refresh_quota(observation, now_ms=at)
+        frame = self.owner._build_projection(now_ms=at)
+        quotas = with_display(account(frame.quota.accounts[0]), now_ms=at).to_json()['observation']['quotas']
+        return [(q['quota_display']['used']['percent'], q['display']['ccost_used']) for q in quotas]
+
+    def test_five_hour_amount_does_not_depend_on_one_week_only_root_becoming_readable(self):
+        self.failed_root = self.add(0, NOW - 48 * HOUR, 70_000)
+        self.add(1, NOW - HOUR, 10_000)
+        self.acquire(NOW)
+        after_retry = self.acquire(NOW + 60_001)
+        self.failed_root = None
+        after_recovery = self.acquire(NOW + 120_002)
+        self.assertEqual([('20%', '1'), ('43%', '?')], after_retry)
+        self.assertEqual([('20%', '1'), ('43%', '8')], after_recovery)
+
+    def test_reset_can_publish_new_used_even_if_the_previous_week_was_already_acquired(self):
+        self.add(0, NOW - 48 * HOUR, 70_000)
+        self.add(1, NOW - HOUR, 10_000)
+        self.assertEqual([('20%', '1'), ('43%', '8')], self.acquire(NOW))
+
+        reset = NOW + HOUR
+        five_hour, weekly = self.native.quotas
+        self.owner.accounts.snapshots = (replace(self.native, quotas=(replace(five_hour,
+            remaining_fraction=D('.9'), reset_at_ms=reset + 5 * HOUR), weekly)),)
+        for i in range(4):
+            self.add(i + 2, reset + i * 10_000, 10_000)
+        self.failed_root = self.add(6, NOW - 24 * HOUR, 20_000)
+        self.assertEqual(('10%', '4'), self.acquire(reset + 60_000)[0])
+
+
 class MidnightCCostTests(unittest.TestCase):
+
     def test_source_history_rolls_over_then_publishes_each_account_and_global_today(self):
         # Explicit UTC instants for local midnight: winter, summer, DST day and UTC control.
         for zone, instant in (('Europe/Stockholm', '2026-11-10T23:00:00'),

@@ -207,12 +207,15 @@ const ReportLoading = (() => {
     if (progress) {
       // The spinner means work is pending; an unavailable gap is not queued work.
       view.historySpinner.style.display = progress.complete || progress.recovering ? 'none' : '';
-      const cached = progress.cached == null ? 'Cached amount unknown' : `${progress.cached} cached`;
-      ReportView.text(view.historyCount,
-        cached + `${progress.remaining == null ? '' : ` · ${progress.remaining} remaining`}` +
-        `${progress.unavailable ? ` · ${progress.unavailable} unavailable` : ''}` +
-        `${progress.recovering ? ' · Local history temporarily unavailable; retrying' :
-          progress.restored ? ' · Checking for updates' : ''}`);
+      const status = [];
+      if (!progress.complete && !progress.recovering) {
+        status.push(progress.cached == null ? 'Cached amount unknown' : `${progress.cached} cached`);
+        if (progress.remaining != null) status.push(`${progress.remaining} remaining`);
+      }
+      if (progress.unavailable) status.push(`${progress.unavailable} unavailable`);
+      if (progress.recovering) status.push('Local history temporarily unavailable; retrying');
+      else if (progress.restored) status.push('Checking for updates');
+      ReportView.text(view.historyCount, status.join(' · '));
       if (button.nextSibling !== view.historyStatus) button.after(view.historyStatus);
     }
   }

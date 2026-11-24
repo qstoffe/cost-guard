@@ -100,13 +100,19 @@ def monthly_quota_window(component: QuotaComponent, now_ms: int) -> tuple[int, i
 
 def history_start(accounts: Iterable[AccountSnapshot], today_start_ms: int, now_ms: int, *,
                   include_copilot_month: bool = False, include_native_month: bool = False) -> int:
-    starts = [today_start_ms]
+    return min(history_starts(accounts, today_start_ms, now_ms,
+                              include_copilot_month=include_copilot_month, include_native_month=include_native_month))
+
+
+def history_starts(accounts: Iterable[AccountSnapshot], today_start_ms: int, now_ms: int, *,
+                   include_copilot_month: bool = False, include_native_month: bool = False) -> tuple[int, ...]:
+    starts = {today_start_ms}
     for account in accounts:
         for component in account.quotas:
             monthly = include_native_month or (include_copilot_month and usage_provider(account.ref.provider_id) == "github-copilot")
-            if (window := quota_window(component, now_ms, include_monthly=monthly)) is not None:
-                starts.append(window[0])
-    return min(starts)
+            if (window := quota_window(component, now_ms, include_monthly=monthly)) is not None and window[0] < window[1]:
+                starts.add(window[0])
+    return tuple(sorted(starts, reverse=True))
 
 
 @dataclass

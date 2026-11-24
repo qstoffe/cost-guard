@@ -140,10 +140,12 @@ def live_acquisition(*, selection=None):
     card_readers = (CardReaders(selection.source.new_card_reader)
         if selection.selected == 'v2' and isinstance(selection.source, OpenCodeV2Source) else None)
     catalog_readers = CardReaders(selection.source.new_card_reader, limit=1) if card_readers is not None else None
+    account_readers = CardReaders(selection.source.new_card_reader, limit=1) if card_readers is not None else None
     return LiveAcquisition(WebWatchCoordinator(selection=selection, report_service=service,
         config=config, service_factory=card_service, session_cost_factory=session_cost_resources,
          card_readers=card_readers,
-         catalog_readers=catalog_readers,
+          catalog_readers=catalog_readers,
+         account_readers=account_readers,
         detail_capture=DetailCapture(run_owned_detail),
         guidance_binding=cached_guidance_binding
             if callable(getattr(selection.source, 'refresh_observation_epoch', None)) else None))

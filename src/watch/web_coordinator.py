@@ -6,36 +6,28 @@ none of their full histories run on the presentation/live thread.
 """
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
-from dataclasses import dataclass, replace
+from dataclasses import replace
+from queue import Empty
 
 from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError
 from src.analysis.account_timeline import PERIODS
-from src.analysis.daily_usage import DailyUsage
+from src.analysis.period_ccost import history_starts
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
 from src.application.session_catalog import MINI_PREVIEW_LIMIT
 from src.application.session_quota import source_scope
 from src.reports.context_guidance import ComparisonMixMemo
 from src.reports.history import WatchHistoryAcquisition
-from src.reports.accounts import AccountPeriodHistory
 from .account_timeline import AccountTimeline, CardToday
 from .card_workers import CardWorkers
 from .cards import WatchCards
 from .session_costs import SessionCosts
 from .coordinator import WatchCoordinator, WatchCycle
-from .today_ccost import WatchTodayCCost
 from .running import running_prompts
 from .source_status import SourceStatus, SOURCE_CONFIRM_SECONDS
 from .source_reads import SourceReads, cancel_source
 from .detail_capture import DetailWorkerStopError
-
-
-@dataclass(frozen=True, slots=True)
-class DailyAccountHistory:
-    accounts: AccountPeriodHistory
-    usage: DailyUsage
-    source: tuple
-    roots: dict
+from .web_account_history import AccountHistoryProgress, DailyAccountHistory, acquire_windows
 
 
 def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
@@ -88,7 +80,7 @@ def refill_catalog(owner, catalog, *, completion_only=False):
 
 class WebWatchCoordinator(WatchCoordinator):
     def __init__(self, *, service_factory, session_cost_factory=None, guidance_binding=None,
-                 card_readers=None, catalog_readers=None, detail_capture=None, **kwargs):
+                 card_readers=None, catalog_readers=None, account_readers=None, detail_capture=None, **kwargs):
         super().__init__(**kwargs)
         self.card_workers = CardWorkers(service_factory,
             batch_size=2 if callable(getattr(self.source, 'load_card_snapshots', None)) else 1,
@@ -103,11 +95,15 @@ class WebWatchCoordinator(WatchCoordinator):
         self.cards = WatchCards(self.card_workers, self.recent_seconds, self._record_card_duration, self._monotonic,
             costs=self.session_costs, guidance=self.guidance, started_at_ms=self.started_at_ms)
         self.history_factory = service_factory
+        self.account_readers = account_readers
         self.history_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-account-history")
         self.history_job = None
         self.history_due_ms = 0
+        self.history_starts = None
+        self.history_progress = None
         self.history_quota = None
-        self.daily_history = WatchHistoryAcquisition(share_roots=True)
+        self.history_fallbacks = ()
+        self.daily_history = WatchHistoryAcquisition(share_roots=True, progressive=True)
         self.daily_history_source = None
         self.history_source, self.history_roots, self.card_today = None, None, None
         self.daily_usage = None
@@ -267,36 +263,55 @@ class WebWatchCoordinator(WatchCoordinator):
                 and self.history_job is None and self.catalog_job is None)
         return self.accounts.wait_delay(6.0 if idle else 3.0)
 
-    def _account_history(self, sessions, snapshots, now_ms, active_roots=(), *, expected_source=None):
-        service = None
+    def _account_history(self, sessions, snapshots, now_ms, active_roots=(), *, expected_source=None, progress=None):
+        readers = self.account_readers
         try:
-            service = self.history_factory(now_ms)
-            with self.reads.using(service.source):
-                source = source_scope(service.source)
-                if expected_source is not None and source != expected_source:
-                    return None
-                if self.daily_history_source != source:
-                    self.daily_history.reset()
-                    self.daily_history_source = source
-                service.enable_watch_accounts(record_evidence=False, history=self.daily_history)
-                service.prepare_watch_account_history(snapshots)
-                today = WatchTodayCCost(service.timezone_id)
-                today.schedule_history(service, sessions, now_ms, active_root_ids=active_roots, live_root_ids=active_roots)
-                while today.history_pending and not self._closed:
-                    # Share authoritative V2 brackets across the existing bounded
-                    # four-root slice instead of relisting all history per root.
-                    today.advance_history(service, now_ms)
-                if self._closed or source_scope(service.source) != source:
-                    self.daily_history_source = None
-                    return None
-                service.project_watch_accounts(snapshots)
-                history, daily = service.watch_account_history(), service.project_watch_today()
-                return DailyAccountHistory(history, daily, source, dict(self.daily_history.chart_roots))
+            with readers.borrow() if readers is not None else nullcontext() as reader:
+                service = self.history_factory(now_ms, reader=reader) if reader is not None else self.history_factory(now_ms)
+                try:
+                    binding = self.reads.using(service.source) if reader is None else nullcontext()
+                    with binding:
+                        return self._acquire_account_windows(service, sessions, snapshots, now_ms, active_roots,
+                                                             expected_source, progress)
+                finally:
+                    service.close_accounts()
         except (SourceError, PricingUnavailableError) as error:
             return error
-        finally:
-            if service is not None:
-                service.close_accounts()
+
+    def _acquire_account_windows(self, service, sessions, snapshots, now_ms, active_roots, expected_source, progress):
+        source = source_scope(service.source)
+        if expected_source is not None and source != expected_source:
+            return None
+        if self.daily_history_source != source:
+            self.daily_history.reset()
+            self.daily_history_source = source
+        value = acquire_windows(service, self.daily_history, sessions, snapshots, now_ms, active_roots,
+                                source, closed=lambda: self._closed, progress=progress)
+        if source_scope(service.source) != source:
+            self.daily_history_source = None
+            return None
+        return value
+
+    def _accept_account_history(self, value, source, day):
+        if value.source != source or value.usage is not None and value.usage.day_start_ms != day:
+            self.history_due_ms = 0
+            return
+        current = value.accounts
+        older = ((self.history_quota, *self.history_fallbacks) if self.history_source == source
+                 and self.history_quota is not None else ())
+        # A fresh reset window can use the newest index while a weekly window
+        # still uses its last covering index. Never combine their usage.
+        fallbacks = []
+        for start in self.history_starts or (day,):
+            if not current.covers(start):
+                covering = next((history for history in older if history.covers(start)), None)
+                if covering is not None and not any(covering is saved for saved in fallbacks):
+                    fallbacks.append(covering)
+        self.history_quota, self.history_fallbacks = current, tuple(fallbacks)
+        self.history_source, self.history_roots = value.source, value.roots
+        if value.usage is not None:
+            self.daily_usage = value.usage
+        self.daily_status.clear()
 
     def _refresh_quota(self, observation, *, now_ms, force=False, allow_history=True, fresh_root_ids=()):
         source = source_scope(self.report_service.source)
@@ -308,24 +323,44 @@ class WebWatchCoordinator(WatchCoordinator):
         self.report_service.record_account_display(self.accounts.diagnostics())
         if changed or self.quota is None:
             self.quota = self.report_service.project_watch_accounts(self.accounts.snapshots)[0]
-        if self.history_job is not None and self.history_job.done():
+        day = local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms)
+        starts = history_starts(self.accounts.snapshots, day, now_ms, include_native_month=True)
+        if self.history_starts is not None and starts != self.history_starts:
+            held = (self.history_quota, *self.history_fallbacks) if self.history_source == source else ()
+            if any(not any(history is not None and history.covers(start) for history in held)
+                   for start in set(starts).difference(self.history_starts)):
+                self.history_due_ms = 0
+        self.history_starts = starts
+        done = self.history_job is not None and self.history_job.done()
+        progress = self.history_progress
+        if progress is not None:
+            # The same recent-first plan can satisfy any new bound inside its
+            # admission scope. Only expansion or a new day needs a new plan.
+            progress.starts = starts
+            if starts[-1] < progress.scope_start_ms or day != progress.day_start_ms:
+                progress.restart.set()
+            while True:
+                try:
+                    value = progress.updates.get_nowait()
+                except Empty:
+                    break
+                self._accept_account_history(value, source, day)
+        if done:
             value = self.history_job.result()
             if isinstance(value, Exception):
                 self.daily_status.fail(value)
                 self.history_due_ms = min(self.history_due_ms, now_ms + int(SOURCE_CONFIRM_SECONDS * 1000))
-            elif (value is not None and value.source == source and
-                  value.usage.day_start_ms == local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms)):
-                self.history_quota, self.daily_usage = value.accounts, value.usage
-                self.history_source, self.history_roots = value.source, value.roots
-                self.daily_status.clear()
             elif value is not None:
-                self.history_due_ms = 0
+                self._accept_account_history(value, source, day)
             self.history_job = None
+            self.history_progress = None
         if not self._closed and self.history_job is None and now_ms >= self.history_due_ms:
             self.history_due_ms = now_ms + 60_000
+            self.history_progress = AccountHistoryProgress(starts, starts[-1], day)
             self.history_job = self.history_pool.submit(self._account_history,
                 observation.sessions, tuple(self.accounts.snapshots), now_ms,
-                observation.active_candidates | observation.live_candidates, expected_source=source)
+                observation.active_candidates | observation.live_candidates, expected_source=source,
+                progress=self.history_progress)
 
     def enrich_once(self):
         return WatchCycle(self.status_projection(), (), ())
@@ -349,10 +384,12 @@ class WebWatchCoordinator(WatchCoordinator):
         self.cards.tick(now_ms)
         day = local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms)
         source = source_scope(self.report_service.source)
-        if self.daily_usage is not None and (self.daily_usage.day_start_ms != day or self.history_source != source):
+        if self.history_source != source:
             self.daily_usage = self.history_quota = None
+            self.history_fallbacks = ()
             self.history_source = self.history_roots = None
-            self.history_due_ms = 0
+        elif self.daily_usage is not None and self.daily_usage.day_start_ms != day:
+            self.daily_usage = None
         active, history, state = self.cards.project(now_ms)
         frame = super()._build_projection(now_ms=now_ms, status=status,
             status_active=status_active, scanned=scanned)
@@ -364,10 +401,14 @@ class WebWatchCoordinator(WatchCoordinator):
                 now_ms=now_ms, today_start_ms=day,
                 month_start_ms=local_month_start_ms(self.report_service.timezone_id, now_ms=now_ms),
                 timezone_id=self.report_service.timezone_id,
-                workday_calendar=str(self.config.get("workdayCalendar") or ""))
+                workday_calendar=str(self.config.get("workdayCalendar") or ""),
+                fallbacks=self.history_fallbacks)
             frame = replace(frame, quota=replace(frame.quota, accounts=accounts))
-            self.card_today = CardToday.from_accounts(accounts, source, self.report_service.timezone_id,
-                day, self.daily_usage.observed_at_ms, self.history_quota)
+            today = next((history for history in (self.history_quota, *self.history_fallbacks)
+                          if history.covers(day)), None)
+            if self.daily_usage is not None and today is not None:
+                self.card_today = CardToday.from_accounts(accounts, source, self.report_service.timezone_id,
+                    day, self.daily_usage.observed_at_ms, today)
         proof = self.cards.history
         frame = replace(frame, active_cards=active, history_cards=history, cards_state=state,
             recent_finished_cards=self.cards.recent.project(self.cards, now_ms),
@@ -389,6 +430,8 @@ class WebWatchCoordinator(WatchCoordinator):
             self.detail_capture.cancel()
         cancel_source(self.source)
         self.reads.cancel()
+        if self.account_readers is not None:
+            self.account_readers.cancel()
         if self.catalog_readers is not None:
             self.catalog_readers.cancel()
         if self.guidance is not None:
@@ -403,6 +446,8 @@ class WebWatchCoordinator(WatchCoordinator):
         finally:
             self.session_costs.close()
             self.history_pool.shutdown(wait=True, cancel_futures=True)
+            if self.account_readers is not None:
+                self.account_readers.close()
             self.detail_pool.shutdown(wait=True, cancel_futures=True)
             self.catalog_pool.shutdown(wait=True, cancel_futures=True)
             if self.catalog_readers is not None:

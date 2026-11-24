@@ -317,6 +317,7 @@ class WebHost:
                        and catalog.state == 'observed')
             unavailable = catalog.unavailable_history()
             live_roots = frozenset(catalog.history_live_roots())
+            progress_roots = frozenset(catalog.history_progress_live_roots()), frozenset(catalog.history_refresh_roots())
             pending = frozenset(catalog.history_pending)
         self.history_accounts.tick(source=source, observation=observation if available else None,
             accounts=accounts if available else (), periods=frozenset(PERIODS),
@@ -325,7 +326,7 @@ class WebHost:
             now_ms=int(time.time() * 1000), available=available, terminal=not available,
             foreground=self.dispatcher.account_timeline_foreground(),
             unavailable_history=unavailable, live_roots=live_roots, pending_history=pending,
-            coverage_confirmed=covered)
+            coverage_confirmed=covered, progress_roots=progress_roots)
 
     def _history_idle(self, jobs):
         driver = self.live.driver

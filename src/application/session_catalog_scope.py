@@ -9,6 +9,15 @@ PERIODS = ("today", "7-days", "30-days", "month", "all")
 PAGE_SIZE = 25
 
 
+def retain_live_arrivals(live, roots, previous, added, since_ms, now_ms):
+    # Unlike display grace, acquisition ownership lasts for the source epoch.
+    # Roots first discovered late with old creation timestamps are history.
+    retained = {key for key in live if key in roots and roots[key].provenance == previous[key].provenance}
+    if since_ms is not None:
+        retained.update(key for key in added if since_ms <= roots[key].created_at_ms <= now_ms)
+    return retained
+
+
 @dataclass(frozen=True, slots=True)
 class CatalogWindow:
     period: str
