@@ -48,11 +48,16 @@ module.exports = async (evaluate, command, session) => {
     const pastEstimate = values();
     view.now_ms = start + 3220000; render();
     const pastDeadline = values();
+    view.now_ms = start + 60000;
+    Object.assign(tool.running_invocations[0].shell_timing, {estimated_duration_ms:null, sample_count:1});
+    render(); const oneSample = values();
     job.node.open = false; render();
     const manualCollapse = !job.node.open;
-    tool.detail_state = 'pending'; render();
-    const withheld = root.node.open && !timing.isConnected && !timing.textContent.includes('2026-') && !job.input.textContent;
-    tool.detail_state = 'observed'; render();
+    const linked = tool.running_invocations, legacy = tool.running_invocation;
+    tool.running_invocations = []; tool.running_invocation = null; render();
+    const withheld = root.node.open && !timing.isConnected && !timing.textContent.includes('2026-') && !job.input.textContent
+      && /original call details.*not available/i.test(root.node.innerText);
+    tool.running_invocations = linked; tool.running_invocation = legacy; render();
     const recovered = root.node.open && !job.node.open && job.timing.node.isConnected;
     const lastNode = job.timing.node;
     row.prompt.in_progress = false; render();
@@ -62,7 +67,7 @@ module.exports = async (evaluate, command, session) => {
     row.prompt.in_progress = true; render();
     const revived = [...state.watch.cards.values()].find(value => value.value.session_id === 'root').runningDetail;
     revived.node.open = true; [...revived.jobs.values()][0].node.open = true;
-    return {initial,tick,collapsed,stable,overflow,commandNote,changedZone,clockSkew,pastEstimate,pastDeadline,
+    return {initial,tick,collapsed,stable,overflow,commandNote,changedZone,clockSkew,pastEstimate,pastDeadline,oneSample,
       manualCollapse,withheld,recovered,cleared};
   })()`);
 
@@ -72,15 +77,16 @@ module.exports = async (evaluate, command, session) => {
   assert.equal(probe.initial.Elapsed, '1m');
   assert.equal(probe.initial.Timeout, '3,220,000 ms (53m 40s)');
   assert.equal(probe.initial['Time to timeout'], '52m 40s');
-  assert.equal(probe.initial.Progress, 'Unknown (no structured phase evidence)');
+  assert.equal(probe.initial.Progress, undefined);
   assert.equal(probe.tick.Elapsed, '1m 1s');
   assert.equal(probe.tick['Time to timeout'], '52m 39s');
   assert.equal(probe.tick['Estimated finish'], probe.initial['Estimated finish']);
   assert.equal(probe.changedZone.Started, '2026-03-28 20:45:20 (native execution start)');
   assert.equal(probe.changedZone['Time to timeout'], '52m 39s');
   assert.match(probe.clockSkew.Elapsed, /ahead of the Watch clock/);
-  assert.match(probe.clockSkew['Estimated finish'], /Unavailable/);
-  assert.match(probe.pastEstimate['Estimated finish'], /past the historical typical duration/);
+  for (const frame of [probe.clockSkew, probe.pastEstimate, probe.oneSample])
+    assert.equal(frame['Estimated finish'], undefined);
+  assert.equal(probe.oneSample.Timeout, probe.initial.Timeout);
   assert.equal(probe.pastDeadline['Time to timeout'], 'Deadline passed; still running');
   assert.equal(probe.commandNote, 'Sensitive argument/value redacted.');
   for (const check of ['stable', 'collapsed', 'manualCollapse', 'withheld', 'recovered', 'cleared'])

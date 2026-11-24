@@ -5,10 +5,11 @@ module.exports = async (evaluate, command, session) => {
     const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root');
     const target=card.runningDetail;
     target.summary.focus({preventScroll:true});
-    return {collapsed:!target.node.open, text:target.input.textContent,
+    const job=[...target.jobs.values()][0];
+    return {collapsed:!target.node.open, text:job.input.textContent,
       noteHidden:target.note.hidden, note:target.note.textContent,
-      commandFirst:[...target.jobs.values()][0].list.firstElementChild===target.input,
-      background:card.backgroundDetail.input.textContent}; })()`);
+      commandFirst:job.list.firstElementChild===job.input,
+      background:card.backgroundDetail.list.querySelector('pre').textContent}; })()`);
   assert.equal(initial.collapsed, true);
   assert.ok(initial.text.startsWith('command:\n"C:\\Python313\\python.exe" "D:\\dev\\scripts\\tokenizer.py" --mode=fast --limit=25\n'));
   assert.match(initial.text, /timeout:\n120000 ms \(2 min\)/);
@@ -24,7 +25,7 @@ module.exports = async (evaluate, command, session) => {
   await command('Input.dispatchKeyEvent', {type:'keyUp', key:'Enter', code:'Enter', windowsVirtualKeyCode:13}, session);
   const retained = await evaluate(`(() => {
     const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root'), target=card.runningDetail;
-    const original=target.input.firstChild, range=document.createRange(); range.selectNodeContents(original);
+    const input=target.list.querySelector('pre'), original=input.firstChild, range=document.createRange(); range.selectNodeContents(original);
     const selection=getSelection(); selection.removeAllRanges(); selection.addRange(range);
     const selected=selection.toString(), focused=document.activeElement;
     target.node.scrollIntoView(); const y=scrollY;
@@ -33,7 +34,7 @@ module.exports = async (evaluate, command, session) => {
       ReportView.renderLive(document.getElementById('result'), INPUT, state);
     }
     const facts={open:target.node.open, selection:selection.toString()===selected,
-      focus:document.activeElement===focused, textNode:target.input.firstChild===original,
+      focus:document.activeElement===focused, textNode:target.list.querySelector('pre').firstChild===original,
       scroll:scrollY===y, injected:target.list.querySelectorAll('script,img').length,
       overflow:document.documentElement.scrollWidth>innerWidth};
     selection.removeAllRanges(); document.activeElement?.blur(); return facts; })()`);
@@ -43,18 +44,45 @@ module.exports = async (evaluate, command, session) => {
     const tool=INPUT.view.active_cards[0].rows[0].tool, saved=structuredClone(tool);
     tool.running_invocation={...tool.running_invocation,identity:'different-call',text:'command:\\ngit diff'};
     target.summary.focus(); ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const changed=!target.node.open && target.input.textContent==='command:\\ngit diff';
+    const changed=!target.node.open && target.list.querySelector('pre').textContent==='command:\\ngit diff';
     target.node.open=true; tool.running_invocation.revision='corrected'; tool.running_invocation.text='command:\\ngit log';
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const corrected=target.node.open && target.input.textContent==='command:\\ngit log';
-    tool.background_kinds=['shell','shell']; ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const aggregate=card.backgroundDetail.input.textContent==='' && /Original call links missing/.test(card.backgroundDetail.note.textContent);
+    const corrected=target.node.open && target.list.querySelector('pre').textContent==='command:\\ngit log';
     INPUT.view.active_cards[0].state='unavailable'; ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const unavailable=target.input.textContent==='' && !target.node.open;
+    const unavailable=target.node.open && !target.list.textContent.includes('git log') &&
+      /waiting.*verified/i.test(target.note.innerText);
     INPUT.view.active_cards[0].state='observed'; Object.assign(tool,saved);
     document.activeElement?.blur(); ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    return {changed,corrected,aggregate,unavailable}; })()`);
-  assert.deepEqual(reset, {changed:true,corrected:true,aggregate:true,unavailable:true});
+    return {changed,corrected,unavailable}; })()`);
+  assert.deepEqual(reset, {changed:true,corrected:true,unavailable:true});
+  // Click the actual background summary while only its Running label is supported.
+  // Keep the label through the missing → verified → missing sequence.
+  const backgroundPoint = await evaluate(`(() => {
+    const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root');
+    const tool=INPUT.view.active_cards[0].rows[0].tool;
+    globalThis.linkedBackground=tool.background_invocation;
+    tool.background_invocation=null; tool.background_kinds=['shell'];
+    ReportView.renderLive(document.getElementById('result'), INPUT, state);
+    const summary=card.backgroundDetail.summary;
+    summary.scrollIntoView({block:'center'}); const r=summary.getBoundingClientRect();
+    return {x:r.left+r.width/2,y:r.top+r.height/2}; })()`);
+  await command('Input.dispatchMouseEvent', {type:'mousePressed',...backgroundPoint,button:'left',clickCount:1}, session);
+  await command('Input.dispatchMouseEvent', {type:'mouseReleased',...backgroundPoint,button:'left',clickCount:1}, session);
+  const gap = await evaluate(`(() => {
+    const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root'), target=card.backgroundDetail;
+    const tool=INPUT.view.active_cards[0].rows[0].tool;
+    const render=()=>ReportView.renderLive(document.getElementById('result'), INPUT, state);
+    const missing=()=>target.node.open && /original call details.*not available/i.test(target.node.innerText)
+      && !target.node.textContent.includes('tokenizer.py');
+    const clicked=missing();
+    tool.background_invocation=linkedBackground; render();
+    const restored=target.node.open && target.list.innerText.includes('tokenizer.py');
+    tool.background_invocation=null; render(); const withheld=missing();
+    target.node.open=false; tool.background_invocation=linkedBackground; render();
+    const closed=!target.node.open;
+    tool.background_kinds=['subagent']; render(); delete globalThis.linkedBackground;
+    return {clicked,restored,withheld,closed}; })()`);
+  assert.deepEqual(gap, {clicked:true,restored:true,withheld:true,closed:true});
   const multi = await evaluate(`(() => {
     const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root'), target=card.backgroundDetail;
     const tool=INPUT.view.active_cards[0].rows[0].tool, saved=structuredClone(tool);
@@ -114,11 +142,12 @@ module.exports = async (evaluate, command, session) => {
       const sibling={...tool[mode+'_invocations'][0],identity:'identical-command-new-call'};
       tool[mode+'_invocations'].push(sibling);
       if(mode==='background') tool.background_kinds.push('shell');
-      else tool.running_invocation_count++;
+      tool[mode+'_invocation_count']=tool[mode+'_invocations'].length;
       render();
       const child=target.jobs.get(sibling.identity), added=job.node.open && !child.node.open;
       tool[mode+'_invocations']=[tool[mode+'_invocations'][0]];
-      if(mode==='background') tool.background_kinds=['shell']; else tool.running_invocation_count=1;
+      if(mode==='background') tool.background_kinds=['shell'];
+      tool[mode+'_invocation_count']=1;
       render();
       const survived=target.jobs.get(job.identity)===job && job.node.open && target.node.open;
       tool[mode+'_invocations']=[sibling]; render();
