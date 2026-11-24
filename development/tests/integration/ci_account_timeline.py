@@ -191,13 +191,13 @@ def assert_loading_cues(plot, waiting, active=None):
 def assert_hover(page, plot, scroller, dates):
     # Real mouse movement across both edges and the middle of every cell. Bring
     # its center into the scrollport when needed, then probe each of its bars.
-    targets = plot.locator('.account-timeline-target')
     for index, day in enumerate(dates):
         weekdays = ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
         expected = f'{day} {weekdays[date.fromisoformat(day).weekday()]}'
-        target = targets.nth(index)
-        points = target.evaluate('''(cell, index) => {
-            const svg = cell.ownerSVGElement;
+        # ResizeObserver replaces hit rectangles on geometry changes. Resolve
+        # the current cell and its bar in the same evaluation on the stable SVG.
+        points = plot.evaluate('''(svg, index) => {
+            const cell = svg.querySelector(`.account-timeline-target[data-slot="${index}"]`);
             const scroll = svg.parentElement;
             const clip = scroll.getBoundingClientRect();
             const old = cell.getBoundingClientRect();
