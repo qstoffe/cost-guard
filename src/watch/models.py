@@ -3,13 +3,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Mapping
+from typing import TYPE_CHECKING, Mapping
 
 from src.reports.models import AccountsQuotasProjection, PromptProjection
 from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.daily_usage import DailyUsage
+
+if TYPE_CHECKING:
+    from src.application.quota_ccost import CapacityOffer
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,3 +233,4 @@ class WatchProjection:
     daily_usage: DailyUsage | None = None
     daily_state: str = "loading"
     running: RunningPrompts = field(default_factory=RunningPrompts)
+    quota_capacity_offers: Mapping[str, CapacityOffer] = field(default_factory=dict)

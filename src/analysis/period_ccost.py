@@ -54,6 +54,13 @@ def combined_cost(values: Iterable[ComparisonCost]) -> ComparisonCost:
         source_complete=all(v.source_complete for v in values))
 
 
+def empty_quota_window(component: QuotaComponent) -> bool:
+    return (component.window_active is False and component.reset_at_ms is None
+            and component.used in (None, 0) and component.remaining_fraction in (None, 1)
+            and not (component.remaining is not None and component.limit is not None
+                     and component.remaining < component.limit))
+
+
 def quota_window(component: QuotaComponent, now_ms: int, *, include_monthly: bool = False) -> tuple[int, int, str] | None:
     duration = component.duration_seconds
     monthly = (include_monthly and duration is None and component.period == "fixed"
@@ -65,10 +72,7 @@ def quota_window(component: QuotaComponent, now_ms: int, *, include_monthly: boo
     if component.origin != "provider_native":
         return None
     if component.window_active is False:
-        if (component.reset_at_ms is None and component.used in (None, 0)
-                and component.remaining_fraction in (None, 1)
-                and not (component.remaining is not None and component.limit is not None
-                         and component.remaining < component.limit)):
+        if empty_quota_window(component):
             # An explicitly empty period has no historical interval. The empty
             # half-open range cannot pick up requests even at the observation time.
             return now_ms, now_ms, "provider-confirmed empty window"

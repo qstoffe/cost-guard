@@ -72,6 +72,7 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_watch_daily.py",
     "test_web_watch_quota.py",
     "test_web_quota_ccost.py",
+    "test_quota_capacity_history.py",
     "test_web_quota_estimates.py",
     "test_web_quota_pace.py",
     "test_watch_context_footer.py",

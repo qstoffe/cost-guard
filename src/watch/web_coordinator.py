@@ -23,6 +23,7 @@ from .card_workers import CardWorkers
 from .cards import WatchCards
 from .session_costs import SessionCosts
 from .coordinator import WatchCoordinator, WatchCycle
+from .quota_capacity_history import QuotaCapacityHistory
 from .running import running_prompts
 from .source_status import SourceStatus, SOURCE_CONFIRM_SECONDS
 from .source_reads import SourceReads, cancel_source
@@ -97,6 +98,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.history_factory = service_factory
         self.account_readers = account_readers
         self.history_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cost-guard-account-history")
+        self.quota_capacity = None
         self.history_job = None
         self.history_due_ms = 0
         self.history_starts = None
@@ -122,6 +124,9 @@ class WebWatchCoordinator(WatchCoordinator):
         self.catalog_job = None
         self.reads = SourceReads()
         self.account_timeline = AccountTimeline(service_factory, self.reads, self.report_service.cache_repository)
+
+    def bind_quota_capacity_archive(self, archive):
+        self.quota_capacity = QuotaCapacityHistory(archive, self.history_pool)
 
     def tick_account_timeline(self, frame, demand, *, available, terminal):
         service = self.report_service
@@ -410,7 +415,13 @@ class WebWatchCoordinator(WatchCoordinator):
                 self.card_today = CardToday.from_accounts(accounts, source, self.report_service.timezone_id,
                     day, self.daily_usage.observed_at_ms, today)
         proof = self.cards.history
+        capacities = {}
+        if self.quota_capacity is not None and not self._closed:
+            accounts = frame.quota.accounts if frame.quota is not None and not frame.quota_stale else ()
+            histories = (self.history_quota, *self.history_fallbacks) if self.history_quota is not None else ()
+            capacities = self.quota_capacity.project(accounts, histories, now_ms)
         frame = replace(frame, active_cards=active, history_cards=history, cards_state=state,
+            quota_capacity_offers=capacities,
             recent_finished_cards=self.cards.recent.project(self.cards, now_ms),
             running=running_prompts(active, state),
             daily_usage=self.daily_usage,
@@ -445,7 +456,12 @@ class WebWatchCoordinator(WatchCoordinator):
             self.card_workers.close()
         finally:
             self.session_costs.close()
-            self.history_pool.shutdown(wait=True, cancel_futures=True)
+            if self.quota_capacity is not None:
+                # Keep the archive flush queued, not new source work on the same lane.
+                if self.history_job is not None:
+                    self.history_job.cancel()
+                self.quota_capacity.flush()
+            self.history_pool.shutdown(wait=True, cancel_futures=self.quota_capacity is None)
             if self.account_readers is not None:
                 self.account_readers.close()
             self.detail_pool.shutdown(wait=True, cancel_futures=True)

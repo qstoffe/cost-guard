@@ -270,6 +270,8 @@ const ReportView = (() => {
   function quotaCapacityHelp(quota, monthly = false) {
     if (quota.unlimited && !monthly) return 'Capacity: Unlimited';
     if (!capacityKnown(quota, monthly)) return 'N/A';
+    if (quota.ccost_reference.retained_capacity)
+      return display(quota, monthly ? 'monthly_capacity_help' : 'capacity_help');
     return 'Estimated reference-cost capacity for this quota.';
   }
   function quotaUsageHelp(quota) {

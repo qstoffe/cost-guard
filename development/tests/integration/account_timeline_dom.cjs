@@ -136,7 +136,7 @@ async function check() {
   chart.choose(0);
   const polite = chart.announce.textContent;
   assert.equal(chart.tipState.textContent, '');
-  assert.match(polite, /Account A: ~<0.1/);
+  assert.ok(polite.includes('Account A: <0.1'), polite);
 
   const quiet = chart.refresh();
   calls.at(-1).resolve(frame('current', 6, [0], [first, second], []));
@@ -221,7 +221,7 @@ async function checkLegendTotals() {
   chart.active(true);
   await chart.refresh();
 
-  for (const [displayUnit, column, qualifiedTiny] of [['credits', 2, '~<0.1'], ['usd', 3, '~<$0.01']]) {
+  for (const [displayUnit, column] of [['credits', 2], ['usd', 3]]) {
     unit = displayUnit;
     chart.draw();
     const cells = chart.selectedLegend.children.map(row => row.children[2]);
@@ -229,7 +229,8 @@ async function checkLegendTotals() {
       cases.map(row => row[column]), displayUnit);
     assert.equal(cells.at(-1).children[1].textContent, 'Total unavailable');
     chart.choose(0);
-    assert.ok(chart.announce.textContent.includes(`Tiny: ${qualifiedTiny}`), chart.announce.textContent);
+    assert.deepEqual(chart.tipValues.children.map(row => row.children[2].textContent), cases.map(row => row[column]));
+    for (const row of cases) assert.ok(chart.announce.textContent.includes(`${row[0]}: ${row[column]}`));
   }
 }
 

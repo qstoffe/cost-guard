@@ -560,7 +560,7 @@ def check(browser, root, screenshots=None):
         positions = labels.evaluate_all("labels => labels.map(label => label.getAttribute('x'))")
         plot.focus()
         page.keyboard.press('Home')
-        expect(status).to_contain_text(f'{today_label}: ~$200.00')
+        expect(status).to_contain_text(f'{today_label}: $200.00')
         page.keyboard.press('ArrowRight')
         expect(status).to_contain_text('$0.00')
         page.keyboard.press('ArrowRight')
@@ -844,12 +844,12 @@ def check_best_effort(browser, root):
         status = chart.get_by_role('status')
         for inspect in (target.hover, target.tap):
             inspect()
-            expect(tip).to_contain_text('account 2~<$0.01')
+            expect(tip).to_contain_text('account 2<$0.01')
         plot.focus()
         page.keyboard.press('Home')
         page.keyboard.press('ArrowRight')
         page.keyboard.press('ArrowRight')
-        expect(status).to_contain_text('account 2: ~<$0.01')
+        expect(status).to_contain_text('account 2: <$0.01')
         for surface in (tip, status):
             expect(surface).not_to_contain_text(re.compile(r'Unavailable|N/A|Unknown|Partial|Provisional'))
         expect(plot.locator('.account-timeline-ring')).to_have_count(0)

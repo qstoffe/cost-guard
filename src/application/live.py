@@ -60,6 +60,8 @@ class LiveRuntime:
             publication_due = time.monotonic()
             timeline_due = publication_due
             coordinator = driver.coordinator
+            if self.catalog.archive is not None and callable(getattr(type(coordinator), "bind_quota_capacity_archive", None)):
+                coordinator.bind_quota_capacity_archive(self.catalog.archive.storage)
             timeline = getattr(coordinator, 'account_timeline', None) if self.timeline_demand is not None else None
             frame = None
             while not self.stopping.is_set():
