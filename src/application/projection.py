@@ -5,7 +5,7 @@ from hashlib import sha256
 from decimal import Decimal
 import json
 
-from src.analysis.model_supersession import superseded_rows
+from src.analysis.model_supersession import reviewed_model_keys, superseded_rows
 from src.analysis.active_hour import active_hour
 from src.analysis.ai_stats import POLICY as STATS_POLICY
 from src.pricing.catalog import FIXED_REFERENCE_MIX
@@ -200,11 +200,13 @@ def model_rows(items, selectable=None):
     selected_faded = {(selected[index].publisher, selected[index].model)
                       for index in superseded_rows([(item.publisher, item.model) for item in selected])}
     for index, item in enumerate(items):
+        reviewed_key, successor_key = reviewed_model_keys(item.publisher, item.model)
         base = fields(item, "publisher model category relative_cost price_summary price_help release_date promotional recent promotion_marker")
         models.append(ObjectValue(base.fields + (("promotion", fields(item.promotion,
             "model description through resumes price_comparison") if item.promotion else None), ("evidence", fields(item.evidence,
             "model_prompts publisher_prompts generic_prior_weight global_prompts history_exhausted observed_prompts")),
-            ("superseded", index in faded), ("selectable", selectable is None or (item.publisher, item.model) in selectable),
+             ("superseded", index in faded), ("selectable", selectable is None or (item.publisher, item.model) in selectable),
+             ("reviewed_key", reviewed_key), ("reviewed_successor_key", successor_key),
             ("superseded_selectable", (item.publisher, item.model) in selected_faded), ("relative_levels", tuple(
             fields(level, "relative_cost threshold_tokens threshold_operator") for level in item.relative_levels)),)))
     return tuple(models)

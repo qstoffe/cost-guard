@@ -10,11 +10,28 @@ _WORD = r"[a-z]+"
 _UNSTABLE = frozenset({"alpha", "beta", "deprecated", "exp", "experimental", "fast", "latest",
                        "legacy", "mode", "nightly", "preview", "test"})
 _MAKERS = {"openai": "openai", "anthropic": "anthropic", "google": "google", "xai": "xai"}
+# Directed alternatives named in GitHub Copilot's November 13 and 17, 2026 notices.
+# Keys are normalized (publisher, catalog display name) pairs.
+_REVIEWED_SUCCESSORS = {
+    ("google", "gemini 3.8 flash"): ("google", "gemini 4 hydrogen"),
+    ("google", "gemini 4 argon"): ("google", "gemini 4 carbon"),
+    ("microsoft", "mai-code-1.1-flash"): ("microsoft", "mai code 2 flash"),
+}
+_REVIEWED_MODELS = _REVIEWED_SUCCESSORS.keys() | set(_REVIEWED_SUCCESSORS.values())
 
 
 def _normalized(text: str) -> str:
     text = re.sub(r"[‐-―−]", "-", text.casefold())
     return re.sub(r"\s+", " ", text).strip()
+
+
+def reviewed_model_keys(publisher: str, name: str) -> tuple[str | None, str | None]:
+    """Supply opaque identity and successor keys for display-only matching."""
+    key = (_normalized(publisher), _normalized(name))
+    if key not in _REVIEWED_MODELS:
+        return None, None
+    successor = _REVIEWED_SUCCESSORS.get(key)
+    return ":".join(key), ":".join(successor) if successor else None
 
 
 def model_version(publisher: str, name: str) -> tuple[tuple[str, ...], tuple[int, ...]] | None:

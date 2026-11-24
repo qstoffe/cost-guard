@@ -550,6 +550,12 @@ const ReportView = (() => {
     heading.append(typeof title === 'string' ? element('span', title) : title, reference);
     return heading;
   }
+  const latestModelsHelp = 'Hide recognized older numeric versions. Also hide reviewed predecessors when their successor is in the selected list.';
+  function latestModels(candidates, enabled, isNumericallySuperseded) {
+    if (!enabled) return candidates;
+    const reviewedKeys = new Set(candidates.map(row => row.reviewed_key).filter(Boolean));
+    return candidates.filter(row => !isNumericallySuperseded(row) && !reviewedKeys.has(row.reviewed_successor_key));
+  }
   function overviewModels(parent, view, state) {
     if (state.modelView && state.modelView.choice === state.models) { state.modelView.update(view); state.modelView.attach(parent); return; }
     const root = element('div', undefined, 'models-view');
@@ -580,7 +586,7 @@ const ReportView = (() => {
       wrap.append(input, element('span', label)); filters.append(wrap);
     }
     checkbox('Show all Copilot-priced models', 'all', 'Show the full priced catalog instead of the available-model list.');
-    checkbox('Latest versions only', 'latest', 'Hide recognized older stable versions among the models selected by the other filter.');
+    checkbox('Latest versions only', 'latest', latestModelsHelp);
     tools.append(prices, filters); root.append(tools);
     const scroll = element('div', undefined, 'overview-models');
     scroll.tabIndex = 0;
@@ -630,7 +636,8 @@ const ReportView = (() => {
       grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
       grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
       const candidates = models.filter(row => choice.all || row.selectable !== false);
-      const shown = candidates.filter(row => !choice.latest || !(choice.all ? row.superseded : catalog ? row.superseded_selectable : row.superseded));
+      const shown = latestModels(candidates, choice.latest,
+        row => choice.all || !catalog ? row.superseded : row.superseded_selectable);
       shown.sort((a, b) => {
         for (const sort of choice.sorts) {
           const x = key(a, sort.index), y = key(b, sort.index);
@@ -931,5 +938,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, valueSlot, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
+  return {render, renderLive, element, modelHeading, latestModels, latestModelsHelp, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, valueSlot, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
 })();

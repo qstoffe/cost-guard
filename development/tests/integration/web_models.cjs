@@ -14,7 +14,7 @@ class Node {
   addEventListener(key, handler) { this.events[key] = handler; }
 }
 const all = (n, tag) => [...(n.tag === tag ? [n] : []), ...n.children.flatMap(c => all(c, tag))];
-const {view, fallback, benchmark} = JSON.parse(fs.readFileSync(0, 'utf8'));
+const {view, fallback, benchmark, reviewed} = JSON.parse(fs.readFileSync(0, 'utf8'));
 const output = new Node('main'), controls = new Node('div');
 const state = {pages: {}, section: 'models'};
 const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, controls,
@@ -30,6 +30,35 @@ const button = name => all(output, 'button').find(n => n.textContent.startsWith(
 const click = (name, event = {}) => button(name).events.click(event);
 const check = (index, value) => { const input = all(output, 'input')[index]; input.checked = value; input.events.change(); };
 draw();
+if (reviewed) {
+  const ids = () => rows().map(r => r.children[0].textContent + '/' + r.children[1].textContent).sort();
+  const always = ['Google/Gemini 4 Carbon', 'Google/Gemini 4 Neon', 'Microsoft/MAI Code 2 Flash',
+    'Other/Gemini 4 Argon', 'OpenAI/GPT-5.2'];
+  assert.deepEqual(ids(), [...always, 'Google/Gemini 3.8 Flash'].sort());
+  check(0, true);
+  assert.deepEqual(ids(), [...always, 'Google/Gemini 4 Hydrogen'].sort());
+  check(1, false);
+  assert.deepEqual(ids(), [...always, 'Google/Gemini 3.8 Flash', 'Google/Gemini 4 Hydrogen',
+    'Google/Gemini 4 Argon', 'Microsoft/MAI-Code-1.1-Flash', 'OpenAI/GPT-5.1'].sort());
+
+  const bv = state.benchmark;
+  bv.data = benchmark; bv.draw();
+  const runs = () => bv.body.children.map(r => r.children.slice(1).map(c => c.textContent).join(' / '));
+  const toggle = (input, checked) => { input.checked = checked; input.events.change(); };
+  const control = key => all(bv.root, 'input').find(n => n.attrs['data-benchmark-control'] === key);
+  const flash = 'Gemini 3.8 Flash / high / 1.0x / 61.0%';
+  const hydrogen = 'Gemini 4 Hydrogen / max / 2.0x / 61.0%';
+  const argon = 'Gemini 4 Argon / high / 3.0x / 61.0%';
+  assert.deepEqual(runs(), [flash, argon]);
+  toggle(control('all'), true);
+  assert.deepEqual(runs(), [argon, hydrogen]);
+  toggle(control('latest'), false);
+  assert.deepEqual(runs(), [flash, argon, hydrogen, 'GPT-5.1 / high / 4.0x / 61.0%']);
+  toggle(control('latest'), true);
+  toggle(bv.effortInputs.find(([key]) => key === 'max')[1], false);
+  assert.deepEqual(runs(), [flash, argon]);
+  return;
+}
 const modelRoot=output.children[0],priceRows=[...rows()],benchmarkRoot=state.benchmark.root;
 view.pricing_retrieved_at_ms += 1000;draw();
 assert.equal(output.children[0],modelRoot,'new observation retains Models root');

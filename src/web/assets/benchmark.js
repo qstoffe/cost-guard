@@ -36,6 +36,7 @@ const BenchmarkView = (() => {
       filters.append(this.picker);
       for (const [key, text] of [['all', 'Show all Copilot-priced models'], ['latest', 'Latest versions only']]) {
         const label = el('label'), input = el('input'); input.type = 'checkbox'; input.checked = this.choice[key];
+        if (key === 'latest') ContextHelp.attach(input, ReportView.latestModelsHelp);
         input.setAttribute('data-benchmark-control', key);
         input.addEventListener('change', () => { this.choice[key] = input.checked; this.draw(); });
         label.append(input, el('span', text)); filters.append(label);
@@ -149,9 +150,10 @@ const BenchmarkView = (() => {
         if (a[key] == null || b[key] == null) return a[key] == null ? b[key] == null ? 0 : 1 : -1;
         return ReportView.sortedCompare(a[key], b[key], dir);
       };
-      const rows = this.data.rows.filter(row => (this.choice.all || row.selectable !== false) &&
-        (!this.choice.latest || !(this.choice.all ? row.superseded : row.superseded_selectable)) &&
-        (!this.choice.efforts || this.choice.efforts.has(row.effort || ''))).sort((a, b) => compare(a, b, keys[index], direction) ||
+      const candidates = this.data.rows.filter(row => (this.choice.all || row.selectable !== false) &&
+        (!this.choice.efforts || this.choice.efforts.has(row.effort || '')));
+      const rows = ReportView.latestModels(candidates, this.choice.latest,
+        row => this.choice.all ? row.superseded : row.superseded_selectable).sort((a, b) => compare(a, b, keys[index], direction) ||
         a.model.localeCompare(b.model) || a.client.localeCompare(b.client) ||
         (a.effort || '').localeCompare(b.effort || '') || a.id.localeCompare(b.id));
       const wanted = [];

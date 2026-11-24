@@ -39,6 +39,7 @@ def benchmark_view(snapshot, reference_rows=(), *, now_ms, timezone_id='UTC'):
         result.append(dict(id=row.id, publisher=reference['publisher'], model=reference['model'],
             selectable=reference.get('selectable', True), superseded=reference.get('superseded', False),
             superseded_selectable=reference.get('superseded_selectable', False),
+            reviewed_key=reference.get('reviewed_key'), reviewed_successor_key=reference.get('reviewed_successor_key'),
             client=row.client, effort=row.effort or None,
             relative_cost=str(relative) if relative is not None else None,
             usd_per_task=str(cost) if cost is not None else None, solved=str(row.solved), recent=bool(recent),

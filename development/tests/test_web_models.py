@@ -9,7 +9,7 @@ import unittest
 
 from development.tests.fixtures.compact_reports import Availability, rendered, report_service
 from development.tests.fixtures.model_views import model_report
-from development.tests.fixtures.benchmark import payload, references
+from development.tests.fixtures.benchmark import page, payload, references, row as benchmark_run
 from src.benchmarks import parse_pages
 from src.application.projection import benchmark_view
 from src.application.projection import project
@@ -70,6 +70,38 @@ class ModelsTests(unittest.TestCase):
         self.assertFalse(rows['GPT-5.1']['superseded_selectable'])
         self.assertTrue(rows['GPT-5.1']['selectable'])
         self.assertFalse(rows['GPT-5.2']['selectable'])
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required to exercise the Models controls")
+    def test_reviewed_successors_follow_each_tables_actual_candidates(self):
+        report = model_report(include_model_catalog=True)
+        catalog = report.model_catalog
+        pairs = [('Google', 'Gemini 3.8 Flash'), ('Google', 'Gemini 4 Hydrogen'),
+                 ('Google', 'Gemini 4 Argon'), ('Google', 'Gemini 4 Carbon'), ('Google', 'Gemini 4 Neon'),
+                 ('Microsoft', 'MAI-Code-1.1-Flash'), ('Microsoft', 'MAI Code 2 Flash'),
+                 ('Other', 'Gemini 4 Argon'), ('OpenAI', 'GPT-5.1'), ('OpenAI', 'GPT-5.2')]
+        rows = tuple(replace(catalog.rows[0], publisher=publisher, model=name) for publisher, name in pairs)
+        selectable = tuple(pair for pair in pairs if pair[1] != 'Gemini 4 Hydrogen')
+        view = project(replace(report, model_catalog=replace(catalog, rows=rows, selectable=selectable))).to_json()
+
+        # Carbon and GPT-5.2 have a price but no benchmark run. Hydrogen has a run only at max effort.
+        runs = []
+        for index, (publisher, name, effort) in enumerate([
+                ('Google', 'Gemini 3.8 Flash', 'high'), ('Google', 'Gemini 4 Hydrogen', 'max'),
+                ('Google', 'Gemini 4 Argon', 'high'), ('OpenAI', 'GPT-5.1', 'high'),
+                ('Microsoft', 'MAI-Code-1.1-Flash', 'high'), ('Microsoft', 'MAI Code 2 Flash', 'max')], 1):
+            run = benchmark_run(index, model=name, effort=effort, cost=330 * index)
+            run['metadata']['model_org'] = dict(label=publisher, url={
+                'Google': 'https://google.com', 'OpenAI': 'https://openai.com',
+                'Microsoft': 'https://www.microsoft.com'}[publisher])
+            runs.append(run)
+        now = 1794182400000
+        benchmark = benchmark_view(parse_pages([page(runs)], now), view['model_catalog']['rows'], now_ms=now)
+
+        result = subprocess.run(['node', 'development/tests/integration/web_models.cjs'],
+            input=json.dumps(dict(view=view, benchmark=benchmark, reviewed=True)),
+            cwd=ROOT, capture_output=True, text=True, timeout=10)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     def test_full_catalog_keeps_canonical_recent_and_promotion_semantics(self):
         now = 1793491200000
