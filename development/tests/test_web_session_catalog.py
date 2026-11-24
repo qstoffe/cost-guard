@@ -612,7 +612,7 @@ class SessionCatalogTests(unittest.TestCase):
             verified_generation=1, generation=1)
         owner = SimpleNamespace(report_service=service, catalog_observation=observe_catalog(source, include_archived_revisions=True),
             cards=SimpleNamespace(sessions={root.session_id: entry}), clock_ms=lambda: 6000,
-            catalog_job=None, _closed=True)
+            catalog_job=None, catalog_readers=None, _closed=True)
         catalog = SessionCatalog(clock=lambda: self.clock, clock_ms=lambda: 6000)
         loads = source.load_count
         WebWatchCoordinator.tick_catalog(owner, catalog)
