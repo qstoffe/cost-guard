@@ -33,10 +33,11 @@ def acquire_windows(service, history, sessions, snapshots, now_ms, active_roots,
     activity = root_activity(sessions)
     active = set(active_roots)
     ordered = sorted(roots, key=lambda root: (root.session_id not in active, -activity[root.session_id]))
-    # Publish only when a consumer's window is covered. Roots tied at the
-    # boundary must all be acquired; a final iteration publishes the full plan.
+    # Stop batches at consumer boundaries. An unreadable older root must not
+    # prevent publishing a newer window that has already been acquired.
     published_since = None
-    for offset in range(0, len(ordered) + 4, 4):
+    offset = 0
+    while True:
         if closed():
             return None
         next_root = ordered[offset] if offset < len(ordered) else None
@@ -62,4 +63,12 @@ def acquire_windows(service, history, sessions, snapshots, now_ms, active_roots,
             progress.updates.put(value)
         if progress is not None and progress.restart.is_set():
             return None
-        service.watch_history_batch(ordered[offset:offset + 4])
+        end = min(offset + 4, len(ordered))
+        for index in range(offset + 1, end):
+            first, following = next_root.session_id, ordered[index].session_id
+            if ((first in active) != (following in active) or first not in active
+                    and any(activity[following] < start <= activity[first] for start in starts)):
+                end = index
+                break
+        service.watch_history_batch(ordered[offset:end])
+        offset = end

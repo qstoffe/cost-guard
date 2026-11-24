@@ -22,7 +22,8 @@ def account_projections(
     catalog: PricingCatalog, *, now_ms: int, today_start_ms: int, month_start_ms: int,
     timezone_id: str = "UTC", workday_calendar: str = "",
     period_index: PeriodCCostIndex | None = None, watch: bool = False,
-    observed_start_ms: int | None = None, require_history: bool = False, observed_at_ms: int | None = None,
+    observed_start_ms: int | None = None, require_history: bool = False,
+    history_for_window=None,
 ) -> tuple[AccountProjection, ...]:
     counts = Counter((item.ref.provider_id, item.plan) for item in accounts)
     providers = Counter(route for item in accounts for route in account_usage_routes(item))
@@ -47,7 +48,7 @@ def account_projections(
                            and entry.model.provider == account.ref.provider_id)
         scopes, notes, account_unknown, provider_notes, estimated_scopes = _period_scopes(account, index, providers, explained, today_start_ms,
                                        month_start_ms, now_ms, watch=watch, observed_start_ms=observed_start_ms,
-                                        require_history=require_history, observed_at_ms=observed_at_ms)
+                                        require_history=require_history, history_for_window=history_for_window)
         unassigned = any(entry.model.provider == account.ref.provider_id and entry.account_ref is None
                          and month_start_ms <= entry.completed_at_ms <= now_ms for entry in entries)
         billing_known = not unassigned
@@ -98,8 +99,8 @@ def _unaccounted_usage(account, index, providers, now_ms, observed_start_ms):
     return component.used - proven.known_ccost - unknown.known_ccost
 
 
-def _period_scopes(account, index, providers, explained, today_start_ms, month_start_ms, now_ms, *, watch,
-                     observed_start_ms, require_history, observed_at_ms):
+def _period_scopes(account, default_index, providers, explained, today_start_ms, month_start_ms, now_ms, *, watch,
+                     observed_start_ms, require_history, history_for_window):
     provider = usage_provider(account.ref.provider_id)
     ranges = [("today", (today_start_ms, now_ms + 1, "configured local calendar day"), None)]
     if not watch:
@@ -116,14 +117,17 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
             continue
         start, end, basis = window
         if start == end:
-            scopes.append((name, index.cost(provider, account.key, start, end, model)))
+            scopes.append((name, default_index.cost(provider, account.key, start, end, model)))
             notes.append(f"CCost {name}: {basis}; no requests in this period.")
             continue
-        if require_history and (observed_start_ms is None or observed_start_ms > start
-                                or observed_at_ms is not None and observed_at_ms < start):
+        window_history = history_for_window(start) if history_for_window is not None else None
+        covered = (window_history is not None if history_for_window is not None
+                   else observed_start_ms is not None and observed_start_ms <= start)
+        if require_history and not covered:
             scopes.append((name, None))
             notes.append(f"CCost {name}: waiting for complete period history.")
             continue
+        index = window_history.index if window_history is not None else default_index
         routes = account_usage_routes(account)
         proven = combined_cost(index.cost(route, account.key, start, end, model)
             for route in account_usage_routes(account, proven=True))
@@ -148,7 +152,7 @@ def _period_scopes(account, index, providers, explained, today_start_ms, month_s
         else:
             # Empty attribution is not missing history: only an acquired scope
             # establishes an observed zero, irrespective of provider/account type.
-            observed = observed_start_ms is not None and observed_start_ms <= start <= now_ms
+            observed = covered and start <= now_ms
             value = proven if proven.observed_requests or observed else None
             attribution = "verified request account references" if proven.observed_requests else "no attributable observed requests"
         scopes.append((name, value))
@@ -165,11 +169,19 @@ class AccountPeriodHistory:
     observed_start_ms: int | None
     observed_at_ms: int | None = None
 
-    def project(self, accounts, *, now_ms, today_start_ms, month_start_ms, timezone_id, workday_calendar):
+    def covers(self, start):
+        return (self.observed_start_ms is not None and self.observed_start_ms <= start
+                and (self.observed_at_ms is None or self.observed_at_ms >= start))
+
+    def project(self, accounts, *, now_ms, today_start_ms, month_start_ms, timezone_id, workday_calendar,
+                fallbacks=()):
+        def history_for_window(start):
+            return next((history for history in (self, *fallbacks) if history.covers(start)), None)
+
         return account_projections(accounts, (), self.catalog, now_ms=now_ms,
             today_start_ms=today_start_ms, month_start_ms=month_start_ms, timezone_id=timezone_id,
             workday_calendar=workday_calendar, period_index=self.index, watch=True,
-            observed_start_ms=self.observed_start_ms, require_history=True, observed_at_ms=self.observed_at_ms)
+            require_history=True, history_for_window=history_for_window)
 
 
 class WatchAccountProjection:

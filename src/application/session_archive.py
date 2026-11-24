@@ -36,6 +36,20 @@ class SessionArchive:
         self.upgrade = upgrade
         self.previous_pending = upgrade is not None and upgrade[1] is not None
 
+    def needs_capture(self, key, revision, target, activity, changed):
+        old = self.authorities.get(key)
+        if old is None or changed and (old[0] != revision or old[3] != target) or activity > old[4]:
+            return True
+        # A new database can use a different revision encoding for the very
+        # same roots. Existing history is not replayed solely for that reason.
+        return old[0] != revision and old[3] == target
+
+    def refresh_roots(self, pending, target):
+        """Previously acquired roots that need refresh, not historical membership."""
+        return {key for key in pending
+                if (saved := self.authorities.get(key)) is not None and saved[3] == target
+                and (row := self.rows.get(key)) is not None and row.activity_qualified}
+
     def load(self):
         try:
             self.storage.initialize()

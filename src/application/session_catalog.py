@@ -25,10 +25,10 @@ from src.watch.models import SessionPreview
 from .detail_archive import acquired_detail
 from .session_active_snapshots import ActiveSnapshotOffers
 from .session_archive import SessionArchive, cached_page, retain_pending_metrics, retain_readable_fields
-from .session_epoch_page import ARRIVAL_SECONDS, epoch_page, ordered, sort_value
+from .session_epoch_page import ARRIVAL_SECONDS, epoch_page, ordered, recent_live_roots, sort_value
 from .session_quota import source_scope
 from .session_catalog_scope import (
-    PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population, in_window,
+    PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population, in_window, retain_live_arrivals,
 )
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
@@ -387,13 +387,9 @@ class SessionCatalog:
             if self.observed is not None and not source_changed:
                 added = self.roots.keys() - previous_roots.keys()
                 self.recent_arrivals.update((key, now) for key in added)
-                self.live_arrivals = {key for key in self.live_arrivals
-                    if key in self.roots and self.roots[key].provenance == previous_roots[key].provenance}
-                if not self.interrupted and self.archive is not None and self.observed_ms is not None:
-                    # An actually new root stays Live work after the display's
-                    # short arrival grace. Late discovery of old roots is history.
-                    self.live_arrivals.update(key for key in added
-                        if self.observed_ms <= self.roots[key].created_at_ms <= now_ms)
+                since_ms = None if self.interrupted or self.archive is None else self.observed_ms
+                self.live_arrivals = retain_live_arrivals(
+                    self.live_arrivals, self.roots, previous_roots, added, since_ms, now_ms)
                 if added:
                     self.background_due = min(self.background_due, now + 15)
             elif source_changed:
@@ -478,18 +474,8 @@ class SessionCatalog:
             if self._archive_needs_capture(key) and not self._archive_unavailable(key)}
 
     def _archive_needs_capture(self, key):
-        old = self.archive.authorities.get(key)
-        if old is None:
-            return True
-        if key in self.changed_roots and (old[0] != self.revisions.get(key) or old[3] != self.archive_target):
-            return True
-        if (self.activity.get(key) or 0) > old[4]:
-            return True
-        if old[0] == self.revisions.get(key):
-            return False
-        # A new database can use a different revision encoding for the very
-        # same roots. Existing history is not replayed solely for that reason.
-        return old[3] == self.archive_target
+        return self.archive.needs_capture(key, self.revisions.get(key), self.archive_target,
+                                          self.activity.get(key) or 0, key in self.changed_roots)
 
     def history_live_roots(self):
         return self.active | self.running_roots | self._new_live_roots()
@@ -500,20 +486,11 @@ class SessionCatalog:
             key for key in self.prompt_activity if self._finish_known(key)}
 
     def history_refresh_roots(self):
-        """Previously acquired roots can need refresh without missing historical membership."""
-        return {key for key in self.history_pending
-                if (saved := self.archive.authorities.get(key)) is not None
-                and saved[3] == self.archive_target
-                and (row := self.archive.rows.get(key)) is not None and row.activity_qualified}
+        return self.archive.refresh_roots(self.history_pending, self.archive_target)
 
     def _new_live_roots(self):
-        # A catalog expansion can discover old sessions in bulk. Treat them
-        # as history, not urgent arrivals that jump the recency queue.
         latest = self.clock_ms()
-        cutoff = latest - ARRIVAL_SECONDS * 1000
-        now = self.clock()
-        return {key for key, discovered in self.recent_arrivals.items()
-                if now - discovered < ARRIVAL_SECONDS and cutoff <= self.activity.get(key, 0) <= latest}
+        return recent_live_roots(self.recent_arrivals, self.activity, self.clock(), latest)
 
     def _archive_signature(self, key):
         return self.archive_target, self.revisions.get(key), self.dependencies

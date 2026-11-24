@@ -102,6 +102,7 @@ class WebWatchCoordinator(WatchCoordinator):
         self.history_starts = None
         self.history_progress = None
         self.history_quota = None
+        self.history_fallbacks = ()
         self.daily_history = WatchHistoryAcquisition(share_roots=True, progressive=True)
         self.daily_history_source = None
         self.history_source, self.history_roots, self.card_today = None, None, None
@@ -291,22 +292,25 @@ class WebWatchCoordinator(WatchCoordinator):
             return None
         return value
 
-    def _accept_account_history(self, value, source, day, *, intermediate=False):
+    def _accept_account_history(self, value, source, day):
         if value.source != source or value.usage is not None and value.usage.day_start_ms != day:
             self.history_due_ms = 0
             return
-        held = self.history_quota
-        narrower = (intermediate and held is not None and self.history_source == source
-                    and held.observed_start_ms is not None
-                    and (value.accounts.observed_start_ms is None
-                         or value.accounts.observed_start_ms > held.observed_start_ms)
-                    and held.observed_at_ms is not None
-                    and held.observed_at_ms >= day)
-        if not narrower:
-            self.history_quota = value.accounts
-            self.history_source, self.history_roots = value.source, value.roots
-            if value.usage is not None:
-                self.daily_usage = value.usage
+        current = value.accounts
+        older = ((self.history_quota, *self.history_fallbacks) if self.history_source == source
+                 and self.history_quota is not None else ())
+        # A fresh reset window can use the newest index while a weekly window
+        # still uses its last covering index. Never combine their usage.
+        fallbacks = []
+        for start in self.history_starts or (day,):
+            if not current.covers(start):
+                covering = next((history for history in older if history.covers(start)), None)
+                if covering is not None and not any(covering is saved for saved in fallbacks):
+                    fallbacks.append(covering)
+        self.history_quota, self.history_fallbacks = current, tuple(fallbacks)
+        self.history_source, self.history_roots = value.source, value.roots
+        if value.usage is not None:
+            self.daily_usage = value.usage
         self.daily_status.clear()
 
     def _refresh_quota(self, observation, *, now_ms, force=False, allow_history=True, fresh_root_ids=()):
@@ -322,9 +326,8 @@ class WebWatchCoordinator(WatchCoordinator):
         day = local_day_start_ms(self.report_service.timezone_id, now_ms=now_ms)
         starts = history_starts(self.accounts.snapshots, day, now_ms, include_native_month=True)
         if self.history_starts is not None and starts != self.history_starts:
-            held = self.history_quota if self.history_source == source else None
-            if any(held is None or held.observed_start_ms is None or start < held.observed_start_ms
-                   or held.observed_at_ms is None or start > held.observed_at_ms
+            held = (self.history_quota, *self.history_fallbacks) if self.history_source == source else ()
+            if any(not any(history is not None and history.covers(start) for history in held)
                    for start in set(starts).difference(self.history_starts)):
                 self.history_due_ms = 0
         self.history_starts = starts
@@ -341,7 +344,7 @@ class WebWatchCoordinator(WatchCoordinator):
                     value = progress.updates.get_nowait()
                 except Empty:
                     break
-                self._accept_account_history(value, source, day, intermediate=True)
+                self._accept_account_history(value, source, day)
         if done:
             value = self.history_job.result()
             if isinstance(value, Exception):
@@ -383,6 +386,7 @@ class WebWatchCoordinator(WatchCoordinator):
         source = source_scope(self.report_service.source)
         if self.history_source != source:
             self.daily_usage = self.history_quota = None
+            self.history_fallbacks = ()
             self.history_source = self.history_roots = None
         elif self.daily_usage is not None and self.daily_usage.day_start_ms != day:
             self.daily_usage = None
@@ -397,11 +401,14 @@ class WebWatchCoordinator(WatchCoordinator):
                 now_ms=now_ms, today_start_ms=day,
                 month_start_ms=local_month_start_ms(self.report_service.timezone_id, now_ms=now_ms),
                 timezone_id=self.report_service.timezone_id,
-                workday_calendar=str(self.config.get("workdayCalendar") or ""))
+                workday_calendar=str(self.config.get("workdayCalendar") or ""),
+                fallbacks=self.history_fallbacks)
             frame = replace(frame, quota=replace(frame.quota, accounts=accounts))
-            if self.daily_usage is not None:
+            today = next((history for history in (self.history_quota, *self.history_fallbacks)
+                          if history.covers(day)), None)
+            if self.daily_usage is not None and today is not None:
                 self.card_today = CardToday.from_accounts(accounts, source, self.report_service.timezone_id,
-                    day, self.daily_usage.observed_at_ms, self.history_quota)
+                    day, self.daily_usage.observed_at_ms, today)
         proof = self.cards.history
         frame = replace(frame, active_cards=active, history_cards=history, cards_state=state,
             recent_finished_cards=self.cards.recent.project(self.cards, now_ms),
