@@ -448,6 +448,43 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual(74, settled['total'])
         self.assertFalse(settled['membership_pending'])
 
+    def test_today_progress_distinguishes_unread_history_from_refresh_and_live_arrivals(self):
+        source = self.source(0, 0)
+        _, catalog = self.restore('one')
+        def add(index, created):
+            snapshot = make_root_snapshot(index, 1, month_start_ms=created - index * 60_000)
+            source.snapshots[snapshot.root.session_id] = replace(snapshot, complete=True)
+            return snapshot.root.session_id
+
+        def observe():
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+
+        recent = add(1, self.now - 60_000)
+        observe()
+        self.assertFalse(catalog.page(period='today')['history_progress']['complete'])
+        self.tick(catalog, source)
+        settled = catalog.page(period='today')
+        self.assertTrue(settled['history_progress']['complete'])
+        self.assertEqual([recent], [r['session_id'] for r in settled['view']['session_usage']])
+
+        # Same-source refresh, genuinely new work, and late discovery of a
+        # week-only root arrive together. Do not run an archive tick to hide a restart.
+        source.snapshots[recent] = replace(source.snapshots[recent], source_revision='new-prompt')
+        add(2, self.now + 1000)
+        add(3, self.now - 2 * DAY_MS)
+        self.now += 3000
+        observe()
+        for advance in (0, 180_000):
+            self.now += advance
+            observe()
+            self.assertFalse(catalog.page(period='7-days')['history_progress']['complete'])
+            self.assertTrue(catalog.page(period='today')['history_progress']['complete'])
+
+        catalog.observe(None)
+        progress = catalog.page(period='today')['history_progress']
+        self.assertFalse(progress['complete'])
+        self.assertTrue(progress['recovering'])
+
     def test_short_prompt_discovered_and_finished_before_history_catches_up(self):
         from concurrent.futures import ThreadPoolExecutor
         from threading import Event
