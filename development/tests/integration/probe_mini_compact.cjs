@@ -63,14 +63,15 @@ module.exports = async ({evaluate, until, fixture, open, close, settle, settings
   await publish(4, 15, 0);
   await open();
   assert.equal(await evaluate('miniWatch.view.rowTarget'), 5);
-  assert.deepEqual((await read()).rows.map(row=>row.id),['active-0','active-1','active-2','active-3','earlier-14']);
+  assert.deepEqual((await read()).rows.map(row=>row.id),['active-0','active-2','earlier-14','active-1','active-3']);
   for (const capacity of [0, 7]) {
     await settings(field, endpoint, capacity);
     // A live preference is allowed to exceed the original height. Reopen to
     // test the full configured band against actual native requested bounds.
     await close(); await open();
     const layout = await read(), {rows} = layout;
-    assert.equal(rows.length,Math.max(4,capacity));
+    const fillers=capacity===7 ? ['earlier-12','earlier-13','earlier-14'] : [];
+    assert.deepEqual(rows.map(row=>row.id),['active-0','active-2',...fillers,'active-1','active-3']);
     assert.equal(rows.filter(row => row.running).length,4);
     const expected = rows;
     const fullHeight = layout.header + expected.reduce((sum,row) => sum + row.height,0);

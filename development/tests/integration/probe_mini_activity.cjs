@@ -14,8 +14,8 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await until(`miniWatch.view.promptRows.has('earlier-0')`);
   await evaluate(`window.activityRow=miniWatch.view.promptRows.get('earlier-0');window.activityTime=activityRow.cells[0].firstChild`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
-    ['00:08','2026-11-06 00:08'],['23:47','2026-11-05 23:47'],
-    ['—','Unknown finish time\nStarted: 1970-01-01 01:00\nCompletion unverified.']]);
+    ['—','Unknown finish time\nStarted: 1970-01-01 01:00\nCompletion unverified.'],
+    ['23:47','2026-11-05 23:47'],['00:08','2026-11-06 00:08']]);
   assert.ok((await values()).every(row=>row.columns===5 && row.focus===0 && !row.native));
   assert.deepEqual(await evaluate(`[...miniWatch.view.body.parentNode.querySelectorAll('th')].map(n=>n.textContent)`),
     ['Activity','Session','CCost','Total','Ctx']);
@@ -27,11 +27,11 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   await evaluate(`activityNow=Date.parse('2026-10-25T02:00:00Z')`);
   await fixture('history-dst'); await until(`miniWatch.view.promptRows.get('earlier-0').activityHelp==='2026-10-25 02:30'`);
   assert.deepEqual((await values()).map(row=>[row.time,row.help]),[
-    ['00:08','2026-11-06 00:08'],['02:30','2026-10-25 02:30'],['02:30','2026-10-25 02:30']]);
+    ['02:30','2026-10-25 02:30'],['02:30','2026-10-25 02:30'],['00:08','2026-11-06 00:08']]);
   assert.equal(await evaluate(`miniWatch.view.promptRows.get('earlier-0')===activityRow && activityRow.cells[0].firstChild===activityTime`),true);
   assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30','focused help refreshes in place');
   await evaluate(`activityNow=Date.parse('2026-10-26T00:30:00Z')-1;miniWatch.render()`);
-  assert.deepEqual((await values()).slice(1).map(row=>row.time),['22h ago','23h ago']);
+  assert.deepEqual((await values()).slice(0,2).map(row=>row.time),['23h ago','22h ago']);
   const before = await evaluate(`({rows:[...miniWatch.view.promptRows.keys()],outer:[miniWatch.window.outerWidth,miniWatch.window.outerHeight],streams:probeStreams})`);
   await evaluate(`window.activityPublication=JSON.stringify(miniWatch.publication.view);window.activityFetches=0;window.activityTimers=0;
     window.activityNativeRender=miniWatch.render;window.activityNativeInterval=miniWatch.window.setInterval;
@@ -55,8 +55,8 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
       await command('Emulation.setTimezoneOverride',{timezoneId},session);
     }
     await evaluate('miniWatch.render()');
-    assert.deepEqual((await values()).slice(1).map(row=>[row.time,row.help]),[
-      ['23h ago','2026-10-25 02:30'],['1d ago','2026-10-25 02:30']]);
+    assert.deepEqual((await values()).slice(0,2).map(row=>[row.time,row.help]),[
+      ['1d ago','2026-10-25 02:30'],['23h ago','2026-10-25 02:30']]);
     assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30');
   }
   checks.push('Actual Document PiP configured-local activity help is invariant under en-US/sv-SE and New York/Tokyo browser zones');
@@ -76,7 +76,7 @@ module.exports = async function activity({evaluate,until,fixture,command,pip,own
   assert.equal(await evaluate(`${help}.textContent`),'2026-10-25 02:30','touch exposes equivalent full local date');
   await key('Escape'); await evaluate('activityTime.blur()');
   await fixture('history-ages'); await until(`miniWatch.view.promptRows.size===5 && miniWatch.view.promptRows.has('earlier-3')`);
-  assert.deepEqual((await values()).map(row=>row.time),['1d ago','3m ago','2y ago','3y ago']);
+  assert.deepEqual((await values()).map(row=>row.time),['3y ago','2y ago','3m ago','1d ago']);
   assert.equal(await evaluate(`[...miniWatch.view.promptRows.values()].find(row=>row.classList.contains('mini-running')).cells[0].textContent`),'▶ 14h ago');
   for(const theme of ['classic','web']) for(const color of ['light','dark']) {
     await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:color}]},ownerSession);

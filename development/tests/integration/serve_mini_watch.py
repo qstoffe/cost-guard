@@ -443,7 +443,8 @@ def main():
                                 completed_at_ms=frame.now_ms - 100000 + index)),)) for index in range(int(count)))
                     current = tuple(replace(cards[0], session_id=f'active-{index}', focal_id=str(index), title='Active long title ' * 30,
                         rows=(replace(cards[0].rows[0], prompt=replace(cards[0].rows[0].prompt,
-                            event_id=str(index), prompt_number=index + 23)),)) for index in range(int(prompt_count)))
+                             event_id=str(index), prompt_number=index + 23,
+                             at_ms=frame.now_ms - (10_000 if index % 2 else 600_000) + index)),)) for index in range(int(prompt_count)))
                     quota = replace(frame.quota, accounts=frame.quota.accounts[:int(account_count[0])]) if account_count else frame.quota
                     publish(value=replace(frame, active_cards=current, history_cards=history, quota=quota,
                         running=running_prompts(current, 'observed')))

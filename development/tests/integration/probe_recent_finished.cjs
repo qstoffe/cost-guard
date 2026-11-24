@@ -41,8 +41,8 @@ module.exports = async ({fixture,evaluate,until,open,close,command,sessionId,tar
   // Same-instance HTTP resync supplies the identical detached recent population.
   await evaluate(`(async()=>{const snapshot=await api('/api/live');window.recentReconnect=snapshot.values.live;
     miniWatch.update(recentReconnect);})()`);
-  assert.deepEqual(await evaluate(`recentReconnect.view.recent_finished_cards.map(c=>c.session_id)`),
-    await evaluate(`[...miniWatch.view.promptRows.keys()]`));
+  assert.deepEqual(await evaluate(`[...miniWatch.view.body.rows].map(row=>row.dataset.id).sort()`),
+    await evaluate(`recentReconnect.view.recent_finished_cards.map(c=>c.session_id).sort()`));
   const owner=await command('Browser.getWindowForTarget',{targetId});
   await command('Browser.setWindowBounds',{windowId:owner.windowId,bounds:{windowState:'minimized'}});
   await fixture('recent-finish-5020-1');

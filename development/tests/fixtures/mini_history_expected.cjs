@@ -28,5 +28,5 @@ module.exports = function expectedMiniRows(view) {
   }
   const newest=(a,b)=>(b.at ?? -Infinity)-(a.at ?? -Infinity) || a.id.localeCompare(b.id);
   const fillers=[...finished.values()].filter(value=>!running.has(value.id)).sort(newest);
-  return [...running.values()].sort(newest).concat(fillers.slice(0,Math.max(0,5-running.size)));
+  return [...running.values(),...fillers.slice(0,Math.max(0,5-running.size))].sort(ordered);
 };
