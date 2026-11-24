@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 import sqlite3
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -341,6 +342,76 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual({'root-0019', 'root-0018'}, set(order[1:3]))
         self.assertEqual(20, len(order))
 
+    def test_slow_running_reads_cannot_spend_every_scalar_slice_while_today_is_cold(self):
+        source = self.source(6, 1, today_roots=6, now_ms=self.now, running_roots=2)
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        active = source.watch_candidate_session_ids()
+        remaining = set(source.snapshots) - active
+        reads = []
+        load = source.load_session_snapshot
+
+        def slow_read(key):
+            reads.append(key)
+            self.now += 6000  # One transport read exceeds the slice; Running is due again next turn.
+            return load(key)
+
+        with patch.object(source, 'load_session_snapshot', side_effect=slow_read):
+            self.tick(catalog, source)
+            self.assertIn(reads[0], active)
+            for _ in range(7):
+                self.tick(catalog, source)
+
+        persisted, _ = SessionArchive(archive).load()
+        self.assertEqual(remaining, set(persisted))
+        self.assertTrue(all(row.prompt_count == 1 for row in persisted.values()))
+        self.assertGreater(len([key for key in reads if key in active]), 1)
+
+    def test_active_scalar_uses_only_current_watch_capture_once_and_never_archives_it(self):
+        from src.reports.watch_capture import capture_rows
+        from src.watch.web_coordinator import publish_catalog_prompts
+
+        source = self.source(1, 2, today_roots=1, now_ms=self.now, running_roots=1)
+        source.refresh_observation_epoch = lambda: None  # The synthetic registration stays available.
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        key, = source.snapshots
+        snapshot = source.snapshots[key]
+        service = report_service(source, self.cache, self.now, self.pricing)
+        capture, _ = capture_rows(service, snapshot.root, fresh=snapshot)
+        entry = SimpleNamespace(snapshot=snapshot, capture=capture, generation=1, verified_generation=1,
+            source_status=SimpleNamespace(failed_at=None), cost=SimpleNamespace(evidence=snapshot))
+        cards = SimpleNamespace(sessions={key: entry}, source_epoch='one')
+        self.assertIsNotNone(capture.catalog_prompt)
+
+        for case in ('current', 'replay', 'wrong-provenance', 'wrong-revision', 'old-epoch', 'incomplete', 'expired'):
+            with self.subTest(offer=case):
+                if case != 'current':
+                    self.now += 5000
+                observed_at = self.now
+                if case == 'replay':
+                    observed_at = capture.observed_at_ms
+                elif case == 'expired':
+                    observed_at -= 5001
+                entry.capture = replace(capture, observed_at_ms=observed_at,
+                    source_epoch='previous' if case == 'old-epoch' else 'one')
+                if case == 'wrong-provenance':
+                    foreign = replace(snapshot.root.provenance, source_instance='foreign')
+                    entry.cost.evidence = replace(snapshot, root=replace(snapshot.root, provenance=foreign))
+                elif case == 'wrong-revision':
+                    entry.cost.evidence = replace(snapshot, source_revision='previous')
+                else:
+                    entry.cost.evidence = replace(snapshot, complete=case != 'incomplete')
+                before = source.load_count
+                publish_catalog_prompts(catalog, cards, offer_snapshots=True)
+                catalog.tick(report_service(source, self.cache, self.now, self.pricing), fresh_snapshots=True)
+
+                self.assertEqual(0 if case == 'current' else 1, source.load_count - before)
+                row, = catalog.page(period='today')['view']['session_usage']
+                self.assertEqual((True, 2), (row['running'], row['prompt_count']))
+        persisted, _ = SessionArchive(archive).load()
+        self.assertNotIn(key, persisted)
+
     def test_cold_week_admits_second_today_page_before_bulk_discovered_older_history(self):
         source = self.source(74, 1, today_roots=30, now_ms=NOV_5 + 54 * 60_000)
         older = {key: source.snapshots.pop(key) for key in list(source.snapshots)[:44]}
@@ -380,7 +451,6 @@ class DisplayHistoryTests(unittest.TestCase):
     def test_short_prompt_discovered_and_finished_before_history_catches_up(self):
         from concurrent.futures import ThreadPoolExecutor
         from threading import Event
-        from types import SimpleNamespace
         from unittest.mock import Mock
         from src.reports.session_summary import session_summary
         from src.reports.watch_capture import capture_rows

@@ -99,18 +99,20 @@ def summary_key(service, root):
 
 
 def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None,
-                    on_activity=None, activity_end_ms=None, on_evidence=None, on_prompt_ends=None):
+                    on_activity=None, activity_end_ms=None, on_evidence=None, on_prompt_ends=None,
+                    fresh_snapshot=False, active_snapshot=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
     epoch = getattr(service.source, "observation_epoch", None)
     key = summary_key(service, root)
-    try:
-        cached = service.cache_repository.get(NAMESPACE, key, busy_timeout_ms=50)
-    except (OSError, sqlite3.Error):
-        cached = None
-    if (on_evidence is None and not active and cached is not None
-            and cached.source_revision == revision and cached.algorithm_version == ALGORITHM):
+    cached = None
+    if on_evidence is None and not active and not fresh_snapshot:
+        try:
+            cached = service.cache_repository.get(NAMESPACE, key, busy_timeout_ms=50)
+        except (OSError, sqlite3.Error):
+            pass
+    if cached is not None and cached.source_revision == revision and cached.algorithm_version == ALGORITHM:
         try:
             values = dict(cached.payload)
             semantics = values.pop("model_identity_semantics", None)
@@ -176,7 +178,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     # Derived analysis alone does not carry full-source acquisition completeness.
     # Establish it once on scalar-cache miss, without changing finite-report semantics.
     stage('reading_summary')
-    item = service._analyze(root, detail=True, force_fresh=active)
+    options = {'snapshot': active_snapshot} if active and active_snapshot is not None else {}
+    item = service._analyze(root, detail=True, force_fresh=active or fresh_snapshot, **options)
     stage('projecting_summary')
     row = service._session_rows((item,), catalog_models=True)[0]
     # This lane already projects a complete scalar row and persists it below.
@@ -186,6 +189,8 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=groups,
                   empty_history=empty_history(item.snapshot),
                   **activity_fields(item, on_activity=on_activity, on_prompt_ends=on_prompt_ends))
+    if options:
+        service.source.refresh_observation_epoch()
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")
     if on_evidence is not None:

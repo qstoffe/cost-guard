@@ -156,6 +156,7 @@ class OpenCodeV2Source:
         self._endpoint: V2Endpoint | None = None
         self._endpoint_marker: tuple[int, ...] | None = None
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
+        self._catalog_before_hint = None
         self._catalog_index: V2CatalogIndex | None = None
         self._message_lock = threading.Lock()
         self.metrics = AcquisitionMetrics(generation="v2")
@@ -166,6 +167,7 @@ class OpenCodeV2Source:
         self._interruptions = LiveInterruptionReasons()
         self._evidence_epoch = None
         self._card_trees: CardTreeBrackets | None = None
+        self._scalar_member_reads = False
         self._model_identities = DesktopModelCatalog(self._client)
         self._diagnostics: dict[str, Any] = {
             "session_contract": None, "session_pages": 0, "raw_sessions": 0,
@@ -246,7 +248,7 @@ class OpenCodeV2Source:
         from .opencode_v2_export import native_export_tree
         return native_export_tree(self, session_id, epoch, cancelled)
 
-    def begin_card_read(self, origin: OpenCodeV2Source) -> None:
+    def begin_card_read(self, origin: OpenCodeV2Source, *, use_live_catalog_hint=False) -> None:
         """Fresh job state on an exclusively borrowed reader, before validation."""
         self.metrics = AcquisitionMetrics(generation='v2')
         self.metrics.add('card_reader_reuses', int(self._http is not None))
@@ -254,6 +256,7 @@ class OpenCodeV2Source:
         if self._card_trees is None:
             self._card_trees = CardTreeBrackets(self, reuse_seconds=_CATALOG_REUSE_SECONDS)
         self._card_trees.reset_job()
+        self._scalar_member_reads = use_live_catalog_hint
         for key, value in self._diagnostics.items():
             if isinstance(value, dict):
                 if key == 'transport':
@@ -265,6 +268,8 @@ class OpenCodeV2Source:
             elif isinstance(value, int):
                 self._diagnostics[key] = 0
         self.inherit_live_evidence(origin, reuse_catalog=True)
+        if use_live_catalog_hint:
+            self._card_trees.before_hint = origin._catalog_before_hint
 
     def inherit_live_evidence(self, origin: OpenCodeV2Source, *, reuse_catalog=False) -> bool:
         """Copy actor evidence only between isolated readers of one service epoch.
@@ -442,7 +447,9 @@ class OpenCodeV2Source:
             return list(self._catalog_cache)
         started = time.perf_counter()
         self.metrics.add("full_catalog_fetches")
-        client = self._client()
+        with self._connection_lock:
+            client = self._client()
+            epoch = self.observation_epoch
         raw_values: list[tuple[Mapping[str, Any], str]]
         contract: str
         pages: int
@@ -493,6 +500,10 @@ class OpenCodeV2Source:
             self._catalog_index = V2CatalogIndex(result)
             self.metrics.add("catalog_index_builds")
             self._catalog_listed_at = time.monotonic()
+            if epoch is not None:
+                # The listing's native values are read-only from this point.
+                # Publish atomically; the reader builds its own mutable index.
+                self._catalog_before_hint = (epoch, started, tuple(result))
         return result
 
     def _normalize_session(self, native: _NativeSession) -> NormalizedSession:
@@ -686,7 +697,8 @@ class OpenCodeV2Source:
             self._client()
             epoch = self._evidence_epoch
         snapshot = load_snapshots(self, (session_id,),
-            brackets=self._card_trees.bracket if self._card_trees is not None else None)[session_id]
+            brackets=self._card_trees.bracket if self._card_trees is not None else None,
+            parallel_members=self._scalar_member_reads)[session_id]
         with self._connection_lock:
             self._current_endpoint()
             if epoch != self._evidence_epoch:

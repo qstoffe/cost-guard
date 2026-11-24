@@ -1,6 +1,8 @@
 """Batch V2 message acquisition bracketed by authoritative catalog revisions."""
 from __future__ import annotations
 
+from collections import deque
+from contextlib import closing
 from dataclasses import replace
 from concurrent.futures import CancelledError, FIRST_COMPLETED, ThreadPoolExecutor, wait
 from threading import Event
@@ -17,23 +19,54 @@ if TYPE_CHECKING:
     from .opencode_v2 import OpenCodeV2Source, _NativeSession
 
 
+def _read_members(source, tree, stopped):
+    """A settled scalar tree may overlap two reads; always join them before its after-bracket."""
+    members = iter(tree)
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix='cost-guard-v2-scalar') as pool:
+        pending = deque()
+
+        def submit():
+            if stopped is not None and stopped.is_set():
+                raise CancelledError()
+            if (member := next(members, None)) is not None:
+                pending.append(pool.submit(source._load_messages, member))
+
+        try:
+            submit()
+            submit()
+            while pending:
+                values = pending.popleft().result()
+                submit()
+                yield values
+        finally:
+            for future in pending:
+                future.cancel()
+
+
 def _read_tree(source: OpenCodeV2Source, tree: Sequence[_NativeSession], root_id: str,
-               revision: str, stopped: Event | None = None) -> SessionSnapshot:
+               revision: str, stopped: Event | None = None, *, parallel_members=False) -> SessionSnapshot:
     messages, parts, boundaries, background, contexts = [], [], [], [], []
     notices: set[str] = set()
     observe_work('reading', completed=0, total=len(tree))
-    for number, native in enumerate(tree, 1):
-        if stopped is not None and stopped.is_set():
-            raise CancelledError()
-        native_messages, native_parts, native_boundaries, native_background, native_notices, context = source._load_messages(native)
-        messages.extend(native_messages)
-        parts.extend(native_parts)
-        boundaries.extend(native_boundaries)
-        background.extend(native_background)
-        notices.update(native_notices)
-        if context is not None:
-            contexts.append(context)
-        observe_work('reading', 1, completed=number, total=len(tree))
+    def read_serial():
+        for member in tree:
+            if stopped is not None and stopped.is_set():
+                raise CancelledError()
+            yield source._load_messages(member)
+
+    settled_tree = parallel_members and len(tree) > 1 and all(member.active is False for member in tree)
+    reads = _read_members(source, tree, stopped) if settled_tree else read_serial()
+    with closing(reads):
+        for number, values in enumerate(reads, 1):
+            native_messages, native_parts, native_boundaries, native_background, native_notices, context = values
+            messages.extend(native_messages)
+            parts.extend(native_parts)
+            boundaries.extend(native_boundaries)
+            background.extend(native_background)
+            notices.update(native_notices)
+            if context is not None:
+                contexts.append(context)
+            observe_work('reading', 1, completed=number, total=len(tree))
     sessions = tuple(source._normalize_session(item) for item in tree)
     events = tuple(event for message in messages
                    if (event := normalize_event(message, frozenset(notices))) is not None)
@@ -49,7 +82,8 @@ def _read_tree(source: OpenCodeV2Source, tree: Sequence[_NativeSession], root_id
     )
 
 
-def _read_trees(source, index, pending, revisions, *, workers, progress, failures=None, on_root=None, identify_members=False):
+def _read_trees(source, index, pending, revisions, *, workers, progress, failures=None, on_root=None,
+                identify_members=False, parallel_members=False):
     """At most four submitted trees; join all owned reads, including failure paths."""
     snapshots = {}
     def accept(root_id, read):
@@ -68,7 +102,8 @@ def _read_trees(source, index, pending, revisions, *, workers, progress, failure
 
     if failures is None and (workers == 1 or len(pending) == 1):
         for root_id in pending:
-            accept(root_id, lambda: _read_tree(source, index.tree(root_id), root_id, revisions[root_id]))
+            accept(root_id, lambda: _read_tree(source, index.tree(root_id), root_id, revisions[root_id],
+                parallel_members=parallel_members and len(pending) == 1))
             progress('messages', len(snapshots), len(pending))
         return snapshots
     stopped = Event()
@@ -109,8 +144,8 @@ def global_bracket(source, root_ids, *, allow_reuse, failures=None):
 
 
 def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers: int = 1,
-                    progress=None, available_only: bool = False, failures=None, on_root=None,
-                    identify_members: bool = False, brackets=None) -> dict[str, SessionSnapshot]:
+                     progress=None, available_only: bool = False, failures=None, on_root=None,
+                     identify_members: bool = False, brackets=None, parallel_members=False) -> dict[str, SessionSnapshot]:
     """Share brackets, not weakened proofs: every returned tree is equal before/after its messages.
 
     Unstable trees alone retry; a reused bracket does not consume either fresh
@@ -139,7 +174,8 @@ def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers
         progress('messages', 0, len(pending))
         with source.metrics.measure("hydration"):
             snapshots = _read_trees(source, index, pending, revisions, workers=workers, progress=progress,
-                                    failures=failures, on_root=on_root, identify_members=identify_members)
+                                    failures=failures, on_root=on_root, identify_members=identify_members,
+                                    parallel_members=parallel_members)
         source.metrics.add("hydrated_roots", len(snapshots))
         source._diagnostics["last_snapshot_stage"] = "catalog_after"
         progress('catalog-after', 0, len(pending))
