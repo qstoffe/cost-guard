@@ -180,8 +180,21 @@ class AccountPeriodHistory:
 
         return account_projections(accounts, (), self.catalog, now_ms=now_ms,
             today_start_ms=today_start_ms, month_start_ms=month_start_ms, timezone_id=timezone_id,
-            workday_calendar=workday_calendar, period_index=self.index, watch=True,
-            require_history=True, history_for_window=history_for_window)
+                    workday_calendar=workday_calendar, period_index=self.index, watch=True,
+                    require_history=True, history_for_window=history_for_window)
+
+    def qualified_capacity_cost(self, account, quota, window):
+        """Use only full, proven account usage through this native observation."""
+        start, end, _ = window
+        if (start == end or not self.covers(start) or self.observed_at_ms is None
+                or self.observed_at_ms < end - 1):
+            return None
+        routes = account_usage_routes(account)
+        if any(self.index.cost(route, None, start, end, quota.model_id).observed_requests for route in routes):
+            return None
+        cost = combined_cost(self.index.cost(route, account.key, start, end, quota.model_id)
+                             for route in account_usage_routes(account, proven=True))
+        return cost if cost.complete and cost.priced_requests > 0 else None
 
 
 class WatchAccountProjection:

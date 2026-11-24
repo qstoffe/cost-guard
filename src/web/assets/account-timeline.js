@@ -588,7 +588,7 @@ const AccountTimelineView = (() => {
       const values = [], rows = [];
       for (const item of this.series) {
         const point = item.points[index];
-        const value = point ? shown(point) : '—';
+        const value = point ? shown(point).replace(/^[~≈]/, '') : '—';
         if (future) continue;
         const name = item.account, row = e('div', undefined, 'account-timeline-tip-row');
         const text = e('span', name, 'account-timeline-tip-name');

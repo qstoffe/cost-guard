@@ -32,7 +32,7 @@ const AccountCards = (() => {
       if (ReportView.capacityKnown(quota(), monthly)) {
         // Basis is source-qualified by the projection, not inferred from provider or text.
         if (!monthly && quota().ccost_reference.basis === 'native') return '';
-        if (monthly || quota().ccost_reference.basis === 'ratio')
+        if (!quota().ccost_reference.retained_capacity && (monthly || quota().ccost_reference.basis === 'ratio'))
           return ReportView.quotaCapacityHelp(quota(), monthly).split('\n')[0];
       }
       return ReportView.quotaCapacityHelp(quota(), monthly);

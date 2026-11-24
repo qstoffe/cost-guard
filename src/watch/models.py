@@ -10,6 +10,7 @@ from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.daily_usage import DailyUsage
+from src.application.quota_ccost import CapacityOffer
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,3 +231,4 @@ class WatchProjection:
     daily_usage: DailyUsage | None = None
     daily_state: str = "loading"
     running: RunningPrompts = field(default_factory=RunningPrompts)
+    quota_capacity_offers: Mapping[str, CapacityOffer] = field(default_factory=dict)

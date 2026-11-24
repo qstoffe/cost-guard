@@ -102,12 +102,12 @@ def card(value, now_ms):
             state=value.session_cost_state, cache_available=None if cost is None else cost.cache_available))
 
 
-def watch_accounts(value, now_ms):
+def watch_accounts(value, now_ms, offers=None):
     if value is None:
         return None
     # Reset display follows the existing Live publication clock, not the last
     # account-history projection. Native observation timestamps remain untouched.
-    return record(now_ms=now_ms, accounts=tuple(watch_account(item) for item in value.accounts))
+    return record(now_ms=now_ms, accounts=tuple(watch_account(item, offers) for item in value.accounts))
 
 
 def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
@@ -167,7 +167,8 @@ def project_live(value, timezone_id="UTC", ccost_display_unit="credits"):
             total=comparison(value.daily_usage.total), mix=token_mix(value.daily_usage.mix),
             prompt_count=value.daily_usage.prompt_count, prompt_count_complete=value.daily_usage.prompt_count_complete),
         daily_state=value.daily_state,
-        today_pending=value.today_pending, accounts=watch_accounts(value.quota, value.now_ms), quota_stale=value.quota_stale,
+        today_pending=value.today_pending,
+        accounts=watch_accounts(value.quota, value.now_ms, value.quota_capacity_offers), quota_stale=value.quota_stale,
         quota_recovering_count=len(value.quota_recovering_accounts),
         recent_model_notice=value.recent_model_notice,
         recent_promotion_notices=value.recent_promotion_notices,

@@ -1,9 +1,17 @@
 """Reference equivalents of verified quota facts, or explicitly estimated period costs."""
+from dataclasses import dataclass
 from decimal import Decimal
 
 from src.numbers import ccost_amount
 from .contracts import record
 from .quota_estimates import estimate_amount, estimate_help, reference_help_amount
+
+
+@dataclass(frozen=True, slots=True)
+class CapacityOffer:
+    capacity: Decimal
+    retained: bool
+    idle: bool
 
 
 def capacity_period(values):
@@ -24,7 +32,7 @@ def capacity_period(values):
     return monthly, duration, (label + " Capacity" if label else "Capacity")
 
 
-def monthly_values(values, capacity, capacity_reason, coherent, current, now_ms):
+def monthly_values(values, capacity, capacity_reason, coherent, current, now_ms, *, idle_estimate=False):
     monthly, duration, label = capacity_period(values)
     if monthly:
         return dict(capacity_label=label, monthly_capacity=None, monthly_reason="", monthly_applicable=False)
@@ -36,7 +44,7 @@ def monthly_values(values, capacity, capacity_reason, coherent, current, now_ms)
         reason = "No verified full recurring window duration; reset time alone is insufficient."
     elif not current:
         reason = "Quota source is stale, unavailable or expired."
-    elif (values.get("window_active") is False or deadline is None or now_ms is None
+    elif not idle_estimate and (values.get("window_active") is False or deadline is None or now_ms is None
             or not deadline - duration * 1000 <= now_ms < deadline):
         reason = "No verified active recurring quota window."
     elif not coherent:
@@ -67,7 +75,13 @@ def period_capacity_help(reference, values):
     if capacity is None:
         return "Capacity: ?\n" + reference["capacity_reason"]
     return ("Capacity: " + reference_help_amount(capacity, inferred=basis == "ratio") +
-            partial_help(reference))
+            capacity_provenance(reference))
+
+
+def capacity_provenance(reference):
+    if reference.get("retained_capacity"):
+        return "\nRetained from an earlier qualified usage observation."
+    return partial_help(reference)
 
 
 def monthly_tokens(reference, values):
@@ -75,7 +89,7 @@ def monthly_tokens(reference, values):
     if not reference["monthly_applicable"]:
         return {"capacity_label": reference["capacity_label"], "monthly_capacity": "", "monthly_capacity_help": ""}
     explanation = ("Monthly Capacity: N/A\n" + reason if reason else
-                   "Monthly Capacity: " + reference_help_amount(raw, inferred=True) + partial_help(reference))
+                   "Monthly Capacity: " + reference_help_amount(raw, inferred=True) + capacity_provenance(reference))
     return {"capacity_label": reference["capacity_label"],
             "monthly_capacity": ("N/A" if raw is None else "~" + estimate_amount(raw)) if reference["monthly_applicable"] else "",
             "monthly_capacity_help": explanation if reference["monthly_applicable"] else ""}
@@ -149,7 +163,7 @@ def unavailable_capacity_reason(values, context, cost, used, fraction, coherent,
     return "Native fraction used is zero; a positive fraction is needed to infer Capacity."
 
 
-def quota_ccost_values(values, now_ms):
+def quota_ccost_values(values, now_ms, *, offer=None):
     """Unrounded reference amounts shared by quota tokens and Web remaining pace."""
     context = values.get("period_ccost")
     if context is None:
@@ -163,6 +177,7 @@ def quota_ccost_values(values, now_ms):
         used = None
     capacity = remaining = None
     basis = "unknown"
+    retained_capacity = idle_estimate = False
     deadline = values.get("reset_at_ms")
     current = (values.get("availability") in {"available", "partial"} and values.get("origin") == "provider_native" and
                values.get("status") not in {"stale", "unavailable", "error", "paused", "invalid"} and
@@ -199,17 +214,26 @@ def quota_ccost_values(values, now_ms):
             duration = values.get("duration_seconds")
             active = (values.get("window_active") is not False and deadline is not None and
                       (not duration or now_ms is None or deadline - duration * 1000 <= now_ms))
-            if (active and fraction is not None and 0 <= fraction < 1 and used is not None and used > 0
+            if offer is not None and (active or offer.idle):
+                basis, capacity = "ratio", offer.capacity
+                retained_capacity, idle_estimate = offer.retained, offer.idle
+                if idle_estimate:
+                    used, remaining = Decimal(0), capacity
+                elif (used is not None and used <= capacity and cost.get("complete")
+                      and not context["estimated"]):
+                    remaining = capacity - used
+            elif (active and fraction is not None and 0 <= fraction < 1 and used is not None and used > 0
                     and cost.get("priced_requests", 0) > 0 and values.get("scope") in {"account", "model"}
                     and (values.get("scope") != "model" or values.get("model_id"))):
                 basis, capacity = "ratio", used / (1 - fraction)
                 remaining = capacity - used
     reason = (unavailable_capacity_reason(values, context, cost, used, fraction, coherent, current, convertible, now_ms)
         if basis == "unknown" else "")
-    return dict(**monthly_values(values, capacity, reason, coherent, current, now_ms),
+    return dict(**monthly_values(values, capacity, reason, coherent, current, now_ms, idle_estimate=idle_estimate),
                 context=context, cost=cost, used=used, capacity=capacity, remaining=remaining,
                 basis=basis, coherent=coherent, current=current, capacity_reason=reason,
-                fraction_used=1 - fraction if basis == "ratio" else None)
+                fraction_used=1 - fraction if basis == "ratio" and offer is None else None,
+                retained_capacity=retained_capacity)
 
 
 def quota_ccost_pace(values, now_ms, reference=None):
@@ -229,7 +253,7 @@ def quota_ccost_pace(values, now_ms, reference=None):
     remaining = reference.get("remaining")
     counts = dict(pace.fields)
     days, workdays = counts["days"], counts["workdays"]
-    if (remaining is None or not remaining.is_finite() or remaining < 0
+    if (remaining is None or not remaining.is_finite() or remaining < 0 or reference.get("retained_capacity")
             or not reference["current"] or days <= 0 or not 0 <= workdays <= days):
         return None
     return record(ccost_remaining=remaining, ccost_per_day=remaining / days,

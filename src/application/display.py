@@ -13,7 +13,7 @@ from src.numbers import balanced_share_percents, ccost_amount, ccost_display, cc
 
 from .contracts import ObjectValue, record
 from .quota_display import quota_displays
-from .quota_ccost import quota_ccost_pace, quota_ccost_tokens, quota_ccost_values
+from .quota_ccost import CapacityOffer, quota_ccost_pace, quota_ccost_tokens, quota_ccost_values
 from .quota_estimates import estimate_amount, estimate_help
 from .prompt_costs import detail_tokens
 from .ai_stats import stat_tokens
@@ -353,10 +353,18 @@ def _with_display(value, timezone_id, now_ms):
         return value
     values = dict(value.fields)
     now_ms = values.get("now_ms", now_ms)
-    reference = quota_ccost_values(values, now_ms) if "period_ccost" in values else {}
+    offered = values.pop("_quota_capacity_offer", None)
+    offer = None
+    if offered is not None:
+        raw = dict(offered.fields)
+        offer = CapacityOffer(Decimal(raw["capacity"]), raw["retained"], raw["idle"])
+    reference = quota_ccost_values(values, now_ms, offer=offer) if "period_ccost" in values else {}
     if reference:
-        value = ObjectValue(value.fields + (("ccost_reference", record(**{key: reference[key] for key in
-            ("used", "capacity", "remaining", "basis", "monthly_capacity", "monthly_applicable")})),))
+        public = {key: reference[key] for key in
+                  ("used", "capacity", "remaining", "basis", "monthly_capacity", "monthly_applicable")}
+        if reference["retained_capacity"]:
+            public["retained_capacity"] = True
+        value = ObjectValue(value.fields + (("ccost_reference", record(**public)),))
     if "native_pace" in values:
         value = ObjectValue(value.fields + (("ccost_pace", quota_ccost_pace(values, now_ms, reference)),))
     # Only differing CCost tokens need a second wire representation. Native
@@ -394,7 +402,7 @@ def _with_display(value, timezone_id, now_ms):
     opaque = {"by_model", "by_day_utc", "current_context_sources", "ccost_reference", "cost_detail"}
     # Mini grouping is presentation input, not another canonical wire ledger.
     # Export the prepared help once per unit; preserve Full Watch's source parts.
-    prepared_only = {"mini_cost_groups", "mini_missing_agents", "mini_session_cost"}
+    prepared_only = {"mini_cost_groups", "mini_missing_agents", "mini_session_cost", "_quota_capacity_offer"}
     fields = tuple((key, item if key in opaque else _with_display(item, timezone_id, now_ms))
                    for key, item in value.fields if key not in prepared_only)
     role_tokens = roles(values)
