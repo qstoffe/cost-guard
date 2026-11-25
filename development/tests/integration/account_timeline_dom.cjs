@@ -123,7 +123,8 @@ async function check() {
 
   const settled = chart.refresh();
   assert.equal(calls.at(-1).request.revision, 3);
-  calls.at(-1).resolve(frame('current', 4, [], [{...second, account: 'Renamed account'}, first]));
+  calls.at(-1).resolve(frame('current', 4, [], [{...second, account: 'Renamed account',
+    provider_monthly_total: true, provider_window_matches: false, month_total: point, observed_total: point}, first]));
   await settled;
   assert.equal(chart.shades.children.length, 0);
   assert.equal(chart.tipTitle.textContent, '2026-11-02 Monday', 'a compatible update retains the inspected date');
@@ -135,6 +136,8 @@ async function check() {
   check.events.change();
   assert.match(chart.entries.get(second.id).name.textContent, /^Renamed account/);
   assert.match(chart.selectedLegend.children[0].children[1].textContent, /^Renamed account/);
+  assert.equal(chart.selectedLegend.children[0].children[2].textContent, 'Provider billing-period total:');
+  assert.equal(chart.selectedLegend.children[0].children[4].textContent, 'Observed OpenCode subtotal: 100');
 
   const provisional = chart.refresh();
   const estimated = {amount: '0.00001', display: {credits: '~<0.1', usd: '~<$0.01'}};

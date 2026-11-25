@@ -14,7 +14,8 @@ from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.test_account_timeline import NOV_1, projected
 from development.tests.test_warm_restart import report_service
-from src.analysis.account_timeline import DAY_MS, PERIODS
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.account_timeline import PERIODS
 from src.application.session_quota import source_scope
 from src.cache import CacheDatabase, CacheRepository
 from src.watch.account_timeline import AccountTimeline

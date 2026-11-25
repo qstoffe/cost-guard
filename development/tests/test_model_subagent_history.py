@@ -12,7 +12,9 @@ from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.model_subagent_history import SOL, ASTRA, NOW, PRICES, native_tree
 from development.tests.fixtures.watch_runtime import MutableSource
 from src.analysis import analyze_snapshot
-from src.analysis.ai_stats import DAY_MS, StatsObservation, StatsRoot, windows
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.ai_stats import StatsObservation, StatsRoot
+from src.analysis.timezones import calendar_periods
 from src.analysis.valuation import comparison_cost
 from src.cache.repository import CacheEntry
 from src.reports.ai_stats_responses import encode_responses, decode_activity, decode_responses
@@ -55,7 +57,7 @@ assert.equal(ReportView.aiStatsModelHelp({}), '');
         root = StatsRoot(snapshot.root.session_id, 'Synthetic', tuple(e for e, _, _ in facts), (),
             responses=decode_responses(responses, facts), activity=decode_activity(responses, facts))
         row = StatsObservation((root,), PRICES.reference_valuation, now=NOW, zone='UTC').period(
-            period=scope, start=dict(windows('UTC', NOW))[scope])
+            period=scope, start=dict(calendar_periods('UTC', NOW))[scope])
         return {metric.metric: metric for metric in row.metrics}
 
     def test_same_model_high_root_max_child_is_one_bucket_with_two_efforts(self):
@@ -64,7 +66,7 @@ assert.equal(ReportView.aiStatsModelHelp({}), '');
         entries = {e.message_id: e for e in bundle.trace_entries}
         child = entries['ca']
         self.assertEqual(('ses_current_child', 'ses_current', 'ses_current', 'cu',
-                          'github-copilot', SOL, 'max', 3 * DAY_MS + 3800),
+                          'github-copilot', SOL, 'max', 40 * DAY_MS + 3800),
             (child.session_id, child.parent_session_id, child.root_session_id, child.logical_prompt_id,
              child.model.provider, child.model.model, child.variant, child.completed_at_ms))
         self.assertEqual(3, len({e.invocation_id for e in entries.values()}))

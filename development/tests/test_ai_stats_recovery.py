@@ -7,7 +7,9 @@ from development.tests.fixtures.active_hour import epoch
 from development.tests.fixtures.session_snapshots import make_native_v2_compaction_snapshot
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
-from src.analysis.ai_stats import DAY_MS, StatsRoot, period_stats, windows
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.ai_stats import StatsRoot, period_stats
+from src.analysis.timezones import calendar_periods
 from src.analysis.ai_stats_models import ModelActivity
 from src.analysis.compaction import completed_compactions
 from src.analysis.models import TraceEntry
@@ -156,7 +158,7 @@ class ObservedStatsTests(unittest.TestCase):
         damaged = (good, request_only, missing_start, invalid, running, missing_tokens)
         forbidden = r'Unavailable|Partial|Provisional|No data|N/A|Unknown|Observed|≥|NaN|Infinity|estimated|approximate'
 
-        for period, start in windows('Europe/Stockholm', NOW):
+        for period, start in calendar_periods('Europe/Stockholm', NOW):
             stats = period_stats(damaged, lambda _m, t: Decimal(8) if t.input == 8 else None,
                 period=period, start=start, now=NOW, zone='Europe/Stockholm', source_complete=False)
             dto = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(stats,))).to_json()

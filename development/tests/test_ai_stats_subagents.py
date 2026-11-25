@@ -5,7 +5,8 @@ import unittest
 
 from development.tests.fixtures.active_hour import epoch
 from development.tests.test_ai_stats_tokens import entry
-from src.analysis.ai_stats import StatsRoot, StatsObservation, windows
+from src.analysis.ai_stats import StatsRoot, StatsObservation
+from src.analysis.timezones import calendar_periods
 from src.domain import TokenUsage
 
 
@@ -20,7 +21,7 @@ class SubagentStatsTests(unittest.TestCase):
     def metrics(self, roots, *, now=None, period='all', valuation=None, zone='UTC'):
         now = now or self.NOW
         return {m.metric: m for m in StatsObservation(roots, valuation or (lambda _m, t: Decimal(t.output)),
-            now=now, zone=zone).period(period=period, start=dict(windows(zone, now))[period]).metrics}
+            now=now, zone=zone).period(period=period, start=dict(calendar_periods(zone, now))[period]).metrics}
 
     def test_root_followups_compaction_empty_launch_and_pending_fallback_are_never_child_cost(self):
         main = self.request('root', parent=None)
@@ -90,7 +91,7 @@ class SubagentStatsTests(unittest.TestCase):
 
     def test_all_periods_use_child_completion_not_parent_activity_and_dst_local_midnight(self):
         for now in (self.NOW, epoch('2026-03-29T12:00:00+00:00'), epoch('2026-10-25T12:00:00+00:00')):
-            for period, start in windows('Europe/Stockholm', now):
+            for period, start in calendar_periods('Europe/Stockholm', now):
                 boundary = start if start is not None else now - 100_000
                 main = self.request('root', parent=None, stamp=now - 500, amount=100)
                 before = self.request('old', stamp=boundary - 1, amount=20)

@@ -24,6 +24,8 @@ class V1WebWatchTests(unittest.TestCase):
     def test_v1_finite_reports_share_the_source_without_changing_its_database(self):
         with tempfile.TemporaryDirectory() as root, closing(V1Watch(root)) as scenario:
             before = scenario.path.read_bytes()
+            # A finite report's 30-date start must be a representable Windows timestamp.
+            scenario.cli.report_service.now_ms = 40 * 86_400_000
             for kind in (ReportKind.NORMAL, ReportKind.ALL_MODELS, ReportKind.SESSIONS,
                     ReportKind.SESSION, ReportKind.TOKEN_MIX, ReportKind.AI_STATS, ReportKind.COMPARISONS):
                 with self.subTest(kind=kind):
