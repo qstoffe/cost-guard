@@ -1,12 +1,16 @@
 """Privacy-safe persisted Web facts and read-only Diagnostics integration."""
 import json
+import io
+from contextlib import redirect_stdout
 from http.cookiejar import CookieJar
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 from urllib.request import build_opener, HTTPCookieProcessor, Request
+from zipfile import ZipFile
 
+from development.tools import collect_diagnostics, diagnostic_web_dependencies
 from development.tools.diagnostic_web import web_evidence
 from src.web.host import WebHost
 from src.web.instance_state import InstanceStore
@@ -26,6 +30,35 @@ class WebDiagnosticsTests(unittest.TestCase):
 
     def evidence(self):
         return web_evidence(self.root, data_home=self.home)
+
+    def test_ordinary_bundle_retains_safe_private_error_when_config_unreadable(self):
+        log = self.store.directory / "logs/errors/cost-guard-errors-2026-10-01.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("Timestamp: 2026-10-01T10:00:01+00:00\nMode: Web\n"
+                       "Phase: observe\nException: PermissionError\nOS errno: 13\n"
+                       "Location: src/web/host.py:10 in maintain\nPRIVATE_EXCEPTION_MESSAGE\n")
+        raw = self.root / "development/logs/errors/cost-guard-errors-2026-10-01.log"
+        raw.parent.mkdir(parents=True)
+        raw.write_text("PRIVATE_RAW_LOG")
+        with patch.object(collect_diagnostics, "ROOT", self.root), \
+             patch("development.tools.diagnostic_web.private_web_directory", return_value=self.store.directory), \
+             patch.object(diagnostic_web_dependencies, "config_evidence", side_effect=PermissionError(13, "PRIVATE_CONFIG")), \
+             patch.object(diagnostic_web_dependencies, "local_source", return_value={"probe": {"healthy": False}}), \
+             patch("src.sources.connectivity_events.recent_events", return_value=[]), redirect_stdout(io.StringIO()):
+            self.assertEqual(0, collect_diagnostics.main([]))
+        from src.log_paths import log_root
+        with ZipFile(log_root(self.root) / "diagnostics/cost-guard-diagnostics.zip") as archive:
+            self.assertEqual({"summary.txt", "diagnostics.json"}, set(archive.namelist()))
+            output = archive.read("diagnostics.json")
+            self.assertNotIn(b"PRIVATE", output + archive.read("summary.txt"))
+            data = json.loads(output)
+        self.assertEqual(("unavailable", "configuration_read", 13),
+                         tuple(data["config"][key] for key in ("status", "phase", "errno")))
+        errors = data["web"]["runtime_errors"]["errors"]
+        self.assertEqual("recorded", errors["status"])
+        self.assertIn("OS errno: 13", errors["reports"][0])
+        self.assertIn("Location: src/web/host.py:10 in maintain", errors["reports"][0])
+        self.assertIn("Exception: PermissionError", errors["reports"][0])
 
     def test_missing_is_not_success_and_collection_never_creates_files(self):
         before = set(self.store.directory.iterdir())
@@ -121,7 +154,8 @@ class WebDiagnosticsTests(unittest.TestCase):
         self.assertGreater(evidence["age_seconds"], 0)
         self.assertEqual({"observed_at": 2, "code": "process_identity_access_denied"},
                          evidence["latest_lifecycle"])
-        self.assertIn("do not prove current readiness", evidence["action"])
+        self.assertTrue(evidence["stale"])
+        self.assertEqual("unknown", evidence["host_probe"]["status"])
         self.assertNotIn("PRIVATE", json.dumps(evidence))
 
 

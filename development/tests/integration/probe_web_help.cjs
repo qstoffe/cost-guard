@@ -79,7 +79,7 @@ async function main() {
          try {
            await evaluate(owner,`connectionStatus('Authentication expired. Use a fresh launcher link.',{kind:'authorization_required',terminal:true,writable:false})`);
            assert.equal(await evaluate(owner,`!document.getElementById('host-state').hidden &&
-             document.getElementById('host-message').textContent==='Reopen Cost Guard from the launcher to reconnect.' &&
+              document.getElementById('host-message').textContent==='This browser is no longer authorized. Open a fresh link from Cost Guard.' &&
              document.getElementById('host-state').dataset.kind==='authorization_required'`),true);
            layouts.push({route:'terminal-authorization',actionable:true});
          } catch(error) {

@@ -685,6 +685,26 @@ class DispatcherTests(unittest.TestCase):
             self.assertTrue(observer.check(self.dispatch))
         self.assertEqual(key, self.dispatch.entries[self.models]['job'])
 
+    def test_locked_configuration_is_not_a_change_and_does_not_replace_the_pinned_baseline(self):
+        from src.web.dispatch_dependencies import DispatchDependencies
+
+        reads = iter((PermissionError("locked"), {"timezone": "UTC"}, {"timezone": "Europe/Stockholm"}))
+        def read():
+            result = next(reads)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        observer = DispatchDependencies(read, lambda: None, clock=lambda: self.now)
+        self.assertTrue(observer.check(self.dispatch, baseline={"timezone": "UTC"}))
+        self.assertEqual("configuration_unavailable", observer.config_status)
+        self.now += 31
+        self.assertTrue(observer.check(self.dispatch))
+        self.assertEqual("verified", observer.config_status)
+        self.now += 31
+        self.assertFalse(observer.check(self.dispatch))
+        self.assertEqual("configuration_changed", observer.config_status)
+
     def test_first_dependency_check_compares_live_pinned_configuration_not_a_new_baseline(self):
         from src.web.dispatch_dependencies import DispatchDependencies
         observer = DispatchDependencies(lambda: {'timezone': 'Europe/Stockholm'}, lambda: None)

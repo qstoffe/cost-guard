@@ -489,7 +489,7 @@ async function main() {
    await until(() => vm.runInContext('Boolean(current?.result) && !current.loading && !current.withheld', watchReload));
   const retained = ids.result.textContent, terminalRequests = requests;
   vm.runInContext("connectionStatus('STOPPED — NOT LIVE. Use the OS launcher.', {kind: 'stopped', terminal: true, writable: false})", watchReload);
-  assert.match(ids['host-state'].textContent, /Reopen Cost Guard from the launcher/);
+  assert.match(ids['host-state'].textContent, /host stopped.*launcher/i);
   assert.equal(ids['host-state'].hidden, false, 'terminal notice is never hidden');
   assert.equal(ids['host-details'].textContent, '');
   assert.equal(ids.notice.textContent, '', 'host recovery is the single terminal surface');

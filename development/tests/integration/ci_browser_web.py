@@ -354,7 +354,7 @@ def main():
                 owner.stop("menu")
                 page.wait_for_function("() => hostState.kind === 'stopped'", timeout=15000)
                 expect(page.locator("#status")).to_have_text("")
-                expect(page.locator("#host-message")).to_have_text("Reopen Cost Guard from the launcher to reconnect.")
+                expect(page.locator("#host-message")).to_have_text("The Cost Guard host stopped. Start it again from the launcher.")
                 expect(page.locator("#host-state")).to_be_visible()
                 assert page.locator("#refresh").is_disabled()
                 assert owner.stopped.wait(10)

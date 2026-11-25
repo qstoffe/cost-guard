@@ -146,7 +146,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
    await run(`bannerMode='terminal';csrf='expired-fixture-csrf';await current.catalog.load()`);
    await until('hostState.terminal && !current.catalog.attached && !document.getElementById("host-state").hidden');
    await quiet();
-   assert.match(await evaluate('document.getElementById("host-message").textContent'),/Reopen Cost Guard from the launcher/);
+    assert.match(await evaluate('document.getElementById("host-message").textContent'),/browser is no longer authorized.*fresh link/i);
   assert.equal(await evaluate('current.catalog.pager.querySelectorAll("[aria-busy=true]").length'),0);
   const ax = await command('Accessibility.getFullAXTree');
    assert.ok(!ax.nodes.some(node=>/Session details|Check your access, then reopen Sessions/.test(node.name?.value || '')));

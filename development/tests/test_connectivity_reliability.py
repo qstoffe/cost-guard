@@ -274,28 +274,60 @@ class V2RestartTests(unittest.TestCase):
         self.assertFalse(pump._thread.is_alive())
         self.assertIsNone(pump.get(0))
 
-    def test_http_stream_cancellation_closes_only_owned_loopback_sockets(self):
-        endpoint = V2Endpoint("http://127.0.0.1:1", None, 1, "opencode", None, Path("service.json"))
-        client = V2HttpClient(endpoint)
-        connection = Mock()
-        client._streams.add(connection)
-        client.close_events()
-        connection.sock.shutdown.assert_called_once_with(socket.SHUT_RDWR)
-        connection.close.assert_called_once()
+    def test_blocked_event_stream_retires_without_incident_and_next_stream_is_usable(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    def test_intentional_stream_close_is_not_a_source_incident(self):
+        partial, finish = threading.Event(), threading.Event()
+
+        class Stream(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                if self.path == "/blocked":
+                    self.wfile.write(b"data: {")
+                    self.wfile.flush()
+                    partial.set()
+                    finish.wait(8)
+                else:
+                    self.wfile.write(b'data: {"type":"next"}\n\n')
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Stream)
+        endpoint = V2Endpoint(f"http://127.0.0.1:{server.server_port}", None, 1, "opencode", None, Path("service.json"))
+        client = V2HttpClient(endpoint)
+        serving = threading.Thread(target=server.serve_forever)
+        serving.start()
+        try:
+            with ThreadPoolExecutor(1) as worker:
+                reader = worker.submit(list, client.sse("/blocked"))
+                try:
+                    self.assertTrue(partial.wait(3))
+                    client.close_events()
+                    self.assertEqual([], reader.result(timeout=3))
+                finally:
+                    finish.set()
+            with closing(client.sse("/next")) as following:
+                self.assertEqual({"type": "next"}, next(following))
+        finally:
+            server.shutdown()
+            server.server_close()
+            serving.join()
+
+    def test_unexpected_stream_failure_is_not_suppressed(self):
         endpoint = V2Endpoint("http://127.0.0.1:1", None, 1, "opencode", None, Path("service.json"))
         client = V2HttpClient(endpoint)
         connection = Mock()
         def cancelled(_connection, _path, _stopped):
-            client.close_events()
             raise SourceUnavailableError("closed", code=FailureCode.DISCONNECTED)
             yield
         with patch.object(client, "_new_connection", return_value=connection), \
              patch.object(client, "_sse", side_effect=cancelled):
-            self.assertEqual([], list(client.sse("/api/event")))
-        self.assertEqual({}, client._stream_stops)
-        self.assertEqual(set(), client._streams)
+            with self.assertRaises(SourceUnavailableError):
+                list(client.sse("/api/event"))
+        connection.close.assert_called_once()
 
     def test_cancel_before_first_stream_read_never_opens_a_connection(self):
         stopped = threading.Event()
@@ -359,16 +391,13 @@ class IncidentEvidenceTests(unittest.TestCase):
                 create_bundle(root / "diagnostics/bundle.zip", root=root, json_bytes=b"{}", text_bytes=b"ok")
                 self.assertEqual(events, connectivity_events.recent_events())
 
-    def test_diagnostics_summary_separates_sources_metadata_and_validation(self):
+    def test_diagnostics_summary_separates_current_probes_from_historical_recovery(self):
         data = {"sources": {"v2": {"probe": {"healthy": True}},
                             "v1": {"probe": {"failure_code": "unsupported_schema"}}},
-                "watch_source_recovery_events": [{"source": "v2", "event": "recovered"}],
-                "model_metadata": {"summary": {"failing_sources": ["models.dev"], "cache_fallback": True}}}
+                "watch_source_recovery_events": [{"source": "v2", "event": "recovered"}]}
         text = "\n".join(connectivity_summary(data))
-        self.assertIn("temporarily unavailable but recovered", text)
+        self.assertIn("V2 connectivity: currently healthy; historical recovery also recorded", text)
         self.assertIn("V1 connectivity: incompatible", text)
-        self.assertIn("cached fallback", text)
-        self.assertIn("Validation/test failures are independent", text)
 
 
 if __name__ == "__main__":
