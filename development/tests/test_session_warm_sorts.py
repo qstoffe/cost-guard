@@ -8,7 +8,8 @@ from unittest.mock import patch
 from development.tests.fixtures.catalog_prompt_activity import publish_verified_capture
 from development.tests.fixtures.catalog_warm_sorts import NOW, WarmSortSource
 from development.tests.fixtures.compact_reports import report_service
-from src.application.session_catalog import SessionCatalog, SORTS, ordered
+from src.application.session_catalog import SessionCatalog, SORTS
+from src.application.session_epoch_page import ordered
 from src.reports.watch_capture import capture_rows
 from src.sources.errors import SourceUnavailableError
 from src.watch.observers import observe_catalog

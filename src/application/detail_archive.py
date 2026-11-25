@@ -13,25 +13,29 @@ LOG = logging.getLogger(__name__)
 DOMAIN = 'detail/1'
 
 
-def detail_fact(key, revision, report, metadata):
+def detail_fact(key, revision, report, metadata, *, projection=None):
     if not isinstance(revision, str):
         return None
     block, = report.prompt_blocks
     if any(row.in_progress or row.execution_unverified for row in block.rows) or not (metadata['activity'] or {}).get('complete'):
         return None
+    return ArchiveFact(revision, metadata['observed_at_ms'],
+                       projection if projection is not None else detail_projection(key, report, metadata))
+
+
+def detail_projection(key, report, metadata):
     view = project(report, metadata['timezone_id'], metadata['ccost_display_unit'], prompt_details=True).to_json()
     for row in view['prompt_blocks'][0]['rows']:
         row['id'] = identity((key, row['event_id'], row['is_compaction']))
         row['last_observed_at_ms'] = metadata['row_observations'].get(row['event_id'])
         row['retained'] = row['event_id'] in metadata['omitted_ids']
-    return ArchiveFact(revision, metadata['observed_at_ms'], dict(
-        view=view, activity=metadata['activity'], value_authority=metadata['value_authority']))
+    return dict(view=view, activity=metadata['activity'], value_authority=metadata['value_authority'])
 
 
-def save_detail(archive, partition, key, revision, report, metadata):
+def save_detail(archive, partition, key, revision, report, metadata, *, projection=None):
     if not partition:
         return False
-    fact = detail_fact(key, revision, report, metadata)
+    fact = detail_fact(key, revision, report, metadata, projection=projection)
     if fact is None:
         return False
     try:
@@ -60,15 +64,8 @@ def acquired_detail(service, item):
 def refresh_detail(archive, key, previous=(0, None)):
     try:
         cursor, candidates = archive.history_item(DOMAIN, key, previous[0])
-        readable = []
-        for _, fact in candidates:
-            try:
-                block, = fact.value['view']['prompt_blocks']
-                if block['session_id'] == key and isinstance(block['rows'], list):
-                    readable.append(fact)
-            except (KeyError, TypeError, ValueError):
-                continue
-        return (cursor, _reconcile(key, readable)) if readable else previous
+        value = readable_detail(key, (fact for _, fact in candidates))
+        return (cursor, value) if value else previous
     except (sqlite3.Error, OSError, KeyError, IndexError, TypeError, ValueError):
         LOG.warning('detail_archive_read_unavailable')
     return previous
@@ -76,6 +73,18 @@ def refresh_detail(archive, key, previous=(0, None)):
 
 def load_detail(archive, key):
     return refresh_detail(archive, key)[1]
+
+
+def readable_detail(key, candidates):
+    readable = []
+    for fact in candidates:
+        try:
+            block, = fact.value['view']['prompt_blocks']
+            if block['session_id'] == key and isinstance(block['rows'], list):
+                readable.append(fact)
+        except (KeyError, TypeError, ValueError):
+            continue
+    return _reconcile(key, readable) if readable else None
 
 
 def _reconcile(key, candidates):
@@ -132,12 +141,12 @@ def _fill_display(current, old, names):
                               for unit, values in (current.get('display_units') or {}).items()}}
 
 
-def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisition):
+def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisition, runtime=None):
     payload = fact.value
     view = payload['view']
     block, = view['prompt_blocks']
     rows = block['rows']
-    cache_revision = identity(('durable-history', fact.revision, fact.observed_ms))
+    cache_revision = detail_revision(fact, runtime)
     stale = revision is not None and revision != cache_revision
     if chunk and stale:
         raise KeyError('detail_read_stale')
@@ -150,10 +159,22 @@ def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisi
     authority = payload.get('value_authority')
     if authority is not None:
         authority = {**authority, 'rows': {row['event_id']: authority['rows'].get(row['event_id']) for row in shown}}
-    return dict(cache_first=True, state='observed', pending=False, revision=cache_revision, stale_cursor=stale, offset=offset,
-                total=len(rows), mode=mode, value_authority=authority, values_invalidated=False,
-                export_available=False, acquisition=acquisition,
-                 **(dict(activity=activity_summary(payload.get('activity')), quota_usage=None) if not chunk else {}),
-                **(dict(activity_refresh=None, activity_revision=cache_revision) if begin else {}),
-                result=dict(observed_at_ms=fact.observed_ms, view=view,
-                             source=dict(status='partial', identity='shared-history', atomicity='cached_projection')))
+    active = runtime is not None
+    refresh = runtime.get('activity_refresh') if active and mode == 'live' else None
+    export = bool(active and runtime['export_available'] and not chunk)
+    return dict(cache_first=True, state=runtime['state'] if active else 'observed',
+                 pending=False, revision=cache_revision, stale_cursor=stale, offset=offset,
+                 total=len(rows), mode=mode, value_authority=authority, values_invalidated=False,
+                 export_available=export, acquisition=acquisition,
+                 **(dict(activity=activity_summary(payload.get('activity')),
+                         quota_usage=runtime['quota_usage'] if active else None) if not chunk else {}),
+                 **(dict(activity_refresh=refresh,
+                         activity_revision=runtime.get('activity_revision') or cache_revision if active
+                             else cache_revision) if begin else {}),
+                 result=dict(observed_at_ms=fact.observed_ms, view=view,
+                              source=dict(status='acquired' if active and runtime['state'] == 'observed' else 'partial',
+                                          identity='shared-history', atomicity='cached_projection')))
+
+
+def detail_revision(fact, runtime):
+    return runtime['revision'] if runtime is not None else identity(('durable-history', fact.revision, fact.observed_ms))

@@ -133,8 +133,9 @@ const AIStatsView = (() => {
     finally { state.priorityUpdate = false; }
   }
   class View {
-    constructor(select) {
+    constructor(select, {archive = false} = {}) {
       const e = ReportView.element;
+      this.archive = archive;
       this.root = e('div', undefined, 'ai-stats-view');
       this.selector = e('div', undefined, 'ai-stats-periods');
       this.selector.setAttribute('role', 'group'); this.selector.setAttribute('aria-label', 'AI Stats period');
@@ -249,10 +250,11 @@ const AIStatsView = (() => {
       this.updateDatabaseCard(facts);
       ContextHelp.refresh(this.root);
     }
-    update(state, sourceBlocked) {
+    update(state, sourceBlocked, terminal = false) {
       if (typeof ReportLoading !== 'undefined')
         ReportLoading.historyProgress?.(this, this.buttons.get(state.period),
-          state.result?.view.history_progress?.[state.period]);
+          terminal ? {terminal: true} : state.result?.view.history_progress?.[state.period] ??
+          (this.archive ? {complete: false} : undefined));
       // Every card has its shell from first render. Only a complete compatible
       // period observation replaces the last-good cards, including their details.
       const e = ReportView.element;

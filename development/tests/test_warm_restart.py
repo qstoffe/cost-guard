@@ -1,8 +1,12 @@
 """Cross-service reuse and cold parity; process/DOM evidence lives in the benchmark."""
 from dataclasses import replace
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import tempfile
+from threading import Event
+from time import perf_counter
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -18,7 +22,9 @@ from src.application.session_archive import DOMAIN as SESSIONS, SessionArchive
 from src.application.session_catalog import SessionCatalog
 from src.application.session_quota import source_scope
 from src.cache import CacheDatabase, CacheRepository
-from src.cache.web_archive import ArchiveFact, WebArchive
+from src.cache import session_projection
+from src.cache.web_archive import PREVIOUS_ARCHIVE_FILENAME, WebArchive
+from src.reports.models import SessionUsageRow
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.reports import ai_stats_warm
 from src.reports.archived_usage import ArchivedUsage
@@ -278,10 +284,16 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual(7, self.request_count(reopened, replacement))
 
     def test_unrecognized_summary_shape_keeps_readable_fields_without_reviving_running(self):
-        archive = WebArchive(self.directory)
-        archive.initialize()
-        archive.publish('old-store', SESSIONS, {'old': ArchiveFact('old-codec', 1, {
-            'title': 'Retained session', 'prompt_count': 8, 'running': True, 'duration_ms': 'unknown'})})
+        source = self.source(1, 8)
+        archive, first = self.restore('one')
+        first.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(first, source)
+        # Drift the payload codec on an actual ready projection, not an orphan
+        # generic fact which never qualified as a Sessions row.
+        with closing(sqlite3.connect(archive.path)) as db, db:
+            db.execute("""UPDATE facts SET value=json_set(value, '$.row.title', 'Retained session',
+                '$.row.new_field', 1, '$.row.running', json('true'), '$.row.duration_ms', 'unknown')
+                WHERE domain=?""", (SESSIONS,))
 
         _, catalog = self.restore('other')
         page = catalog.page(period='all')
@@ -290,42 +302,87 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertFalse(row['running'])
         self.assertIsNone(row['duration_ms'])
 
-    def test_upgrade_keeps_inputs_after_failed_write_then_reopens_both_histories(self):
+    def test_cutover_retires_only_owned_legacy_files_without_import_and_preserves_next_start(self):
         cache_dir = self.directory / 'cache'
-        old_web = WebArchive(self.directory / 'instance')
-        old_web.initialize()
-        old_web.publish('old-epoch', SESSIONS, {'from-appdata': ArchiveFact('r1', 100, {
-            'title': 'Earlier history', 'prompt_count': 3, 'running': True})})
+        instance = self.directory / 'instance'
+        instance.mkdir()
+        old_web = instance / PREVIOUS_ARCHIVE_FILENAME
+        with closing(sqlite3.connect(old_web)) as db, db:
+            db.executescript('''PRAGMA application_id=0x43475732; PRAGMA user_version=2;
+                CREATE TABLE facts(value); INSERT INTO facts VALUES ('old history');''')
         display = cache_dir / 'cost-guard-display-v1.sqlite3'
-        with sqlite3.connect(display) as db:
-            db.executescript('''PRAGMA application_id=0x43474448; PRAGMA user_version=1;
-                CREATE TABLE sessions(source, session_id, title, revision, prompts);
-                INSERT INTO sessions VALUES ('old','from-display','Display history','r2',7);''')
-        db.close()
+        display.write_bytes(b'unknown identity')
         disposable = CacheDatabase(self.directory, generation=2)
         disposable.initialize()
         unrelated = cache_dir / 'unrelated.sqlite3'
         unrelated.write_bytes(b'not a migration input')
-
-        destination = WebArchive(cache_dir)
-        upgrade = SessionArchive(destination, display, upgrade=(self.directory, old_web.path))
-        # The destination does not exist yet; no successful transfer is possible.
-        with self.assertLogs('src.application.session_archive', level='WARNING'):
-            _, retry = upgrade.load_legacy(lambda: False)
-        self.assertTrue(retry)
-        self.assertTrue(all(path.exists() for path in (old_web.path, display, disposable.paths.database)))
-
+        destination = WebArchive(cache_dir, previous_directory=instance, retire_previous=True)
+        with self.assertLogs('src.cache.web_archive', level='WARNING'):
+            destination.initialize()
+        self.assertEqual(b'unknown identity', display.read_bytes())
+        self.assertFalse(old_web.exists())
+        self.assertFalse(disposable.paths.database.exists())
+        self.assertEqual([], list(destination.history_rows(SESSIONS)))
+        display.unlink()
+        with closing(sqlite3.connect(display)) as db:
+            db.executescript('''PRAGMA application_id=0x43474448; PRAGMA user_version=1;
+                CREATE TABLE sessions(title); INSERT INTO sessions VALUES ('Old display');''')
+        orphan = (cache_dir / PREVIOUS_ARCHIVE_FILENAME).with_suffix('.sqlite3-shm')
+        orphan.write_bytes(b'old shared memory')
         destination.initialize()
-        _, retry = upgrade.load_legacy(lambda: False)
-        self.assertFalse(retry)
-        rows, _ = SessionArchive(WebArchive(cache_dir)).load()
-        self.assertEqual({'from-appdata': 3, 'from-display': 7},
-                         {key: row.prompt_count for key, row in rows.items()})
-        self.assertFalse(rows['from-appdata'].running)
-        for path in (old_web.path, display, disposable.paths.database):
-            for suffix in ('', '-wal', '-shm'):
-                self.assertFalse(path.with_name(path.name + suffix).exists())
+        self.assertFalse(orphan.exists())
+        self.assertFalse(display.exists())
+        self.assertEqual([], list(destination.history_rows(SESSIONS)))
+        display.write_bytes(b'created after transition')
+        WebArchive(cache_dir, retire_previous=True).initialize()
+        self.assertEqual(b'created after transition', display.read_bytes())
         self.assertEqual(b'not a migration input', unrelated.read_bytes())
+
+    def test_page_reads_prior_commit_under_live_writer_and_catalog_locks_then_sees_publication(self):
+        notices = []
+        archive = WebArchive(self.directory, retain_writer=True, notify_sessions=notices.append)
+        archive.initialize()
+        self.addCleanup(archive.close_writer)
+        catalog = SessionCatalog(archive=archive, clock_ms=lambda: self.now)
+        self.addCleanup(catalog.close)
+        def publish(live, *, pending):
+            return catalog.archive.update_runtime(state='observed', terminal=False, reset_pending=True,
+                pending=pending, live=live)
+
+        live_row = SessionUsageRow('busy', 'New running session', 'N/A', False, None, 2, running=True)
+        older = replace(live_row, prompt_count=1)
+        self.assertTrue(publish({'busy': (older, self.now - 10, None)}, pending={'waiting': (self.now - 10, False)}))
+        notices.clear()
+        uncommitted, release = Event(), Event()
+        apply = session_projection.update_runtime
+
+        def hold_after_update(*args, **kwargs):
+            apply(*args, **kwargs)
+            uncommitted.set()
+            if not release.wait(5):
+                raise TimeoutError('reader did not release fixture writer')
+
+        with ThreadPoolExecutor(max_workers=2) as pool, patch.object(session_projection, 'update_runtime', hold_after_update):
+            with catalog.lock, archive._lock:
+                writer = pool.submit(publish, {'busy': (live_row, self.now - 10, None)}, pending={})
+                try:
+                    self.assertTrue(uncommitted.wait(2))
+                    start = perf_counter()
+                    prior = pool.submit(catalog.page, period='all').result(timeout=1)
+                    print(f'Sessions logical read with writer and catalog held: {(perf_counter()-start)*1000:.1f} ms')
+                    prior_row, = prior['view']['session_usage']
+                    self.assertEqual((1, 'busy', True, 1), (prior['total'], prior_row['session_id'],
+                                                            prior_row['running'], prior_row['prompt_count']))
+                    self.assertFalse(prior['history_progress']['complete'])
+                    self.assertEqual([], notices)
+                finally:
+                    release.set()
+            self.assertTrue(writer.result(timeout=2))
+        self.assertEqual(1, len(notices))
+        current = catalog.page(period='all')
+        row, = current['view']['session_usage']
+        self.assertTrue(current['history_progress']['complete'])
+        self.assertEqual((1, 'busy', True, 2), (current['total'], row['session_id'], row['running'], row['prompt_count']))
 
     def test_running_and_today_precede_old_all_time_work_without_starvation(self):
         source = self.source(20, 1, today_roots=2, now_ms=NOV_5, running_roots=1)
@@ -366,6 +423,64 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual(remaining, set(persisted))
         self.assertTrue(all(row.prompt_count == 1 for row in persisted.values()))
         self.assertGreater(len([key for key in reads if key in active]), 1)
+
+    def test_old_pending_root_is_taken_over_finalized_once_and_not_replayed_after_deletion(self):
+        source = self.source(18, 1)
+        archive, catalog = self.restore('one')
+        def observe():
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+
+        observe()
+        self.tick(catalog, source)
+        key, deleted = 'root-0000', 'root-0001'
+        ready = catalog.page(period='all')['view']['session_usage']
+        self.assertTrue(ready)
+        self.assertNotIn(key, {row['session_id'] for row in ready})
+        self.assertNotIn(deleted, {row['session_id'] for row in ready})
+        del source.snapshots[deleted]  # Discovered, never enriched.
+        active = self.source(1, 2, today_roots=1, now_ms=self.now, running_roots=1).snapshots[key]
+        active = replace(active, source_revision='takeover')
+        source.snapshots[key] = active
+        observe()
+        with patch.object(source, 'load_session_snapshot', wraps=source.load_session_snapshot) as reads:
+            self.tick(catalog, source)
+        self.assertEqual(key, reads.call_args_list[0].args[0])
+        first = catalog.page(period='all', sort='name', direction=-1)['view']['session_usage'][0]
+        self.assertEqual((key, True, 2), (first['session_id'], first['running'], first['prompt_count']))
+        self.assertNotIn(key, {item for item, _ in archive.history_rows(SESSIONS)})
+
+        from src.reports.watch_capture import capture_rows
+        from src.watch.web_coordinator import publish_catalog_prompts
+        self.now += 6000
+        root = replace(active.root, active=False, updated_at_ms=self.now)
+        final = replace(active, root=root, sessions=(root,), source_revision='settled',
+            messages=(*active.messages[:-1], replace(active.messages[-1], completed_at_ms=self.now, finish_reason='stop')),
+            invocations=(*active.invocations[:-1], replace(active.invocations[-1], completed_at_ms=self.now, finish_reason='stop')))
+        source.snapshots[key] = final
+        observe()
+        capture, _ = capture_rows(report_service(source, self.cache, self.now, self.pricing), root, fresh=final)
+        entry = SimpleNamespace(snapshot=final, capture=capture, generation=1, verified_generation=1,
+                                source_status=SimpleNamespace(failed_at=None))
+        publish_catalog_prompts(catalog, SimpleNamespace(sessions={key:entry}, source_epoch='one'), offer_snapshots=False)
+        # One Live read may establish the end before a distinct qualified
+        # finalization. The forbidden duplicate is a replay *after* publication.
+        for _ in range(2):
+            self.tick(catalog, source)
+            if key in {item for item, _ in archive.history_rows(SESSIONS)}:
+                break
+        self.assertIn(key, {item for item, _ in archive.history_rows(SESSIONS)})
+        with patch.object(source, 'load_session_snapshot', wraps=source.load_session_snapshot) as reads:
+            for _ in range(12):
+                self.tick(catalog, source)
+        self.assertNotIn(key, [call.args[0] for call in reads.call_args_list])
+        self.assertEqual(17, len(list(archive.history_rows(SESSIONS))))
+        self.assertTrue(catalog.page(period='all')['history_progress']['complete'])
+        del source.snapshots[key]  # Settled history survives even when source membership does not.
+        _, reopened = self.restore('one')
+        reopened.observe(observe_catalog(source, include_archived_revisions=True))
+        rows = {r['session_id']: r for r in reopened.page(period='all')['view']['session_usage']}
+        self.assertNotIn(deleted, rows)
+        self.assertEqual((False, 2), (rows[key]['running'], rows[key]['prompt_count']))
 
     def test_active_scalar_uses_only_current_watch_capture_once_and_never_archives_it(self):
         from src.reports.watch_capture import capture_rows

@@ -9,7 +9,8 @@ from unittest.mock import patch
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from src.analysis.timezones import local_date_range
-from src.application.session_catalog import SessionCatalog, ordered, sort_value
+from src.application.session_catalog import SessionCatalog
+from src.application.session_epoch_page import ordered, sort_value
 from src.reports.models import SessionUsageRow
 from src.reports import ReportKind, ReportRequest
 from src.watch.observers import observe_catalog
@@ -196,7 +197,7 @@ class SessionsCalendarCacheTests(unittest.TestCase):
         self.assertFalse(ready["pending_sort"])
         reads = source.load_count
         started = time.perf_counter()
-        with patch("src.application.session_catalog.ordered", side_effect=AssertionError("warm re-sort")):
+        with patch("src.application.session_epoch_page.ordered", side_effect=AssertionError("warm re-sort")):
             for _ in range(5):
                 catalog.page(token=first["token"], sort="ccost", period="30-days")
                 catalog.page(token=first["token"], sort="ccost", period="30-days", offset=75, epoch=ready["epoch"])

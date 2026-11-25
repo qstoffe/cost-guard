@@ -25,8 +25,8 @@ const SessionsCatalog = (() => {
     return '#/sessions?' + params;
   }
   class View {
-    constructor(api) {
-      Object.assign(this, {api, token: null, data: null, attached: false, busy: false, generation: 0, navigationSequence: Date.now()});
+    constructor(api, {archive = false} = {}) {
+      Object.assign(this, {api, archive, token: null, data: null, attached: false, busy: false, generation: 0, navigationSequence: Date.now()});
       this.root = el('div', undefined, 'sessions-catalog'); this.root.setAttribute('aria-label', 'Sessions catalog');
       this.status = el('p', undefined, 'sessions-action-status'); this.status.setAttribute('role', 'status');
       this.status.setAttribute('aria-atomic', 'false'); this.status.hidden = true;
@@ -139,6 +139,9 @@ const SessionsCatalog = (() => {
     }
     periodSelection() {
       for (const {key, button} of this.periodButtons) button.setAttribute('aria-pressed', String(key === this.period));
+      if (this.archive || this.data?.cache_first)
+        ReportLoading.historyProgress(this, this.periodButtons.find(item => item.key === this.period)?.button,
+          this.data?.period === this.period ? this.data.history_progress : {complete: false});
     }
     rememberedDestination() {
       const data = this.data;
@@ -198,14 +201,19 @@ const SessionsCatalog = (() => {
     async poll() {
       if (!this.attached || this.busy || this.terminal) return;
       clearTimeout(this.timer);
-      if (document.hidden) { this.timer = setTimeout(() => this.poll(), 30000); return; }
+      if (document.hidden) {
+        if (!this.data?.cache_events) this.timer = setTimeout(() => this.poll(), 30000);
+        return;
+      }
       if (this.operation?.failed) this.recoverNavigation();
       const generation = this.generation;
       await this.load();
-      if (generation === this.generation && this.attached && !this.terminal)
-        this.timer = setTimeout(() => this.poll(), this.retryDelay || (this.rerun ? 0 : this.operation ? 1000 :
+      if (generation === this.generation && this.attached && !this.terminal) {
+        const delay = this.retryDelay || (this.rerun ? 0 : this.operation ? 1000 :
           this.wakePending && (this.offset === 0 || this.data?.cache_first) ? 100 :
-          this.data?.cache_first ? 1500 : 5000));
+          this.data?.cache_events ? null : this.data?.cache_first ? 1500 : 5000);
+        if (delay !== null) this.timer = setTimeout(() => this.poll(), delay);
+      }
     }
     recoverNavigation() {
       if (this.operation.navigation) this.cancelledNavigation = this.operation.navigation;
@@ -307,6 +315,7 @@ const SessionsCatalog = (() => {
       const operation = this.operation;
       operation.pending = !operation.failed;
       if (!operation.userInitiated) { this.pagerBusy(); return; }
+      if ((this.archive || this.data?.cache_first) && !operation.failed) { this.pagerBusy(); return; }
       const before = operation.kind === 'page' ? null : this.pan;
       if (this.status.nextSibling !== before) this.root.insertBefore(this.status, before);
       const name = columns.find(([key]) => key === this.sort)[1];

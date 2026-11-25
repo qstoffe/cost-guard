@@ -151,7 +151,7 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
       modelsHidden:view.models.root.hidden,publishersHidden:view.publishers.root.hidden};
   })()`);
   assert.equal(unknownMix.valid,true);
-  assert.match(unknownMix.text,/Usage for this period could not be verified yet\./);
+  assert.match(unknownMix.text,/Usage for this period could not be verified\./);
   assert.doesNotMatch(unknownMix.text,/N\/A|Not Applicable|0 tokens|Loading/);
   assert.ok(unknownMix.summaryHidden && unknownMix.modelsHidden && unknownMix.publishersHidden);
   checks.push('explicit Save failure is concise; unknown Token Mix displays neutral coverage, never zero or N/A');

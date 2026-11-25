@@ -35,28 +35,31 @@ def encode_summary(row):
     return values
 
 
-def decode_summary(values):
+def decode_summary(values, *, provisional=False):
     values = dict(values)
     if set(values) != {field.name for field in fields(SessionUsageRow)}:
         raise ValueError("incomplete_summary")
     for name in ("ccost", "main_ccost", "subagent_ccost"):
+        if provisional and values[name] == 'None':
+            values[name] = None
+            continue
         values[name] = Decimal(values[name])
         if not values[name].is_finite() or values[name] < 0:
             raise ValueError("invalid_summary_cost")
     values["cost_groups"] = decode_cost_groups(values["cost_groups"])
-    if (sum((part.known_ccost for part in values["cost_groups"]), Decimal(0)) != values["ccost"]
+    if not provisional and (sum((part.known_ccost for part in values["cost_groups"]), Decimal(0)) != values["ccost"]
             or values["main_ccost"] + values["subagent_ccost"] != values["ccost"]):
         raise ValueError("inconsistent_session_cost_groups")
     for name in ("contributor_models", "linked_model_selections"):
         values[name] = tuple(values[name])
     for role in ("main_models", "subagent_models"):
         values[role] = decode_models(values[role])
-    if not valid_models(values):
+    if not provisional and not valid_models(values):
         raise ValueError("invalid_model_roles")
     values["effort_contributors"] = tuple(SessionEffort(
         part["provider"], part["model"], EffortEvidence(**part["evidence"]), part["requests"])
         for part in values["effort_contributors"])
-    if not valid_effort(values):
+    if not provisional and not valid_effort(values):
         raise ValueError("invalid_effort_summary")
     issues = tuple(ReferenceCostIssue(**issue) for issue in values["ccost_unavailable"])
     if len(issues) > 6 or any(issue.reason not in REASONS or not all(
@@ -105,7 +108,9 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
     epoch = getattr(service.source, "observation_epoch", None)
-    key = summary_key(service, root)
+    # Durable report publication requires full evidence and never reads the
+    # disposable scalar cache. Don't also write a second copy of that row.
+    key = summary_key(service, root) if on_evidence is None else None
     cached = None
     if on_evidence is None and not active and not fresh_snapshot:
         try:
@@ -200,7 +205,7 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
         *(message for message in item.snapshot.messages if message.model is not None)))
     if on_dependencies is not None:
         on_dependencies(identity_values)
-    if item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
+    if key is not None and item.bundle.cacheable and not row.running and row.context_qualified and row.activity_qualified:
         values = encode_summary(row)
         values["model_identity_semantics"] = MODEL_IDENTITY_SEMANTICS
         values['model_identity_dependencies'] = identity_values

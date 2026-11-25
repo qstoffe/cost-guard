@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from decimal import Decimal
 import logging
-from time import monotonic
+from time import monotonic, thread_time
 
 from src.analysis.daily_usage import daily_usage, request_identity
 from src.analysis.timezones import local_day_start_ms
@@ -12,11 +12,15 @@ from src.application.detail_archive import DOMAIN as DETAIL, load_detail
 from src.application.live_projection import project_live
 from src.application.session_archive import DOMAIN as SESSIONS
 from src.pricing.catalog import PricingCatalog
+from src.reports.projection_cadence import cpu_cooldown
 from src.reports.web_history_evidence import DOMAIN as USAGE
 from src.watch.models import WatchProjection
 
 
 LOG = logging.getLogger(__name__)
+VISIBLE_INTERVAL = 1.0
+BACKGROUND_INTERVAL = 5.0
+BACKGROUND_CPU_SHARE = 0.02
 
 
 class WatchHistory:
@@ -28,37 +32,54 @@ class WatchHistory:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-watch-history')
         self.job = None
         self.key = None
-        self.next_turn = 0
+        self.last_started = -BACKGROUND_INTERVAL
+        self.retry_after = 0
+        self.background_resume = 0
+        self.foreground = False
+        self.more = False
 
-    def tick(self, catalog, zone, unit, now):
+    def tick(self, catalog, zone, unit, now, *, foreground=True, price_signature=None):
         with catalog.lock:
             ready = catalog.archive.loaded
-            # Restore also adopts imported summaries into the in-memory index.
-            # Ordinary source observations do not trigger a historical render.
             index = catalog.archive_revision
+            backfill = bool(catalog.history_pending)
+            available = not catalog.index_unavailable
         day = local_day_start_ms(zone, now_ms=now)
+        turn = monotonic()
         if self.job is not None:
             if not self.job.done():
                 return
             try:
-                result, more = self.job.result()
-                if result['day'] == day:
+                result, self.more, cpu = self.job.result()
+                self.background_resume = turn + cpu_cooldown(cpu, BACKGROUND_CPU_SHARE)
+                if self.key[0][:3] == (day, zone, unit):
                     self.publish('watch_history', result)
-                if more:
-                    self.key = None
             except Exception:
                 LOG.warning('watch_archive_projection_unavailable', exc_info=True)
                 self.key = None
-                self.next_turn = monotonic() + 2
+                self.retry_after = turn + 2
             self.job = None
-        if not ready or monotonic() < self.next_turn:
+        if not ready or turn < self.retry_after:
             return
-        key = (day, index, self.archive.generation(USAGE), self.archive.generation(DETAIL),
+        scope = (day, zone, unit, index, backfill, available, price_signature)
+        key = (scope, self.archive.generation(USAGE), self.archive.generation(DETAIL),
                self.archive.generation(SESSIONS))
-        if key != self.key:
+        scope_changed = self.key is None or self.key[0] != scope
+        promoted = foreground and not self.foreground
+        self.foreground = foreground
+        interval = BACKGROUND_INTERVAL if backfill and not foreground else VISIBLE_INTERVAL
+        due = self.last_started + interval
+        if backfill and not foreground:
+            due = max(due, self.background_resume)
+        if (key != self.key or self.more) and (scope_changed or promoted or turn >= due):
             self.key = key
-            self.job = self.pool.submit(self._render, catalog, zone, unit, day, now)
-            self.next_turn = monotonic() + 1
+            self.last_started = turn
+            self.job = self.pool.submit(self._measure_render, catalog, zone, unit, day, now)
+
+    def _measure_render(self, *args):
+        started = thread_time()
+        result, more = self._render(*args)
+        return result, more, thread_time() - started
 
     def _render(self, catalog, zone, unit, day, now):
         _, facts, more = self.usage.snapshot()

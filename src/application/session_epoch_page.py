@@ -63,6 +63,27 @@ def ordered(rows, key, direction, recent_finishes=None):
     return tuple(running) + tuple(finishing) + tuple(row for _, row in known) + tuple(unknown)
 
 
+def _progress(catalog, sort, pending, selected, indexed, pinned, candidates, *, scope):
+    keys = candidates if pending or scope else tuple(row.session_id for row in selected)
+    completed = indexed if pending or scope else sum(catalog._current(key) for key in keys)
+    waiting = [key for key in keys if key in catalog.failures]
+    failed = [key for key in waiting if catalog.failures[key][1]]
+    reason = ('source_unavailable' if catalog.state == 'source_unavailable' else
+              catalog.index_failure if catalog.index_unavailable else
+              catalog.failure_reasons.get((failed or waiting)[0], 'source_key_unavailable') if waiting else None)
+    terminal = bool(failed) or catalog.index_terminal
+    more = pending or completed < len(keys)
+    work = dict(catalog.work) if catalog.work else dict(
+        active=False, sequence=catalog.work_sequence,
+        stage='waiting_retry' if waiting else 'queued' if more else 'ready')
+    return dict(generation=catalog.generation, phase='index' if pending else 'page',
+                status='failed' if terminal else 'pending' if reason or more else 'ready',
+                retryable=not terminal, completed=completed, total=len(keys), reason=reason,
+                failed=len(failed), waiting=len(waiting), pinned=pinned, metrics=dict(catalog.metrics),
+                revalidating=sum(key in catalog.rows and not catalog._key_current(key, sort) for key in keys),
+                work=work)
+
+
 def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigation,
                applied, cancelled, passive):
     # An epoch names an order independently of the slice, including
@@ -334,7 +355,7 @@ def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigatio
             if evidence.model_pending:
                 row['metric_states']['model'] = 'retained' if row['model'] != 'N/A' else 'pending'
             row['indexed'] = False
-    progress = self._progress(sort, pending, selected, indexed, pinned, candidates,
+    progress = _progress(self, sort, pending, selected, indexed, pinned, candidates,
         scope=not pinned and not reuse and (period != 'all' or sort != 'name'))
     if nav is not None and navigation is not None:
         progress.update(completed=len(nav.facts), total=len(nav.roots),

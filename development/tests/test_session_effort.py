@@ -7,7 +7,8 @@ from unittest.mock import patch
 from development.tests.fixtures.compact_reports import report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from src.application.projection import project
-from src.application.session_catalog import SessionCatalog, ordered
+from src.application.session_catalog import SessionCatalog
+from src.application.session_epoch_page import ordered
 from src.domain import ModelRef, TokenUsage
 from src.domain.effort import DefaultEffort
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow

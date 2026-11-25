@@ -13,10 +13,12 @@ from src.analysis.ai_stats import POLICY as STATS_POLICY
 from src.analysis.timezones import calendar_periods
 from src.reports import ReportKind, ReportRequest
 from .jobs import MAX_PENDING
+from .model_snapshots import ModelSnapshots
 from .report_control import ManagedReport
 
 FINITE = (ReportKind.NORMAL, ReportKind.AI_STATS, ReportKind.TOKEN_MIX)
 DEFAULT_REQUESTS = tuple(ReportRequest(kind) for kind in FINITE)
+MODELS_REQUEST = DEFAULT_REQUESTS[0]
 BACKGROUND_STAGGER = 15
 RECENT_SECONDS = 1800
 SECTIONS = {'models', 'watch', 'accounts', 'sessions', 'session', 'token-mix', 'ai-stats', 'settings'}
@@ -78,7 +80,7 @@ def cadence(request, result, foreground):
 
 
 class DataDispatcher:
-    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, owner_kinds=FINITE):
+    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, owner_kinds=FINITE, archive=None):
         self.jobs, self.clock, self.wall_clock = jobs, clock, wall_clock
         self.lock = RLock()
         self.entries = OrderedDict()
@@ -93,6 +95,7 @@ class DataDispatcher:
         self.ready = False
         self.warm_allowed = False
         self.owner_kinds = frozenset(owner_kinds)
+        self.models = ModelSnapshots(archive) if archive is not None else None
 
     def price_refresh(self, key):
         with self.lock:
@@ -107,6 +110,7 @@ class DataDispatcher:
                     self.jobs.cancel(entry['job'])
                 entry.update(job=None, result=None, result_id=None, due=0,
                              terminal=False, error=None, failures=0)
+            self._publish_models()
 
     def _prices(self):
         for key in tuple(self.price_actions):
@@ -134,6 +138,8 @@ class DataDispatcher:
             archive_request = None
             if request and request.kind not in self.owner_kinds:
                 archive_request, request = request, None
+            elif request and self.models and request.kind is ReportKind.NORMAL:
+                request = MODELS_REQUEST
             self._expire()
             if tab not in self.tabs and len(self.tabs) >= 16:
                 raise RuntimeError('busy')
@@ -164,6 +170,11 @@ class DataDispatcher:
                 for tab in self.tabs.values() if tab['visible']
                 and (request := tab.get('archive_request')) is not None)
 
+    def watch_foreground(self):
+        with self.lock:
+            self._expire()
+            return any(tab['visible'] and tab['section'] == 'watch' for tab in self.tabs.values())
+
     def _expire(self):
         for tab, value in tuple(self.tabs.items()):
             if self.clock() - value['touched'] >= LEASE_SECONDS:
@@ -173,6 +184,11 @@ class DataDispatcher:
         return {tab['request'] for tab in self.tabs.values() if tab['visible'] and tab['request']}
 
     def lookup(self, request, *, retry=False):
+        if self.models is not None and request.kind is ReportKind.NORMAL:
+            frame = self.models.read() or self._empty_models_frame()
+            if retry or not frame['id'] and not frame['terminal']:
+                self.models.request(retry=retry)
+            return {**frame, 'terminal': False, 'error': None, 'refresh': 'scheduled'} if retry else frame
         with self.lock:
             entry = self._entry(request)
             self._collect()
@@ -185,17 +201,50 @@ class DataDispatcher:
             if (self.ready and not entry['job'] and not entry['terminal'] and self.clock() >= entry['due']
                     and (not valid or retry)):
                 self._submit(request, entry)
-            result = entry['result']
-            blocked = self.source_error
-            active = self.jobs.snapshot(entry['job']) if entry['job'] else None
-            refresh = ('stopped' if self.source_terminal or entry['terminal'] else
-                'waiting' if not self.ready else active['status'] if active else
-                'delayed' if entry['failures'] else 'scheduled')
-            return dict(id=entry['job'] or (entry['result_id'] if valid else None), result=result if valid else None,
-                result_id=entry['result_id'] if valid else None, refresh=refresh,
-                stale=bool(result and not valid), error=blocked or entry['error'],
-                terminal=self.source_terminal or entry['terminal'],
-                source_identity=self.identity, projection_epoch=self.projection_epoch)
+            return self._admission(entry, valid)
+
+    @staticmethod
+    def _empty_models_frame():
+        return dict(id=None, result=None, result_id=None, refresh='waiting', stale=False,
+                    error='source_starting', terminal=False, source_identity='', projection_epoch=0)
+
+    def _admission(self, entry, valid):
+        result = entry.get('result')
+        job = entry.get('job')
+        terminal = self.source_terminal or entry.get('terminal', False)
+        active = self.jobs.snapshot(job) if job else None
+        refresh = ('stopped' if terminal else 'waiting' if not self.ready else
+                   active['status'] if active else 'delayed' if entry.get('failures') else 'scheduled')
+        return dict(id=job or (entry['result_id'] if valid else None), result=result if valid else None,
+                    result_id=entry['result_id'] if valid else None, refresh=refresh, stale=bool(result and not valid),
+                    error=self.source_error or entry.get('error'), terminal=terminal,
+                    source_identity=self.identity, projection_epoch=self.projection_epoch)
+
+    def _publish_models(self):
+        if self.models is None:
+            return
+        now = int(self.wall_clock() * 1000)
+        entry = self.entries.get(MODELS_REQUEST, {})
+        self.models.publish(self._admission(entry, current_result(MODELS_REQUEST, entry.get('result'), now)), now)
+
+    def _admit_models_demand(self):
+        if self.models is None:
+            return
+        retry = self.models.take_demand()
+        if retry is None:
+            return
+        entry = self._entry(MODELS_REQUEST)
+        valid = current_result(MODELS_REQUEST, entry['result'], int(self.wall_clock() * 1000))
+        entry['requested'] = not bool(entry['result'])
+        if not entry['job'] and (retry or entry['result'] and not valid and not entry['failures']):
+            entry['due'] = 0
+        if retry and not entry['job']:
+            entry.update(terminal=False, failures=0, error=None)
+        if not entry['job'] and not entry['terminal'] and self.clock() >= entry['due'] and (not valid or retry):
+            try:
+                self._submit(MODELS_REQUEST, entry)
+            except RuntimeError:
+                pass  # Another tick or lookup can admit the same request.
 
     def _submit(self, request, entry):
         managed = ManagedReport(**{name: getattr(request, name) for name in ReportRequest.__dataclass_fields__},
@@ -311,6 +360,7 @@ class DataDispatcher:
             if not ready:
                 self.warm_allowed = False
                 self._prioritize(foreground)
+                self._publish_models()
                 return
             if not self.initialized:
                 self.initialized = True
@@ -319,6 +369,7 @@ class DataDispatcher:
                     if request.kind in self.owner_kinds:
                         self._entry(request)
             self.warm_allowed = True
+            self._admit_models_demand()
             for request in foreground:
                 entry = self._entry(request)
                 if entry['result'] and not current_result(request, entry['result'], int(self.wall_clock() * 1000)) and not entry['failures']:
@@ -330,6 +381,7 @@ class DataDispatcher:
                         break
             self._warm(foreground)
             self._prioritize(foreground)
+            self._publish_models()
 
     def _warm(self, foreground):
         now = self.clock()

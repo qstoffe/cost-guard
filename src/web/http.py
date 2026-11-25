@@ -100,10 +100,11 @@ class LoopbackServer(HTTPServer):
         self.server_name = "127.0.0.1"
         self.server_port = self.server_address[1]
 
-    def __init__(self, jobs, lifecycle=None, *, settings=None):
+    def __init__(self, jobs, lifecycle=None, *, settings=None, on_request_done=None):
         self.jobs = jobs
         self.exports = SessionExports()
         self.lifecycle = lifecycle
+        self.on_request_done = on_request_done
         self.settings = settings or WebSettings(lifecycle.root if lifecycle else Path(__file__).resolve().parents[2])
         self.session = BrowserSession(checkout_identity(lifecycle.root)[:32] if lifecycle else None)
         self.assets = {}
@@ -157,6 +158,8 @@ class LoopbackServer(HTTPServer):
             deadline.join()
             self.shutdown_request(request)
             self._slots.release()
+            if self.on_request_done is not None:
+                self.on_request_done()
 
     def handle_error(self, request, address):
         pass  # Base implementation prints raw exception/request context.
@@ -343,7 +346,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                     return
                 live = getattr(self.server.lifecycle, 'live', None)
                 timeline = getattr(self.server.lifecycle, 'history_accounts', None)
-                if timeline is None and live and live.driver and not live.driver.terminal:
+                if timeline is not None:
+                    terminal = live.source_failure is not None or (live.driver is not None and live.driver.terminal)
+                    self.reply(200, dict(timeline.lookup(period, revision, zone=self.server.lifecycle.history_zone),
+                                         terminal=terminal))
+                    return
+                if live and live.driver and not live.driver.terminal:
                     timeline = getattr(live.driver.coordinator, 'account_timeline', None)
                 self.reply(200, timeline.lookup(period, revision) if timeline else
                            dict(scope=None, revision=0, view=None, unchanged=False, series=(), ready=False,
@@ -416,7 +424,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 references = ()
                 timezone_id = 'UTC'
                 dispatcher = getattr(self.server.lifecycle, 'dispatcher', None)
-                if dispatcher:
+                models = getattr(self.server.lifecycle, 'model_snapshots', None)
+                if models is not None:
+                    reference = models.read_benchmark()
+                    references = reference.get('rows', ())
+                    timezone_id = reference.get('timezone_id', 'UTC')
+                elif dispatcher:
                     with dispatcher.lock:
                         for request, entry in dispatcher.entries.items():
                             if request.kind.value == 'normal' and entry['result']:
@@ -442,6 +455,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 value['history_demand'] = value['data_dispatcher']
                 value['account_timeline'] = value['data_dispatcher'] and self.server.lifecycle.live is not None
                 value['archive_history'] = getattr(self.server.lifecycle, 'history_reports', None) is not None
+                value['report_cache_events'] = getattr(self.server.lifecycle, 'report_cache_events', None) is not None
                 if self.server.lifecycle:
                     value["lifecycle"] = self.server.lifecycle.public_status()
                     value["session_detail"] = self.server.lifecycle.live is not None

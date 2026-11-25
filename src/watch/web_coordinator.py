@@ -8,13 +8,14 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from dataclasses import replace
 from queue import Empty
+from time import monotonic
 
 from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError
 from src.analysis.account_timeline import PERIODS
 from src.analysis.period_ccost import history_starts
 from src.analysis.timezones import local_day_start_ms, local_month_start_ms
-from src.application.session_catalog import MINI_PREVIEW_LIMIT
+from src.application.session_previews import MINI_PREVIEW_LIMIT
 from src.application.session_quota import source_scope
 from src.reports.context_guidance import ComparisonMixMemo
 from src.reports.history import WatchHistoryAcquisition
@@ -29,6 +30,9 @@ from .source_status import SourceStatus, SOURCE_CONFIRM_SECONDS
 from .source_reads import SourceReads, cancel_source
 from .detail_capture import DetailWorkerStopError
 from .web_account_history import AccountHistoryProgress, DailyAccountHistory, acquire_windows
+
+
+CATALOG_RUN_SECONDS = 20
 
 
 def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
@@ -65,17 +69,19 @@ def refill_catalog(owner, catalog, *, completion_only=False):
             return
         owner.catalog_job = None
         try:
-            job.result()
+            completed_run = job.result()
         except Exception:
             catalog.index_failed('scalar_worker_failed')
+            completed_run = False
+        if completion_only and completed_run is False:
+            return
     elif completion_only:
         return
     if owner._closed:
         return
-    history_ready = catalog.history_ready()
-    if history_ready or not completion_only and catalog.needed():
+    if catalog.archive_work_ready() or not completion_only and catalog.needed():
         owner.catalog_job = owner.catalog_pool.submit(owner._catalog_capture, catalog, int(owner.clock_ms()))
-        if history_ready:
+        if catalog.archive is not None:
             owner.catalog_job.add_done_callback(lambda _: owner.work_ready.set())
 
 
@@ -234,7 +240,7 @@ class WebWatchCoordinator(WatchCoordinator):
                 try:
                     if reader is not None:
                         with self.catalog_guidance.carry(service):
-                            catalog.tick(service, fresh_snapshots=True)
+                            return self._run_archive_catalog(catalog, service)
                     else:
                         with self.reads.using(service.source):
                             catalog.tick(service)
@@ -244,6 +250,23 @@ class WebWatchCoordinator(WatchCoordinator):
             catalog.index_failed(str(error.code), terminal=error.terminal)
         except PricingUnavailableError:
             catalog.index_failed('pricing_unavailable')
+        return False
+
+    def _run_archive_catalog(self, catalog, service):
+        def cancelled():
+            return self._closed or self.catalog_readers.stopping
+
+        deadline = monotonic() + CATALOG_RUN_SECONDS
+        if cancelled():
+            return False
+        # The first slice also establishes dependencies or clears a recovered
+        # index failure. Subsequent slices run only for due, bound work.
+        catalog.tick(service, fresh_snapshots=True, cancelled=cancelled)
+        while not cancelled() and monotonic() < deadline:
+            if not catalog.archive_work_ready(source_scope(service.source)):
+                return False
+            catalog.tick(service, fresh_snapshots=True, cancelled=cancelled)
+        return not cancelled()
 
     def _hydrate(self, roots, *, now_ms, force_fresh_ids=()):
         # The card scheduler admits bounded work and publishes each session

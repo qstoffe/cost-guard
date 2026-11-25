@@ -173,7 +173,11 @@ const BenchmarkView = (() => {
       }
       const keep = new Set(wanted);
       for (const row of [...this.body.children]) if (!keep.has(row)) row.remove();
-      wanted.forEach((row, index) => { if (this.body.children[index] !== row) this.body.insertBefore(row, this.body.children[index] || null); });
+      let next = this.body.firstElementChild;
+      for (const row of wanted) {
+        if (row === next) next = row.nextElementSibling;
+        else this.body.insertBefore(row, next);
+      }
       for (const [id, entry] of this.rows) if (!keep.has(entry.row)) this.rows.delete(id);
       this.fetched.textContent = 'Last fetched: ' + (this.data.fetched_text || 'Unavailable');
       this.empty.textContent = this.data.fetched_at_ms ? 'No matching benchmark rows' : 'Benchmark unavailable / no benchmark data yet';

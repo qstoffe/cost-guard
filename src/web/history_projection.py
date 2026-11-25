@@ -1,9 +1,11 @@
 """Render current reports from the display archive, without selecting OpenCode."""
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from decimal import Decimal
-from types import SimpleNamespace
+from functools import cache
+from types import MappingProxyType, SimpleNamespace
 from uuid import uuid4
 
+from src.analysis.active_hour import deduplicated_requests
 from src.analysis.ai_stats import StatsObservation, outside_period, windows
 from src.analysis.ai_stats_buckets import friendly_model
 from src.analysis.matched_runs import period_fact
@@ -12,7 +14,37 @@ from src.application.projection import project
 from src.reports import ReportKind
 from src.reports.migration_notice import migration_gap_notes
 from src.reports.models import ReportProjection
-from src.reports.token_mix_history import history_projection
+from src.reports.token_mix_history import prepare_history_usage, prepared_history_projection
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedHistory:
+    roots: tuple
+    stats_requests: tuple
+    mix_usage: object
+    matches: MappingProxyType
+    costs: MappingProxyType
+
+    @classmethod
+    def from_facts(cls, facts):
+        roots, requests, prompt_of, matches, costs = [], [], {}, {}, {}
+        for key, fact in sorted(facts.items(), key=lambda pair: pair[1].report_rank):
+            if fact.report is None:
+                continue
+            stats, usage, match = fact.report
+            roots.append(stats)
+            if match:
+                matches[key] = replace(match, title=stats.title)
+            for entry, prompt, parts in usage:
+                requests.append(entry)
+                if prompt is not None:
+                    prompt_of[entry] = prompt
+                if parts is not None:
+                    costs[entry.model, entry.tokens] = parts
+        return cls(tuple(roots), deduplicated_requests(
+            (entry for root in roots for entry in root.entries), shared_history=True),
+            prepare_history_usage(requests, prompt_of, archived=True),
+            MappingProxyType(matches), MappingProxyType(costs))
 
 
 def observed_in_period(root, start, now):
@@ -28,6 +60,16 @@ class HistoryProjection:
         self.usage = usage
         self.instance = uuid4().hex
         self.sequence = 0
+        self._prepared_facts = None
+        self._prepared = None
+
+    def _prepare(self, facts):
+        # ArchivedUsage replaces, never mutates, this snapshot. The single
+        # projection worker owns the memo; the HTTP reader never uses it.
+        if facts is not self._prepared_facts:
+            self._prepared = PreparedHistory.from_facts(facts)
+            self._prepared_facts = facts
+        return self._prepared
 
     def render(self, *, identity, selection, config, reference, now, revisions, activity, available,
                only=None, defer_while_loading=False, unavailable=frozenset(),
@@ -38,32 +80,25 @@ class HistoryProjection:
         zone = str(config.get('timezone') or 'Europe/Stockholm')
         periods = windows(zone, now)
         mix_starts = dict(calendar_periods(zone, now))
-        roots, requests, prompt_of, matches, costs = [], [], {}, {}, {}
-        for key, fact in sorted(facts.items(), key=lambda pair: pair[1].report_rank):
-            if fact.report is None:
-                continue
-            stats, usage, match = fact.report
-            roots.append(stats)
-            if match:
-                matches[key] = replace(match, title=stats.title)
-            for entry, prompt, parts in usage:
-                requests.append(entry)
-                if prompt is not None:
-                    prompt_of[entry] = prompt
-                if parts is not None:
-                    costs[entry.model, entry.tokens] = parts
+        prepared = self._prepare(facts)
+        roots, matches = prepared.roots, prepared.matches
         pending = {key: activity.get(key) for key, revision in revisions.items()
                    if key not in facts or facts[key].report is None or facts[key].revision != revision}
         refreshes = {key for key in refresh_roots if key in facts and facts[key].report is not None}
         service = SimpleNamespace(timezone_id=zone, now_ms=now, selection=selection)
+        @cache
         def valuation(model, tokens):
-            return costs.get((model, tokens)) or reference.reference_category_valuation(model, tokens)
+            return prepared.costs.get((model, tokens)) or reference.reference_category_valuation(model, tokens)
+
+        @cache
         def total_cost(model, tokens):
             parts = valuation(model, tokens)
             return sum(parts, Decimal(0)) if parts is not None else None
+
         stats = StatsObservation(roots, total_cost,
             now=now, zone=zone, workday_calendar=config.get('workdayCalendar', 'SE'),
-            model_bucket=lambda model: friendly_model(model, reference), shared_history=True)
+            model_bucket=lambda model: friendly_model(model, reference), shared_history=True,
+            prepared_requests=prepared.stats_requests)
         self.sequence += 1
         reports, stats_rows, progress = {}, [], {}
 
@@ -88,8 +123,7 @@ class HistoryProjection:
                 matched=period_fact([matches[root.session_id] for root in period_roots if root.session_id in matches],
                                     start, now, complete=complete and
                                     all(root.source_complete and root.session_id in matches for root in period_roots))))
-            mix = history_projection(service, reference, requests, prompt_of, lambda *_: None, scope=name,
-                                      valuation=valuation, archived=True)
+            mix = prepared_history_projection(service, reference, prepared.mix_usage, scope=name, valuation=valuation)
             mix_start = mix_starts[name]
             mix_complete, mix_progress = coverage(mix_start, sum(not outside_period(root, mix_start) for root in roots))
             mix = replace(mix, token_mix_period={**mix.token_mix_period,

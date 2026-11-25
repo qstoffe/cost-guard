@@ -1,19 +1,25 @@
 """Host-loop cache work: actual browser demand, then infrequent spare-capacity pruning."""
+from collections import deque
 from contextlib import contextmanager
+from threading import Lock
 import time
 
 from src.cache.database import CacheDatabase
 from src.cache.lifecycle import CacheLifecycle
 from src.cache.session_scope import root_key
 
+DEMAND_BATCHES = 128
+
 
 class CacheHousekeeping:
-    def __init__(self, root, *, clock=time.monotonic, lifecycle=None):
+    def __init__(self, root, *, clock=time.monotonic, lifecycle=None, defer_demand=False):
         self.clock = clock
         self.started = None
         self.due = 0
         self.touch_due = 0
         self.lifecycle = lifecycle or CacheLifecycle(CacheDatabase(root))
+        self.demand = deque(maxlen=DEMAND_BATCHES) if defer_demand else None
+        self.request_lock = Lock()
         self.requests = 0
         self.epoch = 0
 
@@ -26,13 +32,19 @@ class CacheHousekeeping:
         # Streams have their own lifetime and cannot make the host permanently busy.
         tracked = path != '/api/events'
         if tracked:
-            self.requests += 1
-            self.epoch += 1
+            with self.request_lock:
+                self.requests += 1
+                self.epoch += 1
         try:
             yield
         finally:
             if tracked:
-                self.requests -= 1
+                with self.request_lock:
+                    self.requests -= 1
+
+    def _request_activity(self):
+        with self.request_lock:
+            return self.requests, self.epoch
 
     def delivered(self, host, path, value):
         """Only the visible shipped UI marks this boundary; probes/API reads do not."""
@@ -53,9 +65,28 @@ class CacheHousekeeping:
 
     def use_roots(self, host, ids):
         catalog = host.live.catalog
+        if self.demand is not None:
+            # Catalog observations replace the root map as a whole. Read its
+            # published reference once and defer lifecycle locks/SQLite to the host.
+            roots = catalog.roots
+            keys = tuple(root_key(root.provenance, key) for key in ids
+                         if (root := roots.get(key)) is not None)
+            if keys:
+                self.demand.append(keys)
+            return
         with catalog.lock:
             roots = [root_key(catalog.roots[key].provenance, key) for key in ids if key in catalog.roots]
         self.lifecycle.note_use(roots)
+
+    def collect_demand(self):
+        if self.demand is None:
+            return
+        for _ in range(DEMAND_BATCHES):
+            try:
+                roots = self.demand.popleft()
+            except IndexError:
+                return
+            self.lifecycle.note_use(roots)
 
     @staticmethod
     def _busy(host, coordinator):
@@ -90,11 +121,13 @@ class CacheHousekeeping:
             self.use_roots(host, (card.session_id for card in cards))
 
     def tick(self, host):
+        self.collect_demand()
         now = self.clock()
         if now >= self.touch_due:
             self.lifecycle.flush()
             self.touch_due = now + 1
-        if (self.started is None or now - self.started < 3600 or now < self.due or self.requests or not host.dispatcher
+        if (self.started is None or now - self.started < 3600 or now < self.due or self._request_activity()[0]
+                or not host.dispatcher
                 or not host.live or host.live.driver is None):
             return
         coordinator = host.live.driver.coordinator
@@ -112,9 +145,12 @@ class CacheHousekeeping:
                 protected |= {card.session_id for card in (*frame.active_cards, *frame.history_cards)}
             revisions = {root_key(root.provenance, key): catalog.revisions[key]
                 for key, root in catalog.roots.items() if key not in protected and key in catalog.revisions}
-        epoch = self.epoch
+        requests, epoch = self._request_activity()
+        if requests or self.demand:
+            return
+
         def allowed():
-            return (not self.requests and epoch == self.epoch and catalog.last_observation is observation
+            return (self._request_activity() == (0, epoch) and not self.demand and catalog.last_observation is observation
                 and coordinator.catalog_observation is observation and not self._busy(host, coordinator))
         # One bounded attempt per day, including busy/cancel/error; no contention loop.
         self.due = now + 86400

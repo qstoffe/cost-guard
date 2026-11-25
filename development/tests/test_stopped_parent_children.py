@@ -75,15 +75,22 @@ class StoppedParentChildrenTests(unittest.TestCase):
             server.messages[key].extend((user('newer', 4200), assistant('answer', 4300, 4400)))
             cards = WatchCards(SimpleNamespace())
             detail = SessionHistory()
-            catalog = SessionCatalog(archive=WebArchive(Path(directory)), clock_ms=lambda: now)
-            self.addCleanup(catalog.close)
+            now = 5000
+            catalog = SessionCatalog(archive=WebArchive(Path(directory)), clock=lambda: now / 1000, clock_ms=lambda: now)
+            source.probe()
+            catalog.bind_archive('v2', source.source_instance, source.observation_epoch)
+            catalog.archive_maintenance()
+            catalog.archive_pool.submit(lambda: None).result(timeout=10)
             coordinator = SimpleNamespace(cards=cards, catalog_job=Future(), catalog_readers=None)
-            for stage, now in [('nested', 5000), ('stale-flag', 6000), ('independent-turn', 7000)]:
+            for stage, now in [('nested', 5000), ('stale-flag', 6000), ('independent-turn', 7000), ('settled', 25_000)]:
                 with self.subTest(stage=stage):
                     if stage == 'stale-flag':
                         server.messages['nested'][1] = assistant('na', 3550, 5800)
                     if stage == 'independent-turn':
                         server.messages['nested'].extend((user('other', 6100), assistant('other-reply', 6200, None)))
+                    if stage == 'settled':
+                        server.active = {}
+                        server.messages['nested'][-1] = assistant('other-reply', 6200, 8200)
                     service = report_service(self, source, now_ms=now)
                     coordinator.report_service = service
                     observation = observe_catalog(source, include_archived_revisions=True)
@@ -93,6 +100,7 @@ class StoppedParentChildrenTests(unittest.TestCase):
                     capture, item = capture_rows(service, entry.root)
                     cards.accept(CardResult(key, entry.generation, 'rows', (capture, (), item.snapshot)), now)
                     WebWatchCoordinator.tick_catalog(coordinator, catalog)
+                    catalog.tick(service)
 
                     active, _, _ = cards.project(now)
                     mini_inputs = {r.prompt.event_id for card in active if card.session_id == key for r in card.rows
@@ -105,10 +113,15 @@ class StoppedParentChildrenTests(unittest.TestCase):
                     self.assertEqual(expected, detail_running)
                     page = catalog.page(period='all')
                     shown = {r['session_id']: r for r in page['view']['session_usage']}
-                    self.assertEqual(bool(expected), shown[key]['running'])
+                    # While the source still reports an active descendant,
+                    # final historical evidence may legitimately be pending.
+                    self.assertEqual(bool(expected), key in shown and shown[key]['running'])
                     if expected:
                         self.assertEqual((key, 3000), (page['view']['session_usage'][0]['session_id'],
                                                        shown[key]['last_activity_ms']))
+                    if stage == 'settled':
+                        self.assertTrue(shown[key]['has_summary'])
+            catalog.close()
 
     def test_native_capture_watch_detail_cli_and_rendered_lifecycle_share_truth(self):
         frames = []

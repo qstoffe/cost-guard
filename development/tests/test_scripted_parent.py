@@ -13,7 +13,7 @@ from src.analysis.session_activity import activity_fields
 from src.application.display import with_display
 from src.application.live_projection import card_row
 from src.application.projection import project, prompt
-from src.application.session_catalog import ordered
+from src.application.session_epoch_page import ordered
 from src.reports.models import ReportProjection, ReportKind, SessionUsageRow
 from src.reports.prompt_rows import PromptRowProjector
 from src.reports.sampling import AnalyzedRoot

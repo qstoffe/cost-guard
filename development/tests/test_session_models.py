@@ -10,7 +10,7 @@ from development.tests.fixtures.claude_alias import desktop_service, snapshot as
 from development.tests.fixtures.quick_aborts import quick_aborts
 from development.tests.fixtures.claude_alias import service as alias_service
 from src.application.projection import project
-from src.application.session_catalog import ordered
+from src.application.session_epoch_page import ordered
 from src.domain import ModelRef, TokenUsage
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
 from src.reports.session_summary import ALGORITHM, NAMESPACE, session_summary, summary_key

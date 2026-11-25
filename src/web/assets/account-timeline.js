@@ -301,6 +301,13 @@ const AccountTimelineView = (() => {
       if (this.visible && !this.pending) this.timer = setTimeout(() => this.refresh(), delay);
     }
 
+    wake(hint, reconnected) {
+      if (!this.cacheEvents || hint === this.cacheHint && !reconnected) return;
+      this.cacheHint = hint;
+      if (this.pending) this.cachePending = true;
+      else this.schedule(0);
+    }
+
     async refresh() {
       if (!this.visible || this.pending) return;
       const period = this.period, revision = this.cache.get(period)?.revision ?? null;
@@ -309,6 +316,8 @@ const AccountTimelineView = (() => {
       try {
         const value = await this.api('/api/accounts/timeline', {period, revision});
         if (generation !== this.generation) return;
+        const terminalChanged = this.terminal !== (value.terminal === true);
+        this.terminal = value.terminal === true;
         if (value.scope !== this.scope) {
           if (!this.sharedHistory) return;
           this.setScope(value.scope);
@@ -333,12 +342,12 @@ const AccountTimelineView = (() => {
           const prior = this.cache.delete(period);
           const empty = value.ready && !value.series.length;
           if (empty || prior) this.initial = !empty;
-          if (prior || empty || activityChanged || this.rosterRevision !== value.revision) {
+          if (prior || empty || activityChanged || terminalChanged || this.rosterRevision !== value.revision) {
             this.rosterRevision = value.revision;
             this.roster = value.series;
             this.draw();
           }
-        } else if (activityChanged) this.draw();
+        } else if (activityChanged || terminalChanged) this.draw();
       } catch (_) {
         // Host health owns sign-in and connection UX. Never narrate retries.
         if (generation === this.generation && this.working) {
@@ -347,7 +356,9 @@ const AccountTimelineView = (() => {
         }
       } finally {
         this.pending = false;
-        this.schedule(generation !== this.generation ? 0 : this.initial ? 350 : 1500);
+        if (generation !== this.generation || this.cachePending) this.schedule(0);
+        else if (!this.cacheEvents) this.schedule(this.initial ? 350 : 1500);
+        this.cachePending = false;
       }
     }
 
@@ -401,7 +412,8 @@ const AccountTimelineView = (() => {
       this.buttons.forEach(([id, button]) => button.setAttribute('aria-pressed', String(id === this.period)));
       if (typeof ReportLoading !== 'undefined')
         ReportLoading.historyProgress(this, this.buttons.find(([id]) => id === this.period)?.[1],
-          view?.history_progress);
+           this.terminal ? {terminal: true} :
+             view?.history_progress ?? (this.sharedHistory && !view ? {complete: false} : undefined));
       this.legendFor(roster);
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];
@@ -442,9 +454,9 @@ const AccountTimelineView = (() => {
       const unselected = roster.length && !selectedSeries.length;
       const loading = !view && !unselected && this.initial && this.visible;
       const message = unselected ? 'Select an account to show its usage.' :
-        loading ? 'Preparing chart' : 'No usage history to show.';
+        this.sharedHistory && !view ? '' : loading ? 'Preparing chart' : 'No usage history to show.';
       ReportView.text(this.message, message);
-      this.initialRing.hidden = !loading || !this.working;
+      this.initialRing.hidden = this.sharedHistory || !loading || !this.working;
       this.frame.hidden = !view?.buckets.length;
       this.empty.hidden = !this.frame.hidden && !unselected;
       this.empty.classList.toggle('over-plot', !this.frame.hidden);

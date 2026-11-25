@@ -563,6 +563,7 @@ const ReportView = (() => {
     const root = element('div', undefined, 'models-view');
     let catalog = view.model_catalog;
     let models = catalog?.rows || view.model_comparison;
+    let sortKeys = new Map();
     state.models ||= {all: false, latest: true, sorts: [{index: 2, direction: -1}]};
     const choice = state.models;
     root.append(modelHeading('GitHub Reference Pricing', 'GitHub Copilot',
@@ -597,7 +598,7 @@ const ReportView = (() => {
     const grid = element('table', undefined, 'overview-model-table');
     // Layout widths come from prepared text, never price arithmetic. Share each
     // marker/ratio/boundary track across rows, including long or multi-tier text.
-    const width = parts => Math.max(0, ...parts.map(value => value.length)) + 'ch';
+    const width = parts => parts.reduce((max, value) => Math.max(max, value.length), 0) + 'ch';
     grid.setAttribute('role', 'table');
     grid.setAttribute('aria-label', 'Reference models');
     const head = element('thead'), header = element('tr'), body = element('tbody');
@@ -627,26 +628,23 @@ const ReportView = (() => {
     head.append(header);
     const empty = element('p', undefined, 'warning');
     const collator = new Intl.Collator(undefined, {sensitivity: 'base'});
-    function key(row, index) {
+    function keys(row) {
       return [row.publisher || null, row.model || null,
         row.relative_levels?.length ? row.relative_levels.map(level => level.relative_cost) : [row.relative_cost],
-        calendarDateKey(row.release_date)][index];
+        calendarDateKey(row.release_date)];
     }
     const rows = new Map();
     function draw() {
-      const levels = models.flatMap(row => display(row, 'relative_cost').split(' → '));
-      grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
-      grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
       const candidates = models.filter(row => choice.all || row.selectable !== false);
       const shown = latestModels(candidates, choice.latest,
         row => choice.all || !catalog ? row.superseded : row.superseded_selectable);
       shown.sort((a, b) => {
         for (const sort of choice.sorts) {
-          const x = key(a, sort.index), y = key(b, sort.index);
+          const x = sortKeys.get(a)[sort.index], y = sortKeys.get(b)[sort.index];
           const order = sort.index < 2 && x != null && y != null ? collator.compare(x, y) * sort.direction : sortedCompare(x, y, sort.direction);
           if (order) return order;
         }
-        return models.indexOf(a) - models.indexOf(b);
+        return 0; // Stable sort preserves the original publication order for ties.
       });
       headers.forEach(([cell, button, label], index) => {
         const priority = choice.sorts.findIndex(sort => sort.index === index), sort = choice.sorts[priority];
@@ -686,7 +684,11 @@ const ReportView = (() => {
       }
       const keep = new Set(wanted);
       for (const row of [...body.children]) if (!keep.has(row)) row.remove();
-      wanted.forEach((row, index) => { if (body.children[index] !== row) body.insertBefore(row, body.children[index] || null); });
+      let next = body.firstElementChild;
+      for (const row of wanted) {
+        if (row === next) next = row.nextElementSibling;
+        else body.insertBefore(row, next);
+      }
       for (const [identity, entry] of rows) if (!keep.has(entry.row)) rows.delete(identity);
       text(empty, shown.length ? '' : 'No matching models.');
     }
@@ -711,6 +713,10 @@ const ReportView = (() => {
       attach(target) { if (root.parentNode !== target) target.replaceChildren(root); },
       update(value) {
         view = value; catalog = view.model_catalog; models = catalog?.rows || view.model_comparison;
+        sortKeys = new Map(models.map(row => [row, keys(row)]));
+        const levels = models.flatMap(row => display(row, 'relative_cost').split(' → '));
+        grid.style?.setProperty('--ratio-width', width(levels.map(value => value.split(' ')[0])));
+        grid.style?.setProperty('--boundary-width', width(levels.map(value => value.includes(' ') ? value.slice(value.indexOf(' ')) : '')));
         text(fetched, 'Last fetched: ' + (view.pricing_retrieved_at_ms > 0 ? display(view, 'pricing_retrieved_at_ms') : 'Unavailable'));
         text(availability, view.model_availability_empty ? 'No available OpenCode models match the pricing catalog.' : '');
         availability.hidden = !view.model_availability_empty; draw();
