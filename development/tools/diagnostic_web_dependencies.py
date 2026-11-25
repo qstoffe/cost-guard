@@ -88,7 +88,7 @@ def _cached_pricing(root):
 
 def _metadata_state(root):
     from src.cache.metadata_state import read_state
-    from src.pricing.release_metadata import SOURCES
+    from src.pricing.release_metadata import FAILURE_CODES, SOURCES
 
     recorded = read_state(root)
     if not recorded:
@@ -97,9 +97,34 @@ def _metadata_state(root):
                 if type(recorded.get(name)) is int}
     sources = recorded.get("sources")
     if isinstance(sources, dict):
-        evidence["recorded_failures"] = {name: bool(entry.get("period")) for name in SOURCES
-                                         if isinstance(entry := sources.get(name), dict)}
+        phases = ("dns", "connect", "tls", "fetch", "decode", "parse", "schema", "match", "internal")
+        evidence["sources"] = {
+            name: _metadata_source(entry, failure_codes=FAILURE_CODES, phases=phases)
+            for name in SOURCES if isinstance(entry := sources.get(name), dict)
+        }
     return {"status": "recorded", **evidence}
+
+
+def _metadata_source(entry, *, failure_codes, phases):
+    result = {"in_failure_period": bool(entry.get("period"))}
+    for key in ("last_failure_ms", "last_success_ms"):
+        if type(at := entry.get(key)) is int and 0 <= at < 2**53:
+            result[key] = at
+    failure = entry.get("last_error")
+    if isinstance(failure, dict):
+        clean = {}
+        if isinstance(code := failure.get("code"), str) and code in failure_codes:
+            clean["code"] = code
+        if (phase := failure.get("phase")) in phases:
+            clean["phase"] = phase
+        if type(status := failure.get("http_status")) is int and 100 <= status <= 599:
+            clean["http_status"] = status
+        if clean:
+            result["last_error"] = clean
+    recovery = entry.get("last_recovery")
+    if isinstance(recovery, dict) and type(at := recovery.get("at_ms")) is int and 0 <= at < 2**53:
+        result["last_recovery_ms"] = at
+    return result
 
 
 def provider_evidence(root, config):

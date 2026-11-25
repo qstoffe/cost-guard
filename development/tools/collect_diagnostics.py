@@ -36,6 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 from development.tools.diagnostic_connectivity import connectivity_summary  # noqa: E402
+from development.tools.diagnostic_accounts import quota_freshness_summary  # noqa: E402
 from development.tools.diagnostic_logs import create_bundle  # noqa: E402
 from development.tools.diagnostic_screen import render_result  # noqa: E402
 from development.tools.diagnostic_section import load_section  # noqa: E402
@@ -110,6 +111,7 @@ def _text_summary(data: dict) -> str:
         f"dated={pricing.get('release_dates_known', 'unknown')}",
         "Enabled quota integrations: " + (", ".join(key for key, value in enabled.items() if value) or
                                            ("none" if enabled else "unknown")),
+        *quota_freshness_summary(data),
         "No Web/source startup, full report, external quota request or developer test was run.",
         "Privacy: no prompt text, session titles, credentials, raw logs or source payloads are attached.",
     ]
