@@ -17,7 +17,7 @@ from development.tests.fixtures.pricing_catalog import catalog
 from src.analysis.session_cost import SessionCost
 from src.analysis.valuation import ComparisonCost
 from src.application.live_projection import project_live
-from src.analysis.timezones import resolve_timezone
+from src.analysis.timezones import _stockholm_timezone, resolve_timezone
 from src.domain import EventKind, NormalizedEvent
 from src.watch.models import WatchCard, WatchRow
 from src.watch.running import running_prompts
@@ -277,6 +277,8 @@ class MiniWatchTests(unittest.TestCase):
         self.assertEqual(82800000, project_live(frame, 'Europe/Stockholm').to_json()['daily_usage']['day_end_ms'])
 
     def test_windows_timezone_fallback_preserves_repeated_hour_identity(self):
+        _stockholm_timezone.cache_clear()
+        self.addCleanup(_stockholm_timezone.cache_clear)
         with patch('src.analysis.timezones.ZoneInfo', side_effect=ZoneInfoNotFoundError):
             zone = resolve_timezone('Europe/Stockholm')
         for hour, fold, expected in ((0, 0, '+0200'), (1, 1, '+0100')):
