@@ -36,6 +36,13 @@ const AccountTimelineView = (() => {
     const minimum = view.period === 'today' ? 33 : view.period === '7-days' ? 42 : 25;
     return 2 * inset + view.buckets.length * minimum;
   }
+  function overlayWidth(base, rank, count) {
+    if (rank === 0) return base;
+    // Leave clear edges for small groups, then share the width above the floor.
+    const floor = 2;
+    const step = Math.min(4, (base - floor) / (count - 1));
+    return Math.max(floor, base - rank * step);
+  }
   function layoutSlots(view, width) {
     const hourly = view.period === 'today', shortDates = view.period === '7-days';
     const group = (width - 2 * inset) / view.buckets.length;
@@ -527,9 +534,10 @@ const AccountTimelineView = (() => {
         const overlays = this.series.filter(item => Number(item.points[index]?.amount) > 0);
         overlays.sort((a, b) => ReportView.compare(b.points[index].amount, a.points[index].amount)
           || a.id.localeCompare(b.id));
-        for (const item of overlays) {
+        for (const [rank, item] of overlays.entries()) {
+          const width = overlayWidth(bar, rank, overlays.length);
           const height = Math.max(1, (bottom - top) * Number(item.points[index].amount) / max);
-          nodes.push(svg('rect', {x: center - bar / 2, y: bottom - height, width: bar, height,
+          nodes.push(svg('rect', {x: center - width / 2, y: bottom - height, width, height,
             class: 'account-timeline-bar', 'data-ink': this.colors.get(item.id), 'data-bucket': index}));
         }
       }
