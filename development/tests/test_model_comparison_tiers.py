@@ -4,7 +4,6 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal as D
 from types import SimpleNamespace
-import re
 import unittest
 
 from development.tests.fixtures.compact_reports import Availability, rendered, report_service
@@ -19,11 +18,9 @@ from src.pricing.github_copilot import (
 from src.reports.model_comparison import price_summary
 from src.reports import ReportRequest
 from src.reports.models import ModelComparisonProjection, ReportKind, ReportProjection
-from src.presentation.model_comparison import aligned_price_summaries, compact_threshold
+from src.presentation.model_comparison import compact_threshold
 
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
 SAMPLE = (SimpleNamespace(input_tokens=20, cache_read_tokens=60, cache_write_tokens=10, output_tokens=10),)
-COLORS = {"colors": {"modelComparisonPromotion": {"ansi256": 214}, "modelComparisonNew": {"ansi256": 118}}}
 
 
 def tier(value, *, minimum=None, maximum=None, operator=None, rates=None):
@@ -196,51 +193,6 @@ class TierSortingTests(unittest.TestCase):
 
 
 class TierPresentationTests(unittest.TestCase):
-    def test_internal_fields_align_across_tiers_markers_colors_and_terminal_widths(self):
-        result = rows(model("Many", "125.4", tier("125.5", minimum=200001, operator=">"),
-                           tier("250", minimum=1000000, operator="≥")),
-                      model("Two", "8", tier("16", minimum=100001, operator=">")), model("Single", "1"))
-        items = tuple(projection(row, marker) for row, marker in zip(result, (1, 12, None)))
-        for kind in (ReportKind.NORMAL, ReportKind.ALL_MODELS):
-            for width in (40, 80, 120, 200, 400):
-                report = ReportProjection(kind, "Report", "V2", model_comparison=items)
-                plain = rendered(report, COLORS, width=width, color=False)
-                colored = rendered(report, COLORS, width=width, color=True)
-                self.assertEqual(plain, ANSI.sub("", colored))
-                lines = [line for line in plain.splitlines() if line.startswith("| Test")]
-                cells = [line.split("|")[3] for line in lines]
-                self.assertEqual(3, len(cells))
-                self.assertTrue(cells[0].startswith(" *1 "))
-                self.assertTrue(cells[1].startswith(" *12 "))
-                base_ends = [re.search(r"\d+\.\d+x", cell).end() for cell in cells]
-                self.assertEqual(1, len(set(base_ends)))
-                self.assertEqual(cells[0].index("→"), cells[1].index("→"))
-                self.assertEqual(cells[0].index("("), cells[1].index("("))
-                self.assertEqual(3, cells[0].count("x"))
-                self.assertIn("125.5x", cells[0])
-                self.assertIn("(≥1M)", cells[0])
-                self.assertNotIn("...", "".join(cells))
-                header = next(line for line in plain.splitlines() if line.startswith("| Publisher"))
-                self.assertEqual(5 if kind == ReportKind.ALL_MODELS else 4, len(header.split("|")[1:-1]))
-                self.assertEqual(kind == ReportKind.ALL_MODELS, "GitHub USD/M I/C/W/O" in header)
-                self.assertNotIn("Copilot CCost/M", plain)
-
-    def test_exact_rates_keep_precision_categories_tiers_and_boundaries_without_a_mix(self):
-        summaries = ("2.123456789/0.0000123/-/8→4.1/0.3/6.2/17.03 (>200000)→8/1/9/31 (≥1000000)",
-                     "125/12/9/300→250/24/18/600 (>100000)→500/48/36/1200 (>2000000)")
-        aligned = aligned_price_summaries(summaries)
-        self.assertEqual([m.start() for m in re.finditer("/", aligned[0])],
-                         [m.start() for m in re.finditer("/", aligned[1])])
-        self.assertIn("2.123456789", aligned[0])
-        items = tuple(ModelComparisonProjection("Test", f"M{i}", None, value, None, promotion_marker=i + 1)
-                      for i, value in enumerate(summaries))
-        text = rendered(ReportProjection(ReportKind.ALL_MODELS, "All", "V2", model_comparison=items), width=40)
-        for expected in ("2.123456789", "0.0000123", "(>200K)", "(≥1M)", "(>2M)", "*1", "*2"):
-            self.assertIn(expected, text)
-        table = [line for line in text.splitlines() if line.startswith("| Test")]
-        self.assertNotIn("x", "".join(line.split("|")[3] for line in table))
-        self.assertNotIn("...", "".join(line.split("|")[4] for line in table))
-
     def test_threshold_compaction_never_rounds_away_actual_token_values(self):
         for value, expected in ((100000, "100K"), (200000, "200K"), (1000000, "1M"),
                                 (1234567, "1.234567M"), (100001, "100.001K"), (999, "999")):

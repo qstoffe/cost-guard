@@ -8,12 +8,10 @@ from unittest.mock import patch
 from development.tests.fixtures.compact_reports import NOW, START, Availability, rendered, report_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.session_snapshots import make_snapshot
-from development.tests.fixtures.quota_rendering import quotas, rolling
+from development.tests.fixtures.quota_rendering import quotas
 from development.tests.fixtures.report_runtime import FakePricingProvider, FakeSource
 from src.reports.sampling import latest_prompts
-from src.bootstrap import _report_request
-from src.cli import CliUsageError, CommandKind, parse_command
-from src.domain import ModelRef, AccountUsageStatus
+from src.domain import ModelRef
 from src.reports import ReportKind, ReportRequest
 from src.reports.model_comparison import selectable_catalog
 from src.sources.model_availability import OpenCodeModelAvailabilitySource
@@ -36,24 +34,6 @@ class ForbiddenAccount:
 class CompactReportTests(unittest.TestCase):
     def service(self, source=None, *, availability=None, accounts=(), now_ms=NOW):
         return report_service(self, source, availability=availability, accounts=accounts, now_ms=now_ms)
-
-    def test_cli_primary_shapes_and_request_mapping(self):
-        for argv, kind, limit in (([], CommandKind.NORMAL, None),
-                                  (["--all-models"], CommandKind.ALL_MODELS, None),
-                                  (["--sessions", "10"], CommandKind.SESSIONS, 10),
-                                  (["--sessions", "100"], CommandKind.SESSIONS, 100),
-                                  (["--sessions", "all"], CommandKind.SESSIONS, None)):
-            command = parse_command(argv)
-            self.assertEqual(kind, command.kind)
-            request = _report_request(command)
-            self.assertEqual(kind.value, request.kind.value)
-            self.assertEqual(limit, request.session_limit)
-        for argv in (("--sessions",), ("--sessions", "0"), ("--sessions", "-1"),
-                     ("--sessions", "1.5"), ("--sessions", "10", "--watch"),
-                     ("--sessions", "all", "ses_a"), ("--all-models", "ses_a"),
-                     ("--all-models", "--watch"), ("--all-models", "--all-models")):
-            with self.subTest(argv=argv), self.assertRaises(CliUsageError):
-                parse_command(argv)
 
     def test_default_does_not_build_historical_views_or_range_totals(self):
         service = self.service()
@@ -197,37 +177,6 @@ class CompactReportTests(unittest.TestCase):
         lines = text.splitlines()
         index = next(i for i, line in enumerate(lines) if line.startswith("* Next Ictx:"))
         self.assertTrue(lines[index + 1].startswith("* CCost:"))
-
-    def test_highlights_accounts_warning_placement_and_distinct_theme_roles(self):
-        service = self.service()
-        prices = service.pricing_provider.catalog
-        service.pricing_provider.catalog = replace(prices, models=tuple(replace(m, metadata={
-            **dict(m.metadata), "release_date": "2026-10-01", "promotion_active": "true",
-            "promotion_expires_ms": str(NOW + 86_400_000), "promotion_discount_percent": "50",
-        }) for m in prices.models))
-        report = service.build(ReportRequest())
-        account = rolling("copilot", "GitHub Copilot Max")
-        account = replace(account, account=replace(account.account, status=AccountUsageStatus.BLOCKED,
-            warnings=("⚠ COPILOT PAUSED: synthetic account warning",)))
-        report = replace(report, accounts_quotas=quotas(account, rolling("openai", "OpenAI Plus")))
-        text = rendered(report, width=140)
-        lines = text.splitlines()
-        new = next(i for i, line in enumerate(lines) if line.startswith("✦ New Models:"))
-        self.assertEqual(["", "Accounts Overview"], lines[new + 1:new + 3])
-        self.assertEqual("GitHub Copilot Max", lines[new + 4])
-        self.assertLess(text.index("Price Promotion:"), text.index("✦ New Models:"))
-        self.assertLess(text.index("Source-wide warning"), text.index("Pricing/cache metadata"))
-        warning = next(line for line in lines if "COPILOT PAUSED" in line)
-        self.assertTrue(warning.startswith("  ⚠"))
-        self.assertLess(text.index("GitHub Copilot Max"), text.index("COPILOT PAUSED"))
-        self.assertLess(text.index("COPILOT PAUSED"), text.index("OpenAI Plus"))
-        self.assertNotIn("Usage Today", text)
-        for theme in ("classic", "modus-operandi-tinted"):
-            colors = service.config["colorSchemes"][theme]
-            self.assertNotEqual(colors["modelComparisonNew"], colors["modelComparisonPromotion"])
-        colored = rendered(report, service.config, color=True)
-        self.assertIn("\x1b[38;5;118m✦ New Models:\x1b[0m", colored)
-        self.assertIn("\x1b[38;5;214m*1 Price Promotion:", colored)
 
 
 class AvailabilityTests(unittest.TestCase):

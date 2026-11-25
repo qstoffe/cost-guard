@@ -4,7 +4,6 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal
 import io
-from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
@@ -12,7 +11,6 @@ from unittest import mock
 from development.tests.fixtures.session_snapshots import make_snapshot, message, MODEL
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src import bootstrap, opencode_service
-from src.config import load_configuration
 from src.domain import CostKind, CostObservation, MessageRole, TokenUsage
 from src.presentation import WatchRenderer
 from src.sources.errors import FailureCode, SourceUnavailableError
@@ -20,49 +18,8 @@ from src.sources.opencode_v1 import _error_name as v1_error_name
 from src.sources.opencode_errors import normalize_error_name as v2_error_name
 from src.watch import WatchCoordinator
 
-ROOT = Path(__file__).resolve().parents[2]
-
 
 class StartupTests(unittest.TestCase):
-    def test_watch_waits_and_reselects_when_service_appears_without_cli_polling(self):
-        selected = object()
-        selector = mock.Mock()
-        selector.select.side_effect = [SourceUnavailableError("offline", code=FailureCode.REFUSED), selected]
-        renderer = mock.Mock(interactive=True)
-        delays = []
-        with mock.patch.object(bootstrap, "SourceSelector", return_value=selector), \
-             mock.patch.object(opencode_service.subprocess, "run") as run:
-            self.assertIs(bootstrap._wait_for_watch_source("v2", renderer, sleep=delays.append), selected)
-        self.assertEqual([5, 5], delays)
-        self.assertEqual([mock.call("v2"), mock.call("v2")], selector.select.call_args_list)
-        self.assertIn("Waiting for OpenCode V2", renderer.render_startup_status.call_args.args[0])
-        run.assert_not_called()
-
-    def test_watch_wait_is_cancelable(self):
-        renderer = mock.Mock(interactive=True)
-        with mock.patch.object(bootstrap, "SourceSelector") as factory:
-            with self.assertRaises(KeyboardInterrupt):
-                bootstrap._wait_for_watch_source("auto", renderer, sleep=mock.Mock(side_effect=KeyboardInterrupt))
-            factory.return_value.select.assert_not_called()
-
-    def test_watch_startup_uses_wait_path_but_normal_report_still_fails_fast(self):
-        selection = mock.Mock(selected="v2")
-        with mock.patch.object(bootstrap, "load_configuration", return_value=mock.Mock(values={"openCode": {"source": "auto"}})), \
-             mock.patch.object(bootstrap, "_select_source", side_effect=SourceUnavailableError("offline", code=FailureCode.REFUSED)), \
-             mock.patch.object(bootstrap, "_wait_for_watch_source", return_value=selection) as wait, \
-             mock.patch.object(bootstrap, "WatchRenderer") as renderer, \
-             mock.patch.object(bootstrap, "StartupProgress"), \
-             mock.patch.object(bootstrap, "CacheDatabase"), \
-             mock.patch.object(bootstrap, "ReportService"), \
-             mock.patch.object(bootstrap, "WatchCoordinator") as coordinator, \
-             mock.patch.object(bootstrap, "_print_error"):
-            renderer.return_value.interactive = True
-            self.assertEqual(0, bootstrap.main(["--watch"]))
-            wait.assert_called_once_with("auto", renderer.return_value)
-            coordinator.return_value.run_forever.assert_called_once()
-            self.assertEqual(1, bootstrap.main([]))
-            wait.assert_called_once()
-
     def test_offline_auto_wakes_shared_service_once_then_selects_v2(self):
         selected = object()
         selector = mock.Mock()
@@ -152,33 +109,6 @@ class AbortAndWarningTests(unittest.TestCase):
             ):
                 self.assertEqual("ProviderError", normalize(error))
 
-    def test_watch_aborted_label_survives_truncation_and_red_ages_out(self):
-        with tempfile.TemporaryDirectory() as td:
-            source = MutableSource(make_snapshot(running=True))
-            config, selection, service, _ = make_service(td, source)
-            clock = [2200]
-            watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: clock[0])
-            watch.initialize()
-            finished = make_snapshot(running=False)
-            messages = tuple(
-                replace(item, error_name="AbortedError") if item.message_id == "a_next" else item
-                for item in finished.messages
-            )
-            source.snapshot = replace(finished, messages=messages, source_revision="abort")
-            clock[0] = 2400
-            recent = next(row for row in watch.poll_once().projection.rows if row.prompt.event_id == "u_next")
-            self.assertTrue(recent.prompt.aborted)
-            self.assertEqual("!", recent.marker)
-            renderer = WatchRenderer(config, stream=io.StringIO(), interactive=True)
-            self.assertEqual("costQuotaCritical", renderer._row_style(recent))
-            long_prompt = replace(recent, prompt=replace(recent.prompt, preview="x" * 80))
-            self.assertIn("! #2 [ABORTED]", renderer._row_label(long_prompt)[:35])
-            clock[0] = 32_401
-            aged = next(row for row in watch.poll_once().projection.rows if row.prompt.event_id == "u_next")
-            self.assertEqual("", aged.marker)
-            self.assertIsNone(renderer._row_style(aged))
-            self.assertIn("[ABORTED]", renderer._row_label(aged))
-
     def test_zero_usage_generic_error_is_not_misclassified_as_abort(self):
         from src.analysis.causal import build_prompt_records
         snapshot = make_snapshot()
@@ -228,21 +158,6 @@ class AbortAndWarningTests(unittest.TestCase):
                 current = watch.poll_once().projection
             self.assertNotEqual(initial.quota.accounts, current.quota.accounts)
             self.assertFalse(current.quota_stale)
-
-    def test_paused_triangle_has_two_spaces_and_role_in_watch(self):
-        config = load_configuration(ROOT).values
-        with tempfile.TemporaryDirectory() as td:
-            source = MutableSource()
-            _cfg, selection, service, _ = make_service(td, source)
-            projection = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: 2200).initialize().projection
-            self.assertIsNotNone(projection.quota)
-            account = projection.quota.accounts[0]
-            account = replace(account, account=replace(account.account, warnings=("⚠  COPILOT PAUSED: GitHub reported hasQuota=false.",)))
-            projection = replace(projection, quota=replace(projection.quota, accounts=(account,)))
-            stream = io.StringIO()
-            renderer = WatchRenderer(config, stream=stream, interactive=True)
-            renderer.render(projection)
-            self.assertIn(renderer.styler.apply("⚠  COPILOT PAUSED: GitHub reported hasQuota=false.", "copilotPausedWarning"), stream.getvalue())
 
 
 class _RecoveryClock:

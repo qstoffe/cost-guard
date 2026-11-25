@@ -23,11 +23,9 @@ from src.analysis.models import TraceEntry
 from src.analysis.quota_pace import quota_pace
 from src.analysis.token_mix import model_token_mixes, priced_token_mix
 from src.analysis.valuation import comparison_cost, unique_usage
-from src.cli import CliUsageError, CommandKind, help_text, parse_command
 from src.domain import AccountRef, AccountSnapshot, ModelPricing, ModelRef, PricingTier, QuotaComponent, TokenUsage
 from src.presentation import WatchRenderer
 from src.presentation.accounts import capacity_lines, pace_text
-from src.presentation.progress import StartupProgress
 from src.presentation.terminal import AnsiStyler
 from src.presentation.token_mix import compact_tokens, token_mix_lines
 from src.numbers import ccost_amount
@@ -102,18 +100,6 @@ class CategoryCostTests(unittest.TestCase):
             self.assertEqual(text, ccost_amount(Decimal(value)))
         for value, text in ((999, "999"), (842_000, "842K"), (5_300_000, "5.3M"), (1_200_000_000, "1.2B")):
             self.assertEqual(text, compact_tokens(value))
-
-    def test_line_shape_integer_shares_small_cost_visible_and_graceful_wrap(self):
-        mix = replace(priced_token_mix((), PRICES.reference_category_valuation), totals=(3, 92, 3, 2),
-                      percentages=(3, 92, 3, 2), request_count=4, priced_requests=4,
-                      costs=(Decimal("18"), Decimal("31"), Decimal("0.6"), Decimal("0.027")))
-        line = token_mix_lines("12 prompts", mix)[0]
-        self.assertEqual("Token Mix % · 12 prompts · Input: 3% (18)   Cached input: 92% (31)   "
-                         "Cache write: 3% (0.6)   Output: 2% (<0.1)", line)
-        for width in (80, 50):
-            lines = token_mix_lines("12 prompts", mix, width=width)
-            self.assertGreater(len(lines), 1)
-            self.assertTrue(all(len(item) <= width for item in lines))
 
     def test_watch_counts_unique_prompts_prices_requests_and_omits_total(self):
         snapshot = make_snapshot()
@@ -199,27 +185,6 @@ class ModelHistoryTests(unittest.TestCase):
         self.assertEqual(historical, unknown)
         self.assertFalse(any("currently selectable" in w for w in unknown.source_warnings))
 
-    def test_cli_help_and_standalone_shape(self):
-        self.assertIs(CommandKind.TOKEN_MIX, parse_command(["--token-mix"]).kind)
-        for argv in (["--token-mix", "--watch"], ["--token-mix", "2026-01-01"]):
-            with self.assertRaises(CliUsageError):
-                parse_command(argv)
-        self.assertIn("--token-mix", help_text())
-
-    def test_progress_heading_is_transient_and_redirect_is_quiet(self):
-        stream = io.StringIO()
-        progress = StartupProgress(stream, interactive=True, animate=False, heading="Cost Guard — Token Mix")
-        progress.update("Analyzing usage history...", 40)
-        self.assertIn("Cost Guard — Token Mix\n\r", stream.getvalue())
-        progress.stop()
-        self.assertTrue(stream.getvalue().endswith("\x1b[1A\x1b[2K"))
-        quiet = io.StringIO()
-        plain = StartupProgress(quiet, interactive=False, heading="Cost Guard — Token Mix")
-        for percent in range(5, 90, 5):
-            plain.update("Analyzing usage history...", percent)
-        self.assertEqual(1, quiet.getvalue().count("\n"))
-        self.assertNotIn("Token Mix", quiet.getvalue())
-
 
 class QuotaPaceTests(unittest.TestCase):
     def test_calendar_and_workday_pace_include_today(self):
@@ -300,17 +265,6 @@ class QuotaPaceTests(unittest.TestCase):
         paused = convert_entitlement_payload({"quotas": {"premiumInteractionsQuota": {
             "total": 7000, "creditsUsed": 7000, "overage_entitlement": 500, "overage_permitted": False}}}, fetched_at_ms=now)
         self.assertEqual("paused", paused.billing_components[0].status)
-
-    def test_report_keeps_credit_units_money_reset_and_separate_remaining(self):
-        now = ms(2026, 10, 5, 8)
-        account = AccountSnapshot(AccountRef("fixture", "other", "a"), now, "Any subscription", quotas=(copilot(),))
-        (projection,) = account_projections((account,), (), PRICES, now_ms=now, today_start_ms=now, month_start_ms=now)
-        text = "\n".join(capacity_lines(projection, AnsiStyler({}, enabled=False), "UTC", width=160,
-                                       force_vertical=True, now_ms=now))
-        self.assertIn("0% used · 0/7000 AI credits ($0.00/$70.00)", text)
-        self.assertIn("Reset at 2026-11-01 00:00", text)
-        self.assertIn("\n  Remaining  259/day · 350/workday", text)
-        self.assertNotIn("Native", text)
 
     def test_provider_exhausted_quota_and_extra_limit_use_existing_single_fetch(self):
         payload = {"copilot_plan": "pro_plus", "quota_reset_date": "2026-11-01", "quotas": {

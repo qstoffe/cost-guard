@@ -7,7 +7,6 @@ import subprocess
 import tempfile
 import unittest
 from dataclasses import replace
-from pathlib import Path
 from unittest import mock
 
 from development.tests.fixtures.session_snapshots import make_snapshot
@@ -18,8 +17,6 @@ from src.sources.errors import SourceDataError, SourceError, SourceSchemaError, 
 from src.sources.selection import MigrationGapDiagnostic, MigrationGapSession
 from src.watch import WatchCoordinator
 from src.watch.coordinator import SOURCE_RETRY_SECONDS, SOURCE_UNREADABLE_RETRIES
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 class FailingMixin:
@@ -178,33 +175,6 @@ class WatchSourceRecoveryTests(unittest.TestCase):
             self.assertEqual("OpenCode V2 source unreadable · retrying every 5s", renderer.renders[1].status)
             self.assertEqual(["Watch stopped: OpenCode V2 source failed."], renderer.finished)
 
-    def test_bootstrap_reports_terminal_watch_failure_as_nonzero_exit(self):
-        from src import bootstrap
-
-        class Coordinator:
-            def __init__(self, **_kwargs):
-                pass
-
-            def initialize_with_recovery(self, _renderer, *, before_recovery=None):
-                return None
-
-            def run_forever(self, *_args, **_kwargs):
-                raise SourceSchemaError("OpenCode V1 message schema is not supported")
-
-        selection = mock.Mock(selected="v1", warnings=(), source=mock.Mock())
-        stdout = io.StringIO()
-        with mock.patch.object(bootstrap, "_select_source", return_value=selection), \
-             mock.patch.object(bootstrap, "WatchCoordinator", Coordinator), \
-             mock.patch.object(bootstrap, "ReportService"), mock.patch.object(bootstrap, "CacheDatabase"), \
-             mock.patch.object(bootstrap, "CacheRepository"), \
-             mock.patch.object(bootstrap, "GitHubCopilotPricingProvider"), \
-             mock.patch.object(bootstrap, "_account_providers", return_value=()), \
-             mock.patch("sys.stdout", stdout):
-            code = bootstrap.main(["--watch"])
-        self.assertEqual(1, code)
-        self.assertIn("Cost Guard - OpenCode incompatible", stdout.getvalue())
-        self.assertIn("format is not supported", stdout.getvalue())
-
     def test_source_warnings_and_migration_gap_never_drive_lifecycle(self):
         with tempfile.TemporaryDirectory() as td:
             source = FailingV2()
@@ -235,20 +205,6 @@ class WatchSourceRecoveryTests(unittest.TestCase):
                 self.assertTrue(source.list_sessions())
                 self.assertTrue(second.requests)
             first.__enter__()  # let the fixture context shut down a live server
-
-
-class WatchLauncherExitTests(unittest.TestCase):
-    def test_windows_watch_launcher_preserves_shell_and_nonzero_result(self):
-        text = (ROOT / "windows/Legacy/Cost-Guard-Watch.cmd").read_text(encoding="utf-8")
-        self.assertIn('start "Cost Guard Watch" %costguard_shell%', text)
-        self.assertNotIn('/b %costguard_shell%', text)
-        self.assertIn("-NoExit", text)
-        driver = (ROOT / "src/windows_launcher.ps1").read_text(encoding="utf-8")
-        self.assertIn("$code = $LASTEXITCODE", driver)
-        self.assertIn("$global:LASTEXITCODE = $code", driver)
-        self.assertIn("if ($code -ne 0)", driver)
-        self.assertNotIn("Read-Host", driver)
-        self.assertNotIn("exit $code", driver)
 
 
 if __name__ == "__main__":

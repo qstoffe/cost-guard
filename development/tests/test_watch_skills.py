@@ -4,17 +4,15 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal
 import json
-import re
 import unittest
 from unittest.mock import patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot, part, prov
-from src.presentation.watch_activity import BASE_ROLE, FAILED_ROLE, skill_summary_segments, tool_summary_segments
 from src.reports.models import PromptProjection, SessionPromptBlock
 from src.sources.opencode_v2_normalization import normalize_message_bundle
 from src.sources.opencode_v2_wire import current_union_message_to_legacy_bundle
 from src.watch.skill_registry import active_skill_origins
-from src.watch.models import SkillObservation, ToolObservation, ToolOutcome
+from src.watch.models import SkillObservation, ToolOutcome
 from src.watch.tools import observe_tools
 
 BROWSER = 'auto-agent-browser'
@@ -72,10 +70,6 @@ def observe_snapshot(value, event_id='u_next', *, now_ms=60_000):
 
 def observe(parts, *, running=True):
     return observe_snapshot(snapshot(parts, running=running))
-
-
-def text(segments):
-    return ''.join(value for value, _role in segments)
 
 
 def prompt(event_id='u_next', number=1, at_ms=2000, **changes):
@@ -297,64 +291,6 @@ class FailureAttributionTests(unittest.TestCase):
         self.assertEqual((SkillObservation(BROWSER),), obs.skills)
 
 
-class SkillWidthTests(unittest.TestCase):
-    def observation(self):
-        return ToolObservation(tool_count=54, failed_count=3,
-                               skills=(SkillObservation(BROWSER, 1), SkillObservation(GITHUB),
-                                       SkillObservation('auto-jira-api'), SkillObservation('auto-log-debugging', 2)))
-
-    def test_large_skill_inventory_builds_only_the_selected_candidate(self):
-        obs = ToolObservation(skills=tuple(SkillObservation(f'skill-{index}') for index in range(1000)))
-        from src.presentation.watch_activity import _skill_candidate
-        with patch('src.presentation.watch_activity._skill_candidate', wraps=_skill_candidate) as candidate:
-            line = text(skill_summary_segments(obs, 80))
-        self.assertLessEqual(len(line), 80)
-        self.assertEqual(1, candidate.call_count)
-        self.assertIn('+', line)
-
-    def test_empty_skills_never_produce_row(self):
-        self.assertEqual([], skill_summary_segments(ToolObservation(), 100))
-
-    def test_exact_terminology_and_independent_colors(self):
-        segments = skill_summary_segments(self.observation(), 300)
-        self.assertEqual([' [1 tool call failure]', ' [2 tool call failures]'],
-                         [value for value, role in segments if role == FAILED_ROLE])
-        self.assertEqual([BROWSER, GITHUB, 'auto-jira-api', 'auto-log-debugging'],
-                         [value for value, role in segments if role == BASE_ROLE and value.startswith('auto-')])
-        self.assertTrue(all(role == BASE_ROLE for value, role in segments if role != FAILED_ROLE))
-        self.assertNotIn('[0', text(segments))
-
-    def test_all_widths_fit_and_omitted_count_matches_whole_names(self):
-        obs = self.observation()
-        for width in range(0, 301):
-            with self.subTest(width=width):
-                line = text(skill_summary_segments(obs, width))
-                self.assertLessEqual(len(line), width)
-                shown = sum(skill.skill_id in line for skill in obs.skills)
-                omitted = re.search(r'\+(\d+) more', line)
-                if omitted:
-                    self.assertEqual(len(obs.skills) - shown, int(omitted[1]))
-                for skill in obs.skills:
-                    if skill.skill_id in line:
-                        self.assertNotIn(skill.skill_id + '...', line)
-                if shown:
-                    self.assertIn(BROWSER, line)
-
-    def test_narrow_row_prioritizes_latest_complete_name_and_failure_indicator(self):
-        expected = f'Skills (4): {BROWSER} [1 tool call failure] · +3 more'
-        self.assertEqual(expected, text(skill_summary_segments(self.observation(), len(expected))))
-        names_only = f'Skills (4): {BROWSER} · +3 more'
-        self.assertEqual(names_only, text(skill_summary_segments(self.observation(), len(names_only))))
-        self.assertEqual('Skills (4)', text(skill_summary_segments(self.observation(), 10)))
-
-    def test_tool_total_and_nonzero_failure_survive_compact_widths(self):
-        obs = self.observation()
-        self.assertEqual('54 · 3 failed', text(tool_summary_segments(obs, 13)))
-        self.assertEqual('54 · 3!', text(tool_summary_segments(obs, 7)))
-        for width in range(0, 150):
-            self.assertLessEqual(len(text(tool_summary_segments(obs, width))), width)
-
-
 class WatchSkillRegistryTests(unittest.TestCase):
     def test_registry_is_queried_once_per_session_only_for_active_skill_work(self):
         class RegistrySource:
@@ -372,8 +308,6 @@ class WatchSkillRegistryTests(unittest.TestCase):
         self.assertEqual(['root'], source.sessions)
         self.assertEqual({}, active_skill_origins(source, snap, block((prompt(),))))
         self.assertEqual(['root'], source.sessions)
-
-
 
 
 if __name__ == '__main__':

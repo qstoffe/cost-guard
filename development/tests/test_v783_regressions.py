@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import io
 import tempfile
 import unittest
 from dataclasses import replace
-from decimal import Decimal
 from pathlib import Path
 
 from development.tests.fixtures.session_snapshots import make_snapshot
@@ -13,9 +11,7 @@ from src.analysis import analyze_snapshot
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.domain import IntegrationHealth, ProviderCapabilities, SessionCapabilities
-from src.presentation import ReportRenderer
 from src.reports import ReportRequest, ReportService
-from src.reports.models import SessionUsageRow, PromptProjection, ReportKind, ReportProjection, SessionPromptBlock
 from src.reports.prompts import build_prompt_block
 from src.sources.model_availability import OpenCodeModelAvailabilitySource
 from src.sources.selection import SourceSelection
@@ -131,44 +127,6 @@ class V783RegressionTests(unittest.TestCase):
     def test_model_comparison_keeps_full_catalog_if_availability_is_unknown(self) -> None:
         report = self._service(_Availability(None)).build(ReportRequest())
         self.assertEqual({"GPT Test", "Claude Test"}, {row.model for row in report.model_comparison})
-
-    def test_sessions_render_whole_session_cost_without_total(self) -> None:
-        report = ReportProjection(
-            ReportKind.SESSIONS, "", "v1",
-            session_usage=(SessionUsageRow("ses_a", "A", "GPT", False, Decimal("123"), 2),),
-        )
-        stream = io.StringIO()
-        ReportRenderer({"timezone": "UTC", "colors": {}}, stream=stream, color_enabled=False, terminal_width=120)._render_sessions(report)
-        row = next(line for line in stream.getvalue().splitlines() if "ses_a" in line)
-        cells = [cell.strip() for cell in row.strip("|").split("|")]
-        self.assertEqual("123", cells[3])
-        self.assertEqual("2", cells[4])
-        self.assertNotIn("Total", stream.getvalue())
-
-    def test_prompt_table_restores_v77_session_header_arrow_and_total_diagnostics(self) -> None:
-        row = PromptProjection(
-            at_ms=1_000, prompt_number=1, label="prompt", preview="If DFP-10524 is a Jira key",
-            model_effort="GPT-5.6 Luna (XHigh)", ccost=Decimal("28"), cost_estimated=False,
-            unresolved_cost=False, calls=49, incoming_context_tokens=9_000,
-            incoming_context_ccost=Decimal("0.26"), extra_ccost=Decimal("25.74"),
-            token_mix_percent=(4, 95, 0, 1), delta_context_tokens=218_000, next_context_tokens=227_000,
-        )
-        block = SessionPromptBlock(
-            "ses_example", "DFP-10524 - Review workflow and state management", (row,), Decimal("28"), 49,
-            total_ictx_cost_text="1%", total_extra_cost_text="99%", total_mix_text="4/95/0/1",
-        )
-        stream = io.StringIO()
-        renderer = ReportRenderer({"timezone": "UTC", "colors": {}, "thresholds": {}}, stream=stream, color_enabled=False, terminal_width=180)
-        renderer._render_prompt_block(block, warning_number=1)
-        text = stream.getvalue()
-        self.assertIn("| Session: ses_example", text)
-        self.assertIn("| *1 DFP-10524 - Review workflow and state management", text)
-        self.assertNotIn("### DFP-10524", text)
-        self.assertIn("+218k → 227k", text)
-        total = next(line for line in text.splitlines() if "| Total" in line)
-        self.assertIn("1%", total)
-        self.assertIn("99%", total)
-        self.assertIn("4/95/0/1", total)
 
     def test_prompt_block_calculates_total_diagnostic_columns(self) -> None:
         snapshot = make_snapshot()

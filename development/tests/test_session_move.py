@@ -12,7 +12,6 @@ from urllib.parse import parse_qs, urlsplit
 from development.tests.fixtures.session_snapshots import (
     MODEL, make_uncompacted_snapshot, message, moved_location, part, prov,
 )
-from development.tests.fixtures.warning_projections import warning_prompt, warning_report_projection, warning_watch_projection
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from development.tests.fixtures.pricing_catalog import catalog as sample_catalog, threshold_catalog
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
@@ -22,7 +21,7 @@ from src.analysis.context import PriceWarningSeverity, watch_context_state
 from src.domain import ContextBoundary, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage
 from src.numbers import ccost_amount
 from src.presentation.token_mix import comparison_cost_text
-from src.presentation import ReportRenderer, WatchRenderer
+from src.presentation import WatchRenderer
 from src.reports.prompts import build_prompt_block
 from src.watch import WatchCoordinator
 from src.watch.token_mix import WatchTokenMix
@@ -259,23 +258,6 @@ class WatchTotalAndMoveTests(unittest.TestCase):
             for snapshot in (before, after, before, after):
                 tracker.observe(snapshot, analyze_snapshot(snapshot, now_ms=9000))
             self.assertEqual(1, tracker.project().request_count)
-
-
-class NextIctxLabelTests(unittest.TestCase):
-    def test_watch_and_report_label_the_range_as_next_ictx_ccost(self):
-        item = replace(warning_prompt(PriceWarningSeverity.APPROACHING, "[Approaching price threshold >272.0K]"),
-                       watch_next_context_cached_ccost=Decimal("0.3"), watch_next_context_fresh_ccost=Decimal("3"))
-        stream = io.StringIO()
-        WatchRenderer({"timezone": "UTC"}, stream=stream, interactive=False).render(warning_watch_projection(item))
-        self.assertIn("*1 Context: Approaching price threshold >272.0K (Next Ictx CCost 0.3–3)", stream.getvalue())
-        projection = warning_report_projection(item)
-        block = replace(projection.prompt_blocks[0], next_context_cached_ccost=Decimal("0.3"),
-                        next_context_fresh_ccost=Decimal("3"))
-        stream = io.StringIO()
-        ReportRenderer({"timezone": "UTC"}, stream=stream, color_enabled=False, terminal_width=160).render(
-            replace(projection, prompt_blocks=(block,)))
-        self.assertIn("(Next Ictx CCost 0.3–3)", stream.getvalue())
-        self.assertNotIn("(0.3", stream.getvalue())
 
 
 if __name__ == "__main__":

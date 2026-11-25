@@ -24,7 +24,7 @@ from development.tests.fixtures.sqlite_faults import SQLiteFaults
 from src.cache.metadata_state import STATE_FILE, LEGACY_STATE_FILE
 from src.runtime_errors import RuntimeErrors
 from development.tools.diagnostic_logs import create_bundle
-from development.tools.diagnostic_metadata import model_metadata_section
+from development.tools.diagnostic_web_dependencies import provider_evidence
 from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog
 from src.pricing.github_copilot import (
@@ -326,8 +326,8 @@ class MetadataStateMigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.legacy_state(root)
-            section = model_metadata_section(root, {}, network=False, database_factory=CacheDatabase)
-            self.assertEqual(NOW + 60000, section["summary"]["next_retry_ms"])
+            section = provider_evidence(root, {})["release_metadata"]
+            self.assertEqual(NOW + 60000, section["next_retry_ms"])
             self.assertFalse((root / STATE_FILE).exists())
             migrated = MetadataHealthStore(root)
             migrated.record(self.success, NOW + 60000, reason="retry_after_failure")
@@ -402,11 +402,13 @@ class MetadataStateMigrationTests(unittest.TestCase):
             root = Path(tmp)
             store = MetadataHealthStore(root)
             store.record(self.success, NOW, reason="unverified_cache")
-            section = model_metadata_section(root, {}, network=False, database_factory=CacheDatabase)
-            self.assertEqual("healthy", section["summary"]["health"])
-            self.assertEqual([], section["failure_events"])
-            self.assertEqual([], section["summary"]["failing_sources"])
-            self.assertEqual([], section["summary"]["recovered_sources"])
+            section = provider_evidence(root, {})["release_metadata"]
+            self.assertEqual(0, section["consecutive_failures"])
+            self.assertTrue(section["sources"])
+            for source in section["sources"].values():
+                self.assertFalse(source["in_failure_period"])
+                self.assertNotIn("last_recovery_ms", source)
+                self.assertNotIn("last_error", source)
             self.assertFalse((root / "logs").exists())
 
 

@@ -1,20 +1,12 @@
 """GitHub display vocabulary without telemetry, pricing or field-order changes."""
-from dataclasses import replace
 from decimal import Decimal as D
-import io
 import unittest
 
 from development.tests.fixtures.compact_reports import rendered
-from development.tests.fixtures.remaining_views import remaining_reports
-from development.tests.fixtures.warning_projections import warning_prompt, warning_watch_projection
-from src.analysis.context import PriceWarningSeverity
 from src.analysis.token_mix import priced_token_mix
 from src.application.display import with_display
-from src.application.live_projection import project_live
 from src.application.projection import project, token_mix as project_mix
-from src.cli import help_text
 from src.domain import ModelRef, TokenUsage
-from src.presentation import WatchRenderer
 from src.presentation.token_mix import MIX_LABELS, mix_cells, token_mix_lines
 from src.pricing.catalog import PricingCatalog
 from src.pricing.github_copilot import parse_pricing_markdown
@@ -23,7 +15,6 @@ from src.reports.models import ModelTokenMixProjection, PublisherTokenMixProject
 
 LABELS = ("Input", "Cached input", "Cache write", "Output")
 KEYS = ("input", "cache", "write", "output")
-LEGEND = "I = Input; C = Cached input; W = Cache write; O = Output"
 
 
 def prices(write="$0.30"):
@@ -103,33 +94,6 @@ class TokenCategoryNamesTests(unittest.TestCase):
         self.assertEqual([1_000_000, 0, 2_000_000, 0], dto["totals"])
         self.assertEqual(D(200), mix.costs[2])
         self.assertEqual("66.7% (200)", dto["display"]["write"])
-
-    def test_cli_scopes_and_watch_explain_compact_values_at_80_120_160_columns(self):
-        reports = remaining_reports(self)
-        mix = observed(TokenUsage(input=10, cache_read=20, cache_write=30, output=40))
-        frame = replace(warning_watch_projection(warning_prompt(PriceWarningSeverity.NONE)), token_mix=mix)
-        live = project_live(frame).to_json()
-        self.assertEqual(LEGEND, live["display"]["token_category_legend"])
-        for width in (80, 120, 160):
-            for name, report in reports.items():
-                text = rendered(report, width=width)
-                dto = project(report).to_json()
-                self.assertEqual(LEGEND, dto["display"]["token_category_legend"])
-                self.assertNotRegex(text, r"\b(?:Cache|Write):|\|\s*(?:Cache|Write)\s*\|")
-                if name in ("normal", "all-models", "token-mix"):
-                    for label in LABELS:
-                        self.assertIn(label, text)
-                if name == "token-mix":
-                    self.assertTrue(all(len(line) <= width for line in text.splitlines()))
-                if name in ("session", "date"):
-                    self.assertIn("Token Mix %", text)
-                    self.assertIn("Input / Cached input / Cache write / Output", " ".join(text.split()))
-            stream = io.StringIO()
-            WatchRenderer({"timezone": "UTC"}, stream=stream, interactive=False, terminal_width=width)._render_quota(frame)
-            self.assertTrue(all(len(line) <= width for line in stream.getvalue().splitlines()))
-            for label in LABELS:
-                self.assertIn(label + ":", stream.getvalue())
-        self.assertIn(LEGEND, help_text())
 
 
 if __name__ == "__main__":

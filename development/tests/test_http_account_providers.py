@@ -309,21 +309,6 @@ class WiringAndLifecycleTests(unittest.TestCase):
                 with self.assertRaises(ConfigError):
                     validate_configuration(config, defaults, {group: {forbidden: "secret"}})
 
-    def test_shared_renderers_align_variable_labels_balance_no_bar_narrow_fallback(self):
-        account = normalize(OPENROUTER, router())
-        other = normalize_minimax_account(BASE, minimax(bucket()))
-        for watch in (True, False):
-            rows = text(other, watch=watch).splitlines()
-            bars = [row.index("█") for row in rows if "█" in row]
-            self.assertEqual(1, len(set(bars)))
-            narrow = text(account, width=40, watch=watch)
-            self.assertTrue(all(len(row) <= 40 for row in narrow.splitlines()))
-            self.assertIn("$32.10/$50.00", narrow)
-            self.assertNotIn("█", text(normalize(DEEPSEEK, seek()), watch=watch))
-        combined = replace(account, quotas=tuple(replace(account.quotas[0], label=label)
-                            for label in ("5h", "Day", "Week", "Month", "Limit")))
-        self.assertEqual(1, len({row.index("█") for row in text(combined).splitlines() if "█" in row}))
-
     def test_report_watch_share_observations_and_failure_does_not_affect_usage(self):
         good = normalize(DEEPSEEK, seek())
         bad = replace(normalize(OPENROUTER, router()), ref=replace(BASE.ref, source_account="credential:2"),

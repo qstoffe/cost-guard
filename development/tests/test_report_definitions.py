@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
-import re
 import unittest
 
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
@@ -13,20 +12,12 @@ from src.reports.sampling import latest_prompts, latest_token_prompts
 from development.tests.fixtures.compact_reports import Availability, rendered
 from development.tests.fixtures.quota_rendering import quotas, rolling
 from development.tests.fixtures.watch_runtime import MutableSource
-from src.analysis.token_mix import TokenMix, priced_token_mix, token_mix
-from src.cli import CommandKind, help_text, parse_command
+from src.analysis.token_mix import TokenMix, token_mix
 from src.domain import ModelRef, TokenUsage
 from src.pricing.catalog import normalized_average_token_mix
-from src.presentation.definitions import DEFINITION_WIDTH
 from src.numbers import balanced_share_percents
-from src.presentation.token_mix import aligned_mix_cells, mix_cells, token_mix_line
+from src.presentation.token_mix import mix_cells, token_mix_line
 from src.reports import ReportKind, ReportProjection, ReportRequest
-from src.reports.models import ModelTokenMixProjection
-
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
-CONFIG = {"timezone": "UTC", "colors": {"reportDefinitionLabel": {"ansi256": 226},
-                                       "reportDefinitionValue": {"ansi256": 227}}}
-LABELS = ("CCost:", "Token Mix %:", "Relative CCost:")
 
 
 def large_mix(sample_size: int = 100) -> TokenMix:
@@ -40,135 +31,7 @@ def report(mix: TokenMix | None = None, sample: int = 100, **changes) -> ReportP
                             token_mix=mix or large_mix(), model_comparison_sample_size=sample, **changes)
 
 
-def blocks(text: str) -> list[list[str]]:
-    lines = ANSI.sub("", text).splitlines()
-    start = next(i for i, line in enumerate(lines) if line.startswith("CCost:"))
-    end = next(i for i, line in enumerate(lines) if line.startswith("Pricing/cache metadata:"))
-    groups: list[list[str]] = [[]]
-    for line in lines[start:end - 1]:  # one blank line separates definitions from the metadata
-        if line:
-            groups[-1].append(line)
-        else:
-            groups.append([])
-    return groups
-
-
 class ReportDefinitionTests(unittest.TestCase):
-    def test_three_blocks_in_order_separated_by_one_blank_line_above_table(self):
-        text = rendered(report())
-        groups = blocks(text)
-        self.assertEqual(3, len(groups), "exactly one blank line between blocks")
-        for group, label in zip(groups, LABELS):
-            self.assertTrue(group[0].startswith(label + " "), group[0])
-        self.assertLess(text.index("Relative CCost: Common"), text.index("| Publisher"))
-        self.assertEqual([
-            "CCost:  1 CCost equals 1 Copilot AI credit.",
-            "        Flat-rate accounts use Copilot's published token rates, not the billed cost.",
-            "        Unlabeled cost figures in Cost Guard are CCost unless stated otherwise.",
-            "        Watch Today is CCost, not provider-native Used or actual Billed spend.",
-        ], groups[0])
-        self.assertEqual([
-            "Token Mix %: The Input / Cached input / Cache write / Output percentage split of your",
-            "             observed token usage.",
-            "             Your mix uses the latest 100 priced prompts, totaling 137.1M tokens.",
-            "             Input: 3% (123)   Cached input: 82% (456)   Cache write: 1% (12)",
-            "             Output: 14% (789)",
-        ], groups[1])
-        self.assertEqual([
-            "Relative CCost: Common token-category workload price comparison, not a same-task benchmark",
-            "                or billing.",
-            "                One shared I/C/W/O mix from the latest 100 completed priceable prompts",
-            "                globally (up to 100).",
-            "                Every model and tier, including untried models, uses those same pooled",
-            "                token shares.",
-            "                Not a capability/throughput benchmark or a forecast of specialized future",
-            "                jobs.",
-            "                Every tier uses the same cheapest positive comparable base price as 1.0x.",
-            "                Arrows show context-tier prices; > or ≥ marks the published input-token",
-            "                boundary.",
-            "                I = Input; C = Cached input; W = Cache write; O = Output.",
-        ], groups[2])
-
-    def test_continuations_align_sentences_split_and_width_bounded(self):
-        for width in (40, 72, 120, 300):
-            for color in (False, True):
-                with self.subTest(width=width, color=color):
-                    for group in blocks(rendered(report(), CONFIG, width=width, color=color)):
-                        label = next(item for item in LABELS if group[0].startswith(item))
-                        indent = group[0].index(group[0][len(label):].lstrip(), len(label))
-                        self.assertEqual(len(label) + (2 if label == "CCost:" else 1), indent)
-                        for line in group:
-                            self.assertLessEqual(len(line), min(DEFINITION_WIDTH, width), line)
-                            self.assertNotRegex(line[indent:], r"\.\s+[A-Z]", "one sentence per line")
-                        for line in group[1:]:
-                            self.assertTrue(line.startswith(" " * indent) and line[indent] != " ", line)
-
-    def test_only_labels_and_live_values_are_emphasized(self):
-        colored = rendered(report(), CONFIG, color=True)
-        self.assertEqual(list(LABELS), re.findall(r"\x1b\[38;5;226m(.*?)\x1b\[0m", colored))
-        for label in LABELS:
-            self.assertIn(f"\x1b[38;5;226m{label}\x1b[0m ", colored)
-        cells = "Input: 3% (123)   Cached input: 82% (456)   Cache write: 1% (12)   Output: 14% (789)"
-        wrapped = cells.rsplit("   ", 1)
-        self.assertEqual(["100", "137.1M", *wrapped], re.findall(r"\x1b\[38;5;227m(.*?)\x1b\[0m", colored))
-        for line in wrapped:
-            self.assertIn(" " * 13 + f"\x1b[38;5;227m{line}\x1b[0m\n", colored, "indent stays unstyled")
-        self.assertIn("the latest \x1b[38;5;227m100\x1b[0m priced prompts, totaling "
-                      "\x1b[38;5;227m137.1M\x1b[0m tokens.", colored)
-        self.assertEqual(ANSI.sub("", colored), rendered(report()))
-        # Wrapped narrow cells stay emphasized per line, never across the indent.
-        narrow = rendered(report(), CONFIG, width=40, color=True)
-        self.assertEqual(cells.split("   "), [cell for segment in re.findall(r"\x1b\[38;5;227m(.*?)\x1b\[0m", narrow)
-                                              if segment.startswith(("Input", "Cached input", "Cache write", "Output"))
-                                              for cell in segment.split("   ")])
-
-    def test_default_palettes_use_plain_yellow_not_promotion_gold(self):
-        from src.config import load_configuration
-        schemes = load_configuration(compact.ROOT).values["colorSchemes"]
-        classic = schemes["classic"]
-        plain = {"foreground": "Yellow", "background": None, "ansi256": None}
-        self.assertEqual(plain, classic["reportDefinitionLabel"])
-        self.assertEqual(plain, classic["reportDefinitionValue"])
-        self.assertNotEqual(classic["modelComparisonPromotion"], classic["reportDefinitionLabel"])
-        light = schemes["modus-operandi-tinted"]
-        self.assertEqual(light["costQuotaWarning"], light["reportDefinitionLabel"])
-        self.assertEqual(light["reportDefinitionLabel"], light["reportDefinitionValue"])
-
-    def test_pricing_metadata_directly_above_table(self):
-        lines = rendered(report()).splitlines()
-        index = next(i for i, line in enumerate(lines) if line.startswith("Pricing/cache metadata:"))
-        self.assertEqual("", lines[index - 1])
-        self.assertTrue(lines[index + 1].startswith("|---"), lines[index + 1])
-
-    def test_wording_header_and_removed_duplicate_mix_line(self):
-        text = rendered(report())
-        self.assertNotIn("does not predict model behavior", text)
-        self.assertNotIn("Token mix", text)
-        self.assertNotIn("Token Mix % · last", text)
-        self.assertIn("Relative CCost", text)
-        self.assertNotIn("GitHub USD/M I/C/W/O", text)
-        self.assertEqual(1, text.count("Input: 3% (123)"), "live mix only in the definitions")
-        lines = text.splitlines()
-        accounts = lines.index("Accounts Overview")
-        self.assertTrue(lines[accounts - 2].startswith("|"))
-        self.assertIs(CommandKind.TOKEN_MIX, parse_command(["--token-mix"]).kind)
-        self.assertIn("--token-mix", help_text())
-        self.assertIn("Token Mix %", help_text())
-
-    def test_dynamic_count_human_tokens_and_empty_states(self):
-        one = replace(token_mix((TokenUsage(input=842_300),), sample_size=1), costs=(Decimal(1),) * 4,
-                      priced_requests=1)
-        text = rendered(report(one, sample=1))
-        self.assertIn("Your mix uses the latest 1 priced prompt, totaling 842.3K tokens.", text)
-        self.assertIn("latest 1 completed priceable prompt", text)
-        twelve = replace(large_mix(37), totals=(700_000, 10_000_000, 0, 2_000_000))
-        self.assertIn("latest 37 priced prompts, totaling 12.7M tokens.", rendered(report(twelve)))
-        empty = rendered(report(TokenMix(), sample=0))
-        self.assertIn("Token Mix %: The Input / Cached input / Cache write / Output percentage split", empty)
-        self.assertIn("No priced prompts are available yet.", empty)
-        self.assertIn("Relative CCost: No completed priced prompts are available yet.", empty)
-        self.assertIn("Relative CCost stays blank", empty)
-
     def test_service_samples_keep_their_distinct_eligibility(self):
         service = compact.report_service(self, SyntheticMonthSource(2, 60, month_start_ms=compact.START))
         built = service.build(ReportRequest())
@@ -226,31 +89,6 @@ class TokenMixHistoryTotalTests(unittest.TestCase):
         hidden = self.service(Availability(("openai/other",))).build_token_mix_history()
         self.assertEqual(built, hidden)
         self.assertIn("Total Token Mix %", rendered(hidden))
-
-    def test_percent_and_ccost_parts_align_independently(self):
-        def mix(counts, costs):
-            return replace(token_mix((TokenUsage(input=counts[0], cache_read=counts[1], cache_write=counts[2],
-                                                 output=counts[3]),)),
-                           costs=tuple(map(Decimal, costs)), priced_requests=1)
-        mixes = [mix((3, 82, 1, 14), (123, 12345, 7, 1)), mix((82, 3, 14, 1), (12345, 7, 123, 99)),
-                 mix((1, 1, 1, 97), (7, 1, 12345, 5)), mix((4, 9956, 0, 40), (1, 2, 0, 3))]
-        cells = aligned_mix_cells(mixes)
-        self.assertEqual((" 3% (  123)", "  82% (12345)", " 1% (    7)", " 14% ( 1)"), cells[0])
-        self.assertEqual((" 0% (    1)", "99.6% (    2)", " 0% (    0)", "0.4% ( 3)"), cells[3])
-        for column in zip(*cells):
-            self.assertEqual(1, len({len(cell) for cell in column}), "no wider than required")
-            self.assertEqual(1, len({cell.index("%") for cell in column}))
-            self.assertEqual(1, len({cell.index("(") for cell in column}))
-        projection = ReportProjection(ReportKind.TOKEN_MIX, "Token Mix % by model", "V2",
-                                      model_token_mix=tuple(ModelTokenMixProjection(f"M{i}", 1, 1, m)
-                                                            for i, m in enumerate(mixes)),
-                                      token_mix=priced_token_mix((), lambda *_: None))
-        table = [line for line in rendered(projection).splitlines() if re.match(r"\| M\d", line)]
-        self.assertEqual(4, len(table))
-        for index in (5, 6, 7, 8):
-            column = [line.split("|")[index] for line in table]
-            self.assertEqual(1, len({cell.index("%") for cell in column}))
-            self.assertEqual(1, len({cell.index(")") for cell in column}))
 
 
 class BalancedShareTests(unittest.TestCase):

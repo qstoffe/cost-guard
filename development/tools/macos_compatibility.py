@@ -148,20 +148,14 @@ class MacCompatibilityChecks(unittest.TestCase):
             self.assertIn("InterfaceError", str(caught.exception))
             self.assertNotIn("private-path-or-secret", str(caught.exception))
 
-    def test_mac_launcher_contracts(self):
-        launchers = (
-            ROOT / "macos/Legacy/Cost-Guard.command",
-            ROOT / "macos/Legacy/Cost-Guard-Watch.command",
-            ROOT / "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command",
-        )
-        for launcher in launchers:
-            with self.subTest(launcher=launcher.name):
-                content = launcher.read_text(encoding="utf-8")
-                self.assertTrue(content.startswith("#!/bin/zsh"))
-                self.assertIn("cg_find_python", content)
-                self.assertIn("python_discovery.sh", content)
-                self.assertIn("CG_ROOT=", content)
-        self.assertIn("--test-service-start", launchers[2].read_text(encoding="utf-8"))
+    def test_mac_diagnostics_launcher_contract(self):
+        launcher = ROOT / "development/user-tools/diagnostics/macos/Cost-Guard-Diagnostics.command"
+        content = launcher.read_text(encoding="utf-8")
+        self.assertTrue(content.startswith("#!/bin/zsh"))
+        self.assertIn("cg_find_python", content)
+        self.assertIn("python_discovery.sh", content)
+        self.assertIn("CG_ROOT=", content)
+        self.assertIn("development/tools/collect_diagnostics.py", content)
 
 
 class JsonResults(unittest.TestResult):

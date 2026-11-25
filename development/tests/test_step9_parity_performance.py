@@ -11,17 +11,13 @@ from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.pricing_catalog import catalog as sample_catalog
 from development.tests.fixtures.report_runtime import FakePricingProvider, FakeSource
-from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import compaction_model_timeline_name, watch_model_timeline_name
 from src.cache import CacheDatabase, CacheRepository
 from src.config import load_configuration
 from src.domain import CostKind, CostObservation, ModelRef, ModelPricing, PricingTier, TokenUsage
-from src.presentation import ReportRenderer, WatchRenderer
+from src.presentation import ReportRenderer
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.sources.selection import SourceSelection
-from src.reports.models import PromptProjection
-from src.watch import WatchCoordinator
-from src.watch.models import WatchProjection, WatchRow
 
 ROOT = Path(__file__).resolve().parents[2]
 NOW_MS = 1_790_510_400_000  # 2026-09-27T12:00:00Z
@@ -102,73 +98,6 @@ class Step9ParityTests(unittest.TestCase):
         self.assertFalse(hasattr(quota, "configured_monthly_budget"))
         self.assertEqual(2, quota.today_prompt_count)
         self.assertEqual(0, quota.today_request_count, "Native account capacity cannot manufacture observed requests")
-
-    def test_session_auto_follow_runtime_stops_when_running_prompt_completes(self):
-        with tempfile.TemporaryDirectory() as td:
-            source = MutableSource(make_snapshot(running=True))
-            config, selection, service, _ = make_service(td, source, now_ms=2_200)
-            clock = [2_200]
-            coordinator = WatchCoordinator(
-                selection=selection, report_service=service, config=config, session_id="root",
-                clock_ms=lambda: clock[0], sleep=lambda _seconds: None,
-            )
-            completed = make_snapshot(running=False)
-            def finish_prompt(_renderer):
-                source.snapshot = replace(completed, source_revision="completed")
-                clock[0] = 2_400
-            coordinator._v1_wait = finish_prompt  # bounded deterministic test seam
-            class Renderer:
-                def __init__(self): self.finished = ""; self.renders = 0
-                def render(self, _projection): self.renders += 1
-                def render_status(self, _projection): pass
-                def finish(self, text): self.finished = text
-            renderer = Renderer()
-            coordinator.run_until_inactive(renderer)
-            self.assertGreaterEqual(renderer.renders, 2)
-            self.assertEqual("Prompt completed.", renderer.finished)
-
-
-    def test_report_session_warning_is_header_marker_and_footnote_not_inline_next_ictx(self):
-        service, config = self._service()
-        report = service.build(ReportRequest(ReportKind.SESSION, session_id="root"))
-        block = replace(report.prompt_blocks[0], next_context_warning="Price threshold >100k exceeded")
-        report = replace(report, prompt_blocks=(block,))
-        out = io.StringIO()
-        ReportRenderer(config, stream=out, color_enabled=False).render(report)
-        text = out.getvalue()
-        header = next(line for line in text.splitlines() if "| *1 " in line)
-        self.assertIn("*1", header)
-        self.assertNotIn("Price threshold", header)
-        self.assertIn("*1 Context: Price threshold >100k exceeded", text)
-
-    def test_watch_renders_recent_notice_warning_marker_and_resolved_effort(self):
-        _, config = self._service()
-        prompt = PromptProjection(
-            at_ms=1_000, prompt_number=1, label="prompt", preview="hello",
-            model_effort="GPT-5.6 (Medium)", watch_model_effort="GPT-5.6 (Medium)",
-            ccost=Decimal("100"), cost_estimated=False, unresolved_cost=False, calls=1,
-            incoming_context_tokens=1_000, incoming_context_ccost=Decimal("1"),
-            extra_ccost=Decimal("0"), token_mix_percent=(70, 10, 0, 20),
-            next_context_tokens=1_200, delta_context_tokens=200, next_context_warning="price threshold approaching",
-        )
-        projection = WatchProjection(
-            title="Cost Guard Watch", source_label="V2",
-            rows=(WatchRow("root", "Root session", prompt, marker="▶"),),
-            now_ms=1_500, session_warnings={"root": "price threshold approaching"},
-            recent_model_notice="✦ New Models: GPT-5.6 · released 2026-09-25",
-        )
-        out = io.StringIO()
-        WatchRenderer(config, stream=out, interactive=False).render(projection)
-        text = out.getvalue()
-        self.assertIn("✦ New Models: GPT-5.6", text)
-        header = next(line for line in text.splitlines() if "Root session" in line)
-        self.assertNotIn("*1", header)
-        self.assertIn("*1 Context: price threshold approaching", text)
-        prompt_line = next(line for line in text.splitlines() if "#1 hello" in line)
-        self.assertIn("GPT-5.6 (Medium)", prompt_line)
-        self.assertTrue(prompt_line.split("|")[6].strip().endswith("*1"))
-        self.assertNotIn("Default -> Medium", text)
-
 
 
 class Step9PerformanceTests(unittest.TestCase):

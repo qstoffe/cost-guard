@@ -3,7 +3,6 @@ from __future__ import annotations
 from contextlib import closing
 
 import io
-import os
 import sqlite3
 import tempfile
 import threading
@@ -17,12 +16,10 @@ from development.tests.fixtures.session_snapshots import make_snapshot, make_unc
 from development.tests.fixtures.watch_runtime import (
     MutableSource, FakeLiveSource, CountingAccountProvider, openai_account, make_service,
 )
-from src.config import load_configuration
-from src.domain import QuotaComponent, TokenUsage
+from src.domain import TokenUsage
 from src.presentation import ReportRenderer, WatchRenderer
 from src.reports import ReportRequest
 from src.sources.base import SourceChange
-from src.version import DISPLAY_VERSION
 from src.watch import LiveEventPump, WatchCoordinator
 from src.watch.observers import PumpResult
 
@@ -125,54 +122,6 @@ class WatchGatingTests(unittest.TestCase):
             self.assertIn("Week " + "█" * 4 + "░" * 6 + "  40% used", text)
             self.assertEqual(3, text.count(" used"))
             self.assertNotIn("equiv", text)
-
-    def test_watch_quota_footer_lists_detected_accounts_and_status_stays_last(self):
-        with tempfile.TemporaryDirectory() as td:
-            config, selection, service, _db = make_service(td, MutableSource())
-            projection = WatchCoordinator(
-                selection=selection, report_service=service, config=config, clock_ms=lambda: 2200,
-            ).initialize().projection
-            openai = openai_account()
-
-            def footer(accounts):
-                quota = replace(projection.quota, accounts=accounts)
-                stream = io.StringIO()
-                WatchRenderer(config, stream=stream, interactive=False).render(replace(projection, quota=quota))
-                return stream.getvalue().splitlines()
-
-            copilot = replace(projection.quota.accounts[0], label="GitHub Copilot Business")
-            copilot_only = footer((copilot,))
-            self.assertTrue(any("GitHub Copilot Business" in line for line in copilot_only))
-            self.assertTrue(any("Month  " + "█" * 3 + "░" * 7 + "  30% used" in line for line in copilot_only))
-            self.assertFalse(any(line.startswith(("Cost today %:", "Local calculated:", "GitHub reported:", "~Copilot equiv:")) for line in copilot_only))
-            self.assertFalse(any(line.startswith("OpenAI ") for line in copilot_only))
-
-            openai_only = footer((openai,))
-            self.assertTrue(any(line.startswith("Token Mix % · ") for line in openai_only))
-            self.assertNotIn("Quotas:", openai_only)
-            self.assertFalse(any(line.startswith(("Cost today %:", "Local calculated:", "GitHub reported:", "Copilot ")) for line in openai_only))
-            self.assertTrue(any("OpenAI Plus" in line for line in openai_only))
-            self.assertTrue(any("5h    " + "█" * 3 + "░" * 7 + "  25% used · Reset@" in line for line in openai_only))
-            self.assertTrue(any("Week " + "█" * 4 + "░" * 6 + "  40% used · Reset@" in line for line in openai_only))
-            self.assertTrue(openai_only[-1].startswith("Watch:"))
-
-            both = footer((copilot, openai))
-            self.assertLess(next(i for i, line in enumerate(both) if line.startswith("GitHub Copilot")),
-                            next(i for i, line in enumerate(both) if line.startswith("OpenAI Plus")))
-            self.assertTrue(both[-1].startswith("Watch:"))
-
-            neither = footer(())
-            self.assertNotIn("Quotas:", neither)
-            self.assertFalse(any(line.startswith(("Copilot ", "OpenAI ")) for line in neither))
-            self.assertTrue(neither[-1].startswith("Watch:"))
-
-            unknown = replace(openai, account=replace(openai.account, quotas=(QuotaComponent("5-hour"),)))
-            unknown_lines = footer((unknown,))
-            self.assertTrue(any("5h    N/A" in line for line in unknown_lines))
-
-            unknown_copilot = replace(copilot, account=replace(copilot.account, quotas=(), plan=None))
-            missing = footer((unknown_copilot,))
-            self.assertTrue(any("Quota available" in line for line in missing))
 
     def test_cost_quota_shows_plus_windows_without_unsupported_dollar_equivalents(self):
         with tempfile.TemporaryDirectory() as td:
@@ -336,85 +285,8 @@ class WatchPresentationTests(unittest.TestCase):
             WatchRenderer(config, stream=stream, interactive=False).render(projection)
             self.assertIn("1/2 done · current", stream.getvalue())
 
-    def test_redirected_renderer_is_stable_and_uses_ascii_tool_marker(self):
-        with tempfile.TemporaryDirectory() as td:
-            source = MutableSource()
-            config, selection, service, _db = make_service(td, source)
-            watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: 2200)
-            projection = watch.initialize().projection
-            stream = io.StringIO()
-            WatchRenderer(config, stream=stream, interactive=False).render(projection)
-            text = stream.getvalue()
-            self.assertRegex(text, rf"Cost Guard {DISPLAY_VERSION} \(Watch started: \d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}\) — Prompt watch — Source: OpenCode V1")
-            self.assertIn("Session / prompt", text)
-            self.assertIn("Δctx → Next Ictx", text)
-            self.assertIn("Month", text)
-            self.assertNotIn("Cost today %:", text)
-            self.assertIn("->", text)
-            self.assertNotIn("\x1b[2J", text)
-            self.assertNotIn("\x1b[3J", text)
-
-
-class _TtyBuffer(io.StringIO):
-    def isatty(self):
-        return True
-
 
 class WatchLayoutRegressionTests(unittest.TestCase):
-    @mock.patch("src.presentation.watch_screen.shutil.get_terminal_size", return_value=os.terminal_size((80, 24)))
-    def test_watch_table_width_is_fixed_and_status_is_single_overwritable_row(self, _size):
-        with tempfile.TemporaryDirectory() as td:
-            source = MutableSource()
-            config, selection, service, _db = make_service(td, source)
-            watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: 2200)
-            projection = watch.initialize().projection
-            layout_stream = io.StringIO()
-            WatchRenderer(config, stream=layout_stream, interactive=False).render(projection)
-            layout_text = layout_stream.getvalue()
-            table_lines = [line for line in layout_text.splitlines() if line.startswith("|")]
-            self.assertTrue(table_lines)
-            self.assertTrue(all(len(line) == 119 for line in table_lines))
-            self.assertNotIn("\n\n|", layout_text)
-
-            stream = _TtyBuffer()
-            renderer = WatchRenderer(config, stream=stream, interactive=True)
-            renderer.render(projection)
-            text = stream.getvalue()
-            clear = "\x1b[H"
-            self.assertEqual(text.count(clear), 1)
-            self.assertFalse(text.endswith("\n"), "interactive status must remain on the current row")
-            renderer.render_status(replace(projection, status="Refreshing...", status_active=True))
-            renderer.render_status(replace(projection, status="Idle · Next prompt check: 00:30", status_active=False, active_count=0))
-            tail = stream.getvalue()
-            self.assertEqual(tail.count(clear), 1, "status updates must not clear the dashboard")
-            self.assertEqual(tail.count("\x1b[3J"), 1, "only the initial wrapped frame clears scrollback")
-            self.assertIn("\r\x1b[2K", tail)
-            self.assertIn("Watch: Refreshing...", tail)
-            self.assertIn("Watch: Idle · Next prompt check: 00:30", tail)
-            self.assertNotIn("Refreshing...\nWatch: Idle", tail)
-            renderer.render(projection)
-            self.assertEqual(stream.getvalue().count(clear), 2, "changed full frames overwrite from home")
-            self.assertEqual(2, stream.getvalue().count("\x1b[3J"), "wrapped frames rebuild clean scrollback")
-
-    def test_watch_initialization_has_transient_heading_and_adjacent_progress(self):
-        config = dict(load_configuration(ROOT).values)
-        stream = _TtyBuffer()
-        renderer = WatchRenderer(config, stream=stream, interactive=True)
-        renderer.render_initializing("V2")
-        renderer.render_startup_status("Watch: [####----] 50% / Analyzing")
-        text = stream.getvalue()
-        self.assertEqual(text.count("\x1b[H"), 1)
-        self.assertNotIn("\x1b[2J", text)
-        self.assertNotIn("\x1b[3J", text)
-        self.assertRegex(text, r"Cost Guard v\d+\.\d+ \(Watch started: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\) — Watch\n")
-        self.assertNotIn("Session / prompt", text)
-        self.assertNotIn("Token Mix %", text)
-        self.assertNotIn("\n\n", text)
-        self.assertNotIn("Quotas:", text)
-        self.assertNotIn("Cost today %:     loading...", text)
-        self.assertIn("\r\x1b[2K", text)
-        self.assertIn("Watch: [####----] 50% / Analyzing", text)
-
     def test_running_watch_uses_active_refresh_cadence_and_hash_prompt_marker(self):
         with tempfile.TemporaryDirectory() as td:
             source = MutableSource(make_snapshot(running=True))

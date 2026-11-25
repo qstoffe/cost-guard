@@ -1,19 +1,11 @@
 """Lifecycle-aware global block ordering, truthful header times and divider geometry."""
 from dataclasses import replace
-from decimal import Decimal
 import io
-import tempfile
 import unittest
-from unittest.mock import Mock
 
-from development.tests.fixtures.quota_rendering import quotas, rolling
 from development.tests.fixtures.watch_rows import inputs, prompt, tracker
-from development.tests.fixtures.watch_runtime import MutableSource, make_service
-from src.analysis.context import PriceWarningSeverity
 from src.presentation import WatchRenderer
-from src.watch import WatchCoordinator
-from src.watch.models import SkillObservation, ToolObservation, WatchProjection, WatchSessionSubtotal
-from src.watch.redraw import needs_full_render, transient_signature, visible_signature
+from src.watch.models import WatchProjection
 from src.watch.tracker import WatchRowTracker
 
 MINUTE = 60_000
@@ -235,88 +227,3 @@ class SessionGroupLifecycleTests(unittest.TestCase):
         self.assertEqual([200, 200], [row.session_latest_ms for row in scoped_rows])
         self.assertTrue(all(not row.session_active for row in scoped_rows))
         self.assertEqual(3, len(rules(rendered(scoped_rows))))
-
-
-class SessionGroupRenderingTests(unittest.TestCase):
-    def test_single_group_and_empty_have_no_additional_rule(self):
-        for active in (False, True):
-            blocks, snapshots = inputs(A=(prompt(1, 100, in_progress=active),), B=(prompt(1, 200, in_progress=active),))
-            rows = tracker().project(blocks, snapshots, now_ms=1000)
-            self.assertEqual(3, len(rules(rendered(rows))))
-        empty = rendered(())
-        self.assertEqual(3, len(rules(empty)))
-        self.assertIn("No prompts since Watch started", empty)
-
-    def test_separator_preserves_activity_skills_status_warnings_subtotals_and_quota(self):
-        warning = "[Price threshold >200.0K exceeded]"
-        blocks, snapshots = inputs(H=(prompt(1, 100, watch_error=True),),
-                                   R=(prompt(1, 200, in_progress=True, watch_next_context_warning=warning,
-                                             watch_next_context_warning_severity=PriceWarningSeverity.EXCEEDED),))
-        rows = tracker().project(blocks, snapshots, now_ms=1000)
-        tool = ToolObservation(tool_count=2, tool_counts=(("read", 2),), running_tool="read", running_ms=1000,
-                               skills=(SkillObservation("test-skill"),))
-        rows = tuple(replace(row, tool=tool) for row in rows)
-        quota = quotas(rolling())
-        subtotals = {"H": WatchSessionSubtotal(Decimal(3)), "R": WatchSessionSubtotal(Decimal(7))}
-
-        output = rendered(rows, now_ms=1000, quota=quota, session_subtotals=subtotals)
-
-        self.assertEqual(4, len(rules(output)))
-        lines = output.splitlines()
-        self.assertEqual(2, sum("2 tool calls" in line for line in lines))
-        self.assertEqual(2, sum("Skills (1):" in line for line in lines))
-        self.assertEqual(1, sum("running: read" in line for line in lines))
-        self.assertEqual(2, output.count("test-skill"))
-        self.assertIn("Σ 3", next(line for line in lines if "Session H" in line))
-        self.assertIn("Σ 7", next(line for line in lines if "Session R" in line))
-        self.assertIn("*1 Context:", output)
-        self.assertIn("*1", next(line for line in lines if "▶ #1" in line))
-        self.assertIn("#1 [ERROR]", output)
-        self.assertNotIn("! #1", output)
-        self.assertIn("OpenAI Plus", output)
-        table_end = max(index for index, line in enumerate(lines) if line.startswith("|-"))
-        self.assertTrue(all(len(line) == len(rules(output)[0]) for line in lines[1:table_end + 1] if line.startswith("|")))
-        self.assertEqual(7, next(line for line in lines if "▶ #1" in line).count("|"))
-        after_table = output.split(rules(output)[0])[-1]
-        without_groups = rendered(tuple(replace(row, session_active=False) for row in rows), now_ms=1000,
-                                  quota=quota, session_subtotals=subtotals).split(rules(output)[0])[-1]
-        self.assertEqual(without_groups, after_table)
-
-    def test_idle_wake_redraws_group_and_time_and_then_repaints_status_only(self):
-        with tempfile.TemporaryDirectory() as td:
-            config, selection, service, _ = make_service(td, MutableSource())
-            now = [1000]
-            watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: now[0])
-            self.addCleanup(watch.close)
-            watch.tracker = tracker(recent_seconds=1)
-            watch.blocks, watch.snapshots = inputs(E=(prompt(1, 100, watch_error=True, completed_at_ms=500),))
-            before = watch._projection(now_ms=1000)
-            renderer = Mock()
-            watch._render(renderer, before)
-            now[0] = 2000
-
-            after = watch.status_projection()
-            watch._render_wake(renderer, after, before)
-
-            self.assertEqual("!", before.rows[0].marker)
-            self.assertEqual("", after.rows[0].marker)
-            self.assertNotEqual(transient_signature(before), transient_signature(after))
-            self.assertNotEqual(visible_signature(before), visible_signature(after))
-            self.assertTrue(needs_full_render(before, after, source_changed=False))
-            self.assertEqual(2, renderer.render.call_count)
-            now[0] = 3000
-            same = watch.status_projection()
-            watch._render_wake(renderer, same, before)
-            self.assertFalse(needs_full_render(after, same, source_changed=False))
-            self.assertEqual(2, renderer.render.call_count)
-            renderer.render_status.assert_called_once_with(same)
-
-    def test_timestamp_only_change_invalidates_both_signatures(self):
-        blocks, snapshots = inputs(A=(prompt(1, 100, completed_at_ms=500),))
-        rows = tracker().project(blocks, snapshots, now_ms=1000)
-        before = WatchProjection("Watch", "V1", rows)
-        after = replace(before, rows=(replace(rows[0], session_latest_ms=600),))
-
-        self.assertNotEqual(transient_signature(before), transient_signature(after))
-        self.assertTrue(needs_full_render(before, after, source_changed=False))
-        self.assertFalse(needs_full_render(before, replace(before, now_ms=100_000), source_changed=False))

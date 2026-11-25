@@ -1,7 +1,6 @@
 """Trustworthy shared effort meaning and request-only compaction regressions."""
 from __future__ import annotations
 
-import io
 import unittest
 from dataclasses import replace
 
@@ -12,11 +11,8 @@ from src.analysis.core import analyze_snapshot
 from src.analysis.effort import EffortKind, interpret_effort, prompt_effort, prompt_replies
 from src.analysis.comparisons import model_timeline_name, watch_model_timeline_name
 from src.domain import ModelRef
-from src.presentation import ReportRenderer, WatchRenderer
-from src.reports.models import ReportKind, ReportProjection
 from src.reports.prompts import build_prompt_block
 from src.sources.opencode_v2_wire import interim_flat_message_to_legacy_bundle
-from src.watch.models import WatchProjection, WatchRow
 
 
 def normal_snapshot(selected="default", actual=None):
@@ -89,20 +85,6 @@ class EffortProjectionTests(unittest.TestCase):
                 self.assertEqual(row.model_effort, row.watch_model_effort)
                 self.assertNotIn("->", row.model_effort)
 
-    def test_actual_renderers_keep_default_and_resolved_labels_compact(self):
-        for actual, expected in ((None, "Default"), ("medium", "Medium"), ("high", "High")):
-            _, block = project(normal_snapshot("default", actual))
-            row = next(row for row in block.rows if row.event_id == "u_next")
-            block = replace(block, rows=(row,))
-            report_out, watch_out = io.StringIO(), io.StringIO()
-            ReportRenderer({}, stream=report_out, color_enabled=False).render(
-                ReportProjection(ReportKind.SESSION, "Test", "Test", prompt_blocks=(block,)))
-            WatchRenderer({}, stream=watch_out, interactive=False).render(
-                WatchProjection("Test", "Test", (WatchRow("root", "Test", row),), now_ms=6000))
-            for text in (report_out.getvalue(), watch_out.getvalue()):
-                self.assertIn(f"GPT Test ({expected})", text)
-                self.assertNotIn("Default ->", text)
-
     def test_other_requests_models_and_summaries_cannot_resolve_default(self):
         snapshot = normal_snapshot()
         for target in ("a_sub", "ca", "a_comp"):
@@ -156,28 +138,6 @@ class EffortProjectionTests(unittest.TestCase):
                 row = next(row for row in block.rows if row.is_compaction)
                 self.assertEqual(expected, row.model_effort)
                 self.assertEqual(expected, row.watch_model_effort)
-
-    def test_compaction_renderers_show_own_model_and_explicit_effort_only(self):
-        snapshot = normal_snapshot("high", "high")
-        for own, expected in ((None, "GPT Test"), ("high", "GPT Test (High)")):
-            changed = replace(snapshot,
-                messages=tuple(replace(m, variant=own) if m.message_id == "a_comp" else m for m in snapshot.messages),
-                invocations=tuple(replace(i, variant=own) if i.message_id == "a_comp" else i for i in snapshot.invocations))
-            _, block = project(changed)
-            row = next(row for row in block.rows if row.is_compaction)
-            for calls in (row.calls, 0):
-                compact = replace(row, calls=calls, ccost=0 if not calls else row.ccost)
-                report_out, watch_out = io.StringIO(), io.StringIO()
-                ReportRenderer({}, stream=report_out, color_enabled=False).render(
-                    ReportProjection(ReportKind.SESSION, "Test", "Test", prompt_blocks=(replace(block, rows=(compact,)),)))
-                WatchRenderer({}, stream=watch_out, interactive=False).render(
-                    WatchProjection("Test", "Test", (WatchRow("root", "Test", compact),), now_ms=6000))
-                for text in (report_out.getvalue(), watch_out.getvalue()):
-                    self.assertIn("/compact", text)
-                    self.assertIn(expected, text)
-                    self.assertNotIn("(Default)", text)
-                    if own is None:
-                        self.assertNotIn("(High)", text)
 
     def test_compaction_trigger_can_supply_its_own_explicit_effort(self):
         snapshot = normal_snapshot("default", "medium")

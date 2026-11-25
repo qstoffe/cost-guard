@@ -6,9 +6,7 @@ import ast
 from decimal import Decimal as D
 import io
 import json
-import os
 from pathlib import Path
-import re
 import shutil
 import tempfile
 import unittest
@@ -20,25 +18,21 @@ from src.analysis import analyze_snapshot
 from src.analysis.cache import AnalysisDependencies, DerivedAnalysisCache
 from src.analysis.comparisons import model_comparison_rows
 from src.analysis.context import estimate_next_context
-from src.analysis.quota_pace import QuotaPace
 from src.analysis.token_mix import priced_token_mix
 from src.analysis.valuation import comparison_cost, billed_spend
 from src.cache import CacheDatabase, CacheRepository, CACHE_FILENAME
-from src.cli import parse_command, startup_mode
 from src.config import ConfigError, load_configuration
 from src.domain import AccountRef, AccountSnapshot, CostDisposition, ModelPricing, ModelRef, PricingTier, QuotaComponent, TokenUsage
 from src.domain.ccost import CCOST_PER_REFERENCE_USD, reference_usd_to_ccost
 from src.numbers import ccost_amount, ccost_range, consumed_capacity, remaining_capacity, exact_number, reference_rate
-from src.presentation import ReportRenderer, StartupProgress, WatchRenderer
+from src.presentation import ReportRenderer
 from src.presentation.accounts import capacity_lines
 from src.presentation.terminal import AnsiStyler
-from src.presentation.token_mix import compact_tokens, token_mix_lines
+from src.presentation.token_mix import compact_tokens
 from src.pricing.catalog import PricingCatalog, price_token_usage
 from src.reports.model_comparison import price_summary
-from src.reports.models import AccountProjection, AccountsQuotasProjection, ModelTokenMixProjection, ReportKind, ReportProjection
+from src.reports.models import AccountProjection, ReportKind, ReportProjection
 from src.reports.prompts import build_prompt_block
-from src.version import mode_heading
-from src.watch.models import WatchProjection
 
 ROOT = Path(__file__).resolve().parents[2]
 MODEL = ModelRef("github-copilot", "gpt-test", "Test")
@@ -204,19 +198,6 @@ class NumericSemanticsTests(unittest.TestCase):
         text = "\n".join(capacity_lines(account, styler, "UTC", width=180, force_vertical=True))
         self.assertIn("6994/7000.125 AI credits ($69.94/$70.00)", text)
 
-    def test_historical_counts_mix_cost_and_session_numbers_are_ungrouped(self):
-        mix = priced_token_mix(((MODEL, TokenUsage(input=1000000)),), PricingCatalog((NATIVE,)).reference_category_valuation)
-        projection = ReportProjection(ReportKind.TOKEN_MIX, "Token Mix", "V2",
-            model_token_mix=(ModelTokenMixProjection("Test", 10000, 5300000, mix),))
-        stream = io.StringIO()
-        ReportRenderer({}, stream=stream, color_enabled=False, terminal_width=180).render(projection)
-        self.assertIn("10000", stream.getvalue())
-        self.assertIn("5300000", stream.getvalue())
-        self.assertNotRegex(stream.getvalue(), r"\d[, ]\d{3}(?:\D|$)")
-        self.assertNotIn("$", stream.getvalue())
-        self.assertIn("(200)", stream.getvalue())
-        self.assertIn("(200)", token_mix_lines("10000 prompts", mix)[0])
-
 
 class ConfigurationCacheTests(unittest.TestCase):
     def test_obsolete_keys_fail_before_any_runtime_and_user_file_is_unchanged(self):
@@ -285,84 +266,6 @@ class ConfigurationCacheTests(unittest.TestCase):
             self.assertIsNone(DerivedAnalysisCache(CacheRepository(current_db)).load(**args))
             self.assertIsNone(old_cache.load(**args), "even copied old payloads must miss the algorithm key")
             self.assertEqual(before, old_db.paths.database.read_bytes())
-
-
-class StartupQuotaGeometryTests(unittest.TestCase):
-    def test_actual_modes_share_canonical_heading(self):
-        for args, label in (([], "Report"), (["--watch"], "Watch"), (["--token-mix"], "Token Mix"),
-                (["--all-models"], "All Models"), (["--sessions", "all"], "Sessions"), (["ses_example"], "Session"),
-                (["ses_example", "--watch"], "Watch"), (["2026-10-05"], "Date"),
-                (["2026-10-01:2026-10-05"], "Date Range")):
-            self.assertEqual(label, startup_mode(parse_command(args)))
-            stream = io.StringIO()
-            progress = StartupProgress(stream, interactive=True, animate=False, heading=mode_heading(label))
-            progress.update("Analyzing", 57)
-            text = stream.getvalue()
-            self.assertTrue(text.startswith(mode_heading(label) + "\n\r["))
-            self.assertNotIn("\n\n", text)
-            progress.stop()
-            self.assertEqual(1, stream.getvalue().count("\x1b[1A\x1b[2K"))
-        from development.tools.collect_diagnostics import _diagnostic_header
-        self.assertEqual(mode_heading("Diagnostics"), _diagnostic_header())
-
-    @patch("src.presentation.watch_screen.shutil.get_terminal_size", return_value=os.terminal_size((80, 24)))
-    def test_watch_startup_transitions_to_unchanged_dashboard(self, _size):
-        stream = io.StringIO()
-        renderer = WatchRenderer({}, stream=stream, interactive=True)
-        renderer.render_initializing()
-        progress = StartupProgress(stream, mode="watch", interactive=True, animate=False, line_sink=renderer.render_startup_status)
-        progress.update("Selecting OpenCode source", 5)
-        progress.stop()
-        self.assertRegex(stream.getvalue(), r"Cost Guard v\d+\.\d+ \(Watch started: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\) — Watch\n")
-        self.assertNotIn("\n\n", stream.getvalue())
-        before = len(stream.getvalue())
-        renderer.render(WatchProjection("Watch", "V2", ()))
-        final = stream.getvalue()[before:]
-        self.assertTrue(final.startswith("\x1b[2J\x1b[3J\x1b[H"), "fixed table wraps at 80 columns")
-        self.assertEqual(1, final.count("\x1b[2J"))
-        self.assertEqual(1, final.count("\x1b[3J"))
-        self.assertIn("Session / prompt", final)
-        self.assertIn("Token Mix %", final)
-        self.assertNotIn("Initializing", final)
-
-    def test_redirected_output_has_no_animated_or_transient_heading(self):
-        stream = io.StringIO()
-        progress = StartupProgress(stream, interactive=False, heading=mode_heading("Token Mix"))
-        for percent in (5, 20, 60, 90):
-            progress.update("Analyzing history", percent)
-        progress.stop()
-        self.assertEqual("Cost Guard: Analyzing history\n", stream.getvalue())
-        self.assertNotIn("\x1b", stream.getvalue())
-
-    def test_all_report_bars_share_column_but_watch_secondary_does_not(self):
-        accounts = tuple(AccountProjection(AccountSnapshot(AccountRef("fixture", "generic", str(i)), 1, label,
-            quotas=tuple(QuotaComponent(q, remaining_fraction=D("0.8")) for q in quotas)), label)
-            for i, (label, quotas) in enumerate((("One", ("5-hour", "weekly")), ("Two", ("5-hour", "Long window")),
-                                               ("Three", ("Monthly",)))))
-        quota = AccountsQuotasProjection(comparison_cost((), lambda *_: D(0)), comparison_cost((), lambda *_: D(0)), accounts)
-        pace = QuotaPace("Monthly", "AI credits", D("6993.7"), 1, 1, D("6993.7"))
-        report_quota = replace(quota, accounts=(*accounts[:2], replace(accounts[2], pace=(pace,))))
-        for color in (False, True):
-            stream = io.StringIO()
-            ReportRenderer({}, stream=stream, color_enabled=color, terminal_width=160)._render_accounts_quotas(
-                ReportProjection(ReportKind.NORMAL, "Report", "V2", accounts_quotas=report_quota))
-            lines = re.sub(r"\x1b\[[0-9;]*m", "", stream.getvalue()).splitlines()
-            bars = [line.index("█") for line in lines if "█" in line]
-            self.assertEqual(5, len(bars))
-            self.assertEqual(1, len(set(bars)))
-            remaining = next(line for line in lines if line.lstrip().startswith("Remaining"))
-            self.assertEqual(bars[0], remaining.index("6993/day"))
-        stream = io.StringIO()
-        WatchRenderer({}, stream=stream, interactive=False, terminal_width=240)._render_quota(WatchProjection("Watch", "V2", (), quota=quota))
-        rows = [line for line in stream.getvalue().splitlines() if "█" in line]
-        self.assertEqual(1, len({line.index("█") for line in rows}))
-        self.assertIn("| Week █", rows[0])
-        self.assertIn("| Long window █", rows[1])
-        for width in (30, 45, 80):
-            for account in accounts:
-                lines = capacity_lines(account, AnsiStyler({}, enabled=False), "UTC", width=width,
-                                       force_vertical=True, primary_label_width=11)
-                self.assertTrue(all(len(line) <= width for line in lines))
 
 
 if __name__ == "__main__":

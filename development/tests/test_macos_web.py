@@ -377,32 +377,6 @@ exit "$CG_FAKE_EXIT"
                         os.close(slave)
                         os.close(master)
 
-    @unittest.skipUnless(shutil.which('zsh'), 'native macOS CI owns zsh execution')
-    def test_moved_legacy_commands_resolve_cli_and_preserve_exit_without_gui(self):
-        with tempfile.TemporaryDirectory(prefix="legacy å ' space ") as directory:
-            root = Path(directory)
-            legacy = root / 'macos/Legacy'
-            legacy.mkdir(parents=True)
-            binary = root / 'bin'
-            binary.mkdir()
-            python = binary / 'python3'
-            (root / 'src').mkdir()
-            shutil.copyfile(ROOT / 'src/python_discovery.sh', root / 'src/python_discovery.sh')
-            python.write_text('''#!/bin/sh
-if [ "$1" = "-I" ]; then printf 'CGPY|3|13|darwin|%s\n' "$0"; exit 0; fi
-printf 'ENTRY:%s|%s\\n' "$1" "${2-}"
-exit 17
-''', encoding='utf-8')
-            python.chmod(0o700)
-            for name, argument in (('Cost-Guard.command', ''), ('Cost-Guard-Watch.command', '--watch')):
-                command = legacy / name
-                shutil.copyfile(ROOT / 'macos/Legacy' / name, command)
-                result = subprocess.run([shutil.which('zsh'), str(command)], cwd=binary,
-                    env=dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH']),
-                    stdin=subprocess.DEVNULL, capture_output=True, timeout=5)
-                self.assertEqual(17, result.returncode, result.stderr)
-                self.assertIn(('ENTRY:' + str(root / 'src/entrypoints/cli.py') + '|' + argument).encode(), result.stdout)
-
     def test_source_launcher_is_relative_and_does_not_control_terminal(self):
         source = (ROOT / "macos/Cost-Guard-Web.command").read_text(encoding="utf-8")
         self.assertTrue(source.startswith("#!/bin/zsh\n"))

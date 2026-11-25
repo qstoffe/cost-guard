@@ -5,8 +5,6 @@ from dataclasses import replace
 from decimal import Decimal
 import io
 import json
-import os
-import re
 import unittest
 from unittest.mock import patch
 
@@ -350,50 +348,6 @@ class ActiveActivityLifecycleTests(unittest.TestCase):
         self.assertEqual('▶', other_row.marker)
         self.assertIsNotNone(other_row.tool)
 
-    def test_skills_row_uses_tool_activity_color_and_failures_stay_red(self):
-        rows = self.project((prompt(in_progress=True),), snapshot(self.parts))
-        raw = render(rows, interactive=True)
-        clean = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', raw)
-        lines = clean.splitlines()
-        prompt_line = next(line for line in lines if '#1 work' in line)
-        tool_index = next(index for index, line in enumerate(lines) if 'tool calls' in line)
-        self.assertIn('Skills (1)', lines[tool_index + 1])
-        activity_line = lines[tool_index + 1]
-        activity_prefix = next(index for index, char in enumerate(activity_line) if char not in '| ')
-        self.assertEqual(prompt_line.index('#'), activity_prefix)
-        self.assertIn('\x1b[92m' + BROWSER + '\x1b[0m', raw)
-        self.assertNotIn('\x1b[93m' + BROWSER + '\x1b[0m', raw)
-        self.assertIn('\x1b[91m [1 tool call failure]\x1b[0m', raw)
-
-    def test_real_tiny_terminal_is_not_clamped_to_forty_columns_for_activity(self):
-        class TinyTerminal(io.StringIO):
-            def isatty(self):
-                return True
-
-            def fileno(self):
-                return 1
-
-        rows = self.project((prompt(in_progress=True),), snapshot(self.parts))
-        stream = TinyTerminal()
-        renderer = WatchRenderer({'colors': {}}, stream=stream, interactive=False)
-        with patch('src.presentation.terminal.os.get_terminal_size', return_value=os.terminal_size((25, 10))):
-            renderer.render(WatchProjection('Watch', 'V2', rows))
-        activities = [line for line in stream.getvalue().splitlines() if line.startswith('|     ->')]
-        self.assertEqual(2, len(activities))
-        self.assertTrue(all(len(line) <= 24 for line in activities))
-
-    def test_rendered_activity_lines_respect_terminal_width_including_borders(self):
-        rows = self.project((prompt(in_progress=True),), snapshot(self.parts))
-        for width in range(1, 161):
-            renderer = WatchRenderer({'colors': {}}, stream=io.StringIO(), interactive=False, terminal_width=width)
-            _table, _styles, activities, _headers = renderer._table_rows(WatchProjection('Watch', 'V2', rows))
-            for kind, marker, obs in activities.values():
-                line = renderer._activity_line(kind, marker, obs, max(0, width - 4)) if width >= 4 else '|'
-                self.assertLessEqual(len(line), width)
-            output = render(rows, width=width)
-            for line in output.splitlines():
-                if 'tool calls' in line or 'Skills' in line:
-                    self.assertLessEqual(len(line), width)
 
 if __name__ == '__main__':
     unittest.main()

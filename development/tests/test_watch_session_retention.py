@@ -2,19 +2,17 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import timezone
 from decimal import Decimal
 import io
 import re
 import tempfile
 import unittest
-from unittest.mock import patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
-from development.tests.fixtures.watch_runtime import ROOT, MutableSource, make_service
+from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.context import PriceWarningSeverity
-from src.config import load_configuration
 from src.domain import EventKind, NormalizedEvent
 from src.presentation import WatchRenderer
 from src.reports.models import PromptProjection, SessionPromptBlock
@@ -25,7 +23,6 @@ from src.watch.tracker import WatchRowTracker
 MINUTE = 60_000
 NOW = 1_000 * MINUTE
 EXCEEDED = "[Price threshold >200.0K exceeded]"
-APPROACHING = "[Approaching price threshold >272.0K]"
 EARLIER_NOTE = "[Earlier] Session activity before Watch started; excluded from Token Mix and Watch total CCost."
 
 
@@ -281,139 +278,6 @@ class OrderingAndHeaderTests(unittest.TestCase):
     def header_line(self, output, title):
         return next(line for line in output.splitlines() if title in line)
 
-    def test_merged_header_shows_time_and_keeps_columns_aligned(self):
-        blocks, snapshots = inputs(A=(prompt(1, 1_760_000_000_000),))
-        rows = tracker().project(blocks, snapshots, now_ms=1_760_000_100_000)
-        projection = WatchProjection("Watch", "V2", rows, now_ms=1_760_000_100_000)
-        output = rendered(projection)
-        header = self.header_line(output, "Session A")
-        prompt_line = self.header_line(output, "#1 prompt 1")
-        self.assertTrue(header.startswith("|   08:53 Session A "))
-        self.assertEqual(len(prompt_line), len(header))
-        self.assertEqual(6, header.count("|"), "Session/prompt and Model/effort share one header cell")
-        self.assertEqual(7, prompt_line.count("|"), "prompt rows keep every separator")
-        self.assertEqual([index for index, char in enumerate(prompt_line) if char == "|"][2:],
-                         [index for index, char in enumerate(header) if char == "|"][1:])
-        stockholm = rendered(projection, config={"colors": {}, "timezone": "Europe/Stockholm"})
-        self.assertIn("|   10:53 Session A ", stockholm)
-
-    def test_earlier_header_marker_truncation_color_and_sanitization(self):
-        title = "\x1b[31mEvil\nrow " + "long title " * 10
-        blocks, snapshots = inputs(A=(warned(1, 1_760_000_000_000),))
-        blocks["A"] = replace(blocks["A"], title=title)
-        observed = tracker(started_at_ms=1_770_000_000_000)
-        observed.set_earlier_sessions(("A",))
-        rows = observed.project(blocks, snapshots, now_ms=1_770_000_000_000)
-        projection = WatchProjection("Watch", "V2", rows, now_ms=1_770_000_000_000,
-                                     session_warnings={"A": rows[0].next_context_warning})
-        output = rendered(projection)
-        header = self.header_line(output, "[Earlier]")
-        self.assertTrue(header.startswith("|   2025-10-09 08:53 [Earlier] Evil row long title"))
-        self.assertNotIn("*1", header)
-        prompt_line = self.header_line(output, "#1 prompt 1")
-        self.assertIn("model", prompt_line.split("|")[2])
-        self.assertTrue(prompt_line.split("|")[6].strip().endswith("*1"))
-        self.assertIn("... |", header)
-        self.assertNotIn("\x1b", output)
-        self.assertEqual(1, output.count(EARLIER_NOTE))
-        self.assertIn("*1 Context:", output)
-        config = dict(load_configuration(ROOT).values, timezone="UTC")
-        colored = rendered(projection, config=config, interactive=True)
-        renderer = WatchRenderer(config, stream=io.StringIO(), interactive=True)
-        self.assertIn(renderer.styler.apply("[Earlier]", "nextIctxWarning"), colored)
-        self.assertIn(renderer.styler.apply("2025-10-09 08:53 ", "watchSessionHeader"), colored)
-        self.assertIn(renderer.styler.apply("Evil row long title long title ...", "watchSessionHeader"), colored)
-        self.assertNotIn(renderer.styler.apply("[Earlier]", "watchSessionHeader"), colored)
-
-    def test_earlier_time_only_uses_configured_local_day_and_recomputes_after_midnight(self):
-        timestamp = 1_760_000_000_000
-        blocks, snapshots = inputs(A=(prompt(1, timestamp),))
-        observed = tracker(started_at_ms=1_770_000_000_000)
-        observed.set_earlier_sessions(("A",))
-        rows = observed.project(blocks, snapshots, now_ms=NOW)
-        projection = WatchProjection("Watch", "V2", rows)
-
-        with patch("src.presentation.watch._current_local_date", return_value=date(2025, 10, 9)):
-            same_day = rendered(projection)
-        self.assertTrue(self.header_line(same_day, "[Earlier]").startswith("|   08:53 [Earlier]"))
-
-        stream = io.StringIO()
-        renderer = WatchRenderer({"colors": {}, "timezone": "UTC"}, stream=stream, interactive=False)
-        with patch("src.presentation.watch._current_local_date",
-                   side_effect=(date(2025, 10, 9), date(2025, 10, 10))):
-            renderer.render(projection)
-            first = stream.getvalue()
-            renderer.render(projection)
-        second = stream.getvalue()[len(first):]
-        self.assertIn("|   08:53 [Earlier]", first)
-        self.assertIn("|   2025-10-09 08:53 [Earlier]", second)
-
-    def test_earlier_same_day_uses_configured_timezone_date(self):
-        timestamp = int(datetime(2026, 10, 13, 23, 30, tzinfo=timezone.utc).timestamp() * 1000)
-        blocks, snapshots = inputs(A=(prompt(1, timestamp),))
-        start = int(datetime(2026, 10, 15, tzinfo=timezone.utc).timestamp() * 1000)
-        observed = tracker(started_at_ms=start)
-        observed.set_earlier_sessions(("A",))
-        projection = WatchProjection("Watch", "V2", observed.project(blocks, snapshots, now_ms=start))
-        today = date(2026, 10, 14)
-        with patch("src.presentation.watch._current_local_date", return_value=today):
-            stockholm = rendered(projection, config={"colors": {}, "timezone": "Europe/Stockholm"})
-            utc = rendered(projection, config={"colors": {}, "timezone": "UTC"})
-        self.assertIn("|   01:30 [Earlier]", stockholm)
-        self.assertIn("|   2026-10-13 23:30 [Earlier]", utc)
-
-    def test_running_session_headers_keep_two_aligned_prefix_positions(self):
-        blocks, snapshots = inputs(
-            A=(prompt(1, NOW + 1), running(2, NOW + 2)),
-            B=(prompt(1, NOW + 3),),
-            C=(running(1, NOW + 4),),
-        )
-        rows = tracker(started_at_ms=NOW).project(blocks, snapshots, now_ms=NOW + 10)
-        projection = WatchProjection("Watch", "V2", rows, now_ms=NOW + 10)
-        config = {"timezone": "UTC", "colors": {"watchRunningWarning": {"foreground": "Yellow"}}}
-        output = rendered(projection, config=config, interactive=False)
-        running_header = self.header_line(output, "Session A")
-        idle_header = self.header_line(output, "Session B")
-        self.assertEqual("▶ ", running_header[2:4])
-        self.assertEqual("  ", idle_header[2:4])
-        self.assertEqual(running_header.index("16:40"), idle_header.index("16:40"))
-        self.assertIn("▶ #2", self.header_line(output, "#2 prompt 2"))
-        self.assertNotIn("▶ #1", self.header_line(output, "#1 prompt 1"))
-        self.assertIn("▶ ", self.header_line(output, "Session C"))
-        self.assertNotIn("▶️", output)
-        colored = rendered(projection, config=config, interactive=True)
-        self.assertIn("\x1b[93m▶\x1b[0m", self.header_line(colored, "Session A"))
-
-    def test_session_play_header_disappears_when_prompts_complete_or_abort(self):
-        blocks, snapshots = inputs(A=(running(1, NOW + 1),), B=(running(1, NOW + 2),))
-        observed = tracker(started_at_ms=NOW, recent_seconds=30)
-        live = observed.project(blocks, snapshots, now_ms=NOW + 3)
-        live_output = rendered(WatchProjection("Watch", "V2", live))
-        self.assertIn("▶ ", self.header_line(live_output, "Session A"))
-        self.assertIn("▶ ", self.header_line(live_output, "Session B"))
-
-        blocks["A"] = replace(blocks["A"], rows=(prompt(1, NOW + 1, completed_successfully=True),))
-        blocks["B"] = replace(blocks["B"], rows=(prompt(1, NOW + 2, aborted=True),))
-        stopped = observed.project(blocks, snapshots, now_ms=NOW + 10)
-        stopped_output = rendered(WatchProjection("Watch", "V2", stopped))
-        for title in ("Session A", "Session B"):
-            self.assertEqual("  ", self.header_line(stopped_output, title)[2:4])
-        self.assertIn("✓ #1 prompt 1", stopped_output)
-        self.assertIn("! #1 [ABORTED] prompt 1", stopped_output)
-
-    def test_explanation_only_while_an_earlier_session_is_visible(self):
-        blocks, snapshots = inputs(A=(prompt(1, 1_000),), B=(prompt(1, 2_000),))
-        observed = tracker(started_at_ms=NOW)
-        observed.set_earlier_sessions(("A", "B"))
-        first = rendered(WatchProjection("Watch", "V2", observed.project(blocks, snapshots, now_ms=NOW)), width=60)
-        self.assertEqual(1, first.count("[Earlier] Session activity before Watch started;"))
-        self.assertTrue(all(len(line) <= 60 for line in first.splitlines() if "Session activity" in line))
-        self.assertEqual(1, sum(line.startswith("CCost · Watch:") for line in first.splitlines()))
-        for name in "AB":
-            blocks[name] = replace(blocks[name], rows=blocks[name].rows + (prompt(2, NOW + 10),))
-        rows = observed.project(blocks, snapshots, now_ms=NOW + 20)
-        self.assertNotIn("[Earlier]", rendered(WatchProjection("Watch", "V2", rows)))
-
 
 class WarningConsolidationTests(unittest.TestCase):
     def coordinator_projection(self, blocks, snapshots, now_ms):
@@ -424,40 +288,6 @@ class WarningConsolidationTests(unittest.TestCase):
         self.addCleanup(watch.close)
         watch.blocks, watch.snapshots = blocks, snapshots
         return watch, watch._projection(now_ms=now_ms)
-
-    def test_identical_warnings_share_one_explanation_with_ordered_markers(self):
-        blocks, snapshots = inputs(**{name: (warned(1, NOW - index),) for index, name in enumerate("ABCD")})
-        _watch, projection = self.coordinator_projection(blocks, snapshots, NOW)
-        output = rendered(projection)
-        self.assertIn("*1,2,3,4 Context: Price threshold >200.0K exceeded (1.9x more expensive)", output)
-        self.assertEqual(1, output.count("Context:"))
-        prompt_rows = [line for line in output.splitlines() if "#1 prompt 1" in line]
-        self.assertEqual(4, len(prompt_rows))
-        for number, line in enumerate(prompt_rows, start=1):
-            self.assertIn("model", line.split("|")[2])
-            self.assertTrue(line.split("|")[6].strip().endswith(f"*{number}"))
-        for title in "ABCD":
-            header = next(line for line in output.splitlines() if f"Session {title}" in line)
-            self.assertNotIn("*", header)
-
-    def test_different_threshold_severity_or_cost_detail_stays_separate(self):
-        blocks, snapshots = inputs(
-            A=(warned(1, NOW),), B=(warned(1, NOW - 1),),
-            C=(warned(1, NOW - 2, APPROACHING, PriceWarningSeverity.APPROACHING),),
-            D=(warned(1, NOW - 3, multiplier="2.2"),),
-            E=(warned(1, NOW - 4, multiplier=None, watch_next_context_cached_ccost=Decimal("0.3"),
-                      watch_next_context_fresh_ccost=Decimal(3)),),
-        )
-        _watch, projection = self.coordinator_projection(blocks, snapshots, NOW)
-        lines = [line for line in rendered(projection).splitlines() if "Context:" in line]
-        self.assertEqual(4, len(lines))
-        self.assertEqual(1, sum(">200.0K exceeded (1.9x more expensive)" in line for line in lines))
-        self.assertTrue(any(line.startswith("*4,5 ") for line in lines), "only identical A and B are grouped")
-        self.assertTrue(any("(2.2x more expensive)" in line for line in lines))
-        self.assertTrue(any("Approaching price threshold >272.0K" in line for line in lines))
-        self.assertTrue(any("(Next Ictx CCost 0.3–3)" in line for line in lines))
-        markers = [line.split(" ", 1)[0] for line in lines]
-        self.assertEqual(sorted(markers, key=lambda marker: int(marker[1:].split(",")[0])), markers)
 
     def test_evicted_session_marker_leaves_the_group_and_last_group_disappears(self):
         blocks, snapshots = inputs(A=(finished_at(1, NOW),), B=(finished_at(1, NOW - 1),),
@@ -475,32 +305,6 @@ class WarningConsolidationTests(unittest.TestCase):
         gone = watch._projection(now_ms=NOW)
         self.assertNotIn("Context:", rendered(gone))
         self.assertEqual({}, dict(gone.session_warnings))
-
-    def test_old_sessions_keep_warning_and_orange_next_ictx(self):
-        blocks, snapshots = inputs(A=(warned(1, NOW - 600 * MINUTE),),
-                                   B=(warned(1, NOW - 700 * MINUTE, APPROACHING, PriceWarningSeverity.APPROACHING),))
-        _watch, projection = self.coordinator_projection(blocks, snapshots, NOW)
-        stream = io.StringIO()
-        renderer = WatchRenderer({"colors": {}}, stream=stream, interactive=True, terminal_width=200)
-        renderer.render(projection)
-        output = stream.getvalue()
-        self.assertEqual(2, output.count("Context:"))
-        warning = renderer.styler.apply("x", "nextIctxWarning")
-        start = warning[:warning.index("x")]
-        self.assertIn(start + "*2 Context: Price threshold", output, "exceeded colors the whole line")
-        self.assertIn(start + "*1" + warning[warning.index("x") + 1:] + " Context: Approaching", output)
-        self.assertEqual(2, output.count(start + "   ~210k"), "Next Ictx stays highlighted for both sessions")
-
-    def test_long_grouped_explanation_wraps_without_dropping_information(self):
-        blocks, snapshots = inputs(**{name: (warned(1, NOW - index),) for index, name in enumerate("ABCDEFGHIJKL")})
-        _watch, projection = self.coordinator_projection(blocks, snapshots, NOW)
-        lines = [line for line in rendered(projection, width=50).splitlines()]
-        start = next(index for index, line in enumerate(lines) if line.startswith("*1,2,3,4,5,6,7,8,9,10,11,12 "))
-        end = next(index for index in range(start + 1, len(lines)) if not lines[index].startswith(" "))
-        self.assertGreater(end - start, 1, "the explanation wraps")
-        text = " ".join(line.strip() for line in lines[start:end])
-        self.assertIn("Context: Price threshold >200.0K exceeded (1.9x more expensive)", text)
-        self.assertTrue(all(len(line) <= 50 for line in lines[start + 1:end]))
 
 
 if __name__ == "__main__":

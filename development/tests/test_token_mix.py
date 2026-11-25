@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-import io
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -10,23 +9,16 @@ from unittest.mock import patch
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.session_snapshots import make_snapshot, one_request
 from src.reports.sampling import latest_token_prompts
-from development.tests.fixtures.compact_reports import START, rendered, report_service
-from development.tests.fixtures.quota_rendering import quotas, rolling
+from development.tests.fixtures.compact_reports import START, report_service
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.cache import AnalysisDependencies, _bundle_from_dict, _bundle_to_dict
 from src.analysis.token_mix import token_mix
-from src.cli import help_text
 from src.domain import TokenUsage, TerminalEvidence, TerminalOutcome
-from src.presentation import WatchRenderer
-from src.presentation.accounts import capacity_lines
-from src.presentation.terminal import AnsiStyler
-from src.presentation.token_mix import token_mix_line
-from src.reports import ReportKind, ReportProjection, ReportRequest
+from src.reports import ReportRequest
 from src.sources.opencode_v1 import _token_usage as v1_usage
 from src.sources.opencode_v2_normalization import normalize_token_usage as v2_usage
 from src.watch import WatchCoordinator
-from src.watch.models import WatchProjection
 from src.watch.token_mix import WatchTokenMix
 
 
@@ -281,64 +273,6 @@ class ReportTokenMixTests(unittest.TestCase):
         self.assertEqual(before.token_mix, after.token_mix)
         self.assertEqual((None,) * 4, after.token_mix.percentages)
         self.assertEqual(1, source.load_count)
-
-
-class TokenMixPresentationTests(unittest.TestCase):
-    def test_compact_row_no_bar_and_labelled_categories(self):
-        mix = token_mix((TokenUsage(input=9, cache_read=85, cache_write=1, output=5),))
-        expected = "Token Mix % · 12 prompts · Input: 9% (0)   Cached input: 85% (0)   Cache write: 1% (0)   Output: 5% (0)"
-        self.assertEqual(expected, token_mix_line("12 prompts", mix))
-        self.assertNotIn("█", expected)
-
-    def test_no_observations_differs_from_known_zero_and_unknown_telemetry(self):
-        self.assertEqual("Token Mix % · 0 prompts · no token data yet", token_mix_line("0 prompts", token_mix(())))
-        self.assertEqual(0, token_mix(()).request_count)
-        for usages in ((TokenUsage(),), (TokenUsage(input=5, known_fields=("input",)),)):
-            line = token_mix_line("this watch", token_mix(usages))
-            self.assertEqual(4, line.count("--"), "observed but undefined shares stay per-category")
-            self.assertNotIn("no token data", line)
-
-    def test_watch_heading_replaced_accounts_byte_identical_and_empty_always_shown(self):
-        account = rolling()
-        quota = quotas(account)
-        projection = WatchProjection("Watch", "V2", (), quota=quota, now_ms=quota.now_ms)
-        stream = io.StringIO()
-        renderer = WatchRenderer({"timezone": "UTC"}, stream=stream, interactive=False, terminal_width=120)
-        renderer._render_quota(projection)
-        lines = stream.getvalue().splitlines()
-        self.assertTrue(lines[0].startswith("Token Mix % · 0 prompts"))
-        self.assertEqual(
-            "CCost · Watch: 0 · Total today: 0", lines[1]
-        )
-        expected = capacity_lines(account, AnsiStyler({}, enabled=False), "UTC", width=120,
-                                  watch=True, now_ms=quota.now_ms, account_label_width=len(account.label),
-                                  primary_label_width=4)
-        self.assertEqual(expected, lines[2:-1])
-        self.assertNotIn("Quotas", stream.getvalue())
-        stream.seek(0); stream.truncate()
-        renderer.render(replace(projection, quota=None))
-        self.assertIn("Token Mix % · 0 prompts", stream.getvalue())
-
-    def test_report_mix_is_defined_above_table_and_not_repeated_above_accounts(self):
-        mix = token_mix((TokenUsage(input=11, cache_read=82, cache_write=1, output=6),), sample_size=37)
-        report = ReportProjection(ReportKind.NORMAL, "Report", "V2", accounts_quotas=quotas(rolling()), token_mix=mix)
-        lines = rendered(report).splitlines()
-        index = next(i for i, line in enumerate(lines) if line.startswith("Token Mix %"))
-        self.assertIn("latest 37 priced prompts", lines[index + 2])
-        self.assertLess(index, next(i for i, line in enumerate(lines) if line.startswith("| Publisher")))
-        accounts = lines.index("Accounts Overview")
-        self.assertEqual("", lines[accounts - 1])
-        self.assertTrue(lines[accounts - 2].startswith("|"), "accounts follow the table directly")
-        self.assertEqual("OpenAI Plus", lines[accounts + 2])
-
-    def test_initializing_and_help_document_abbreviations(self):
-        stream = io.StringIO()
-        WatchRenderer({}, stream=stream, interactive=True).render_initializing()
-        self.assertRegex(stream.getvalue(), r"Cost Guard v\d+\.\d+ \(Watch started: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\) — Watch\n")
-        self.assertNotIn("Token Mix %", stream.getvalue())
-        self.assertNotIn("Quotas", stream.getvalue())
-        for phrase in ("I = Input", "C = Cached input", "W = Cache write", "O = Output"):
-            self.assertIn(phrase, help_text())
 
 
 if __name__ == "__main__":

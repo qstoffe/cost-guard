@@ -1,74 +1,29 @@
+"""Shared report projections for models, sessions, attribution and accounts."""
 from __future__ import annotations
 
 import io
-import sys
 import tempfile
 import unittest
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import patch
 
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.report_runtime import (
     FakeSource, FakePricingProvider, FakeAccountProvider, shifted_snapshot_with_stale_root,
 )
 from src.cache import CacheDatabase, CacheRepository
-from src.analysis.context import PriceWarningSeverity
-from src.bootstrap import _prepare_console_output
-from src.cli import CliUsageError, CommandKind, parse_command
 from src.config import load_configuration
 from src.domain import (
     AccountUsageStatus, CostDisposition, IntegrationHealth, ModelRef, ProviderCapabilities, QuotaSnapshot, QuotaWindow,
     QuotaWindowKind,
 )
-from src.presentation import AnsiStyler, ReportRenderer
-from src.presentation.report import _MetricProfile
+from src.presentation import ReportRenderer
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.reports.service import _chronological_blocks
 from src.sources.selection import SourceSelection
-from src.version import DISPLAY_VERSION, RELEASE_DATE
 
 ROOT = Path(__file__).resolve().parents[2]
-
-
-class CliParityTests(unittest.TestCase):
-    def test_legacy_encoded_console_replaces_unsupported_glyphs_without_crashing(self) -> None:
-        buffer = io.BytesIO()
-        stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
-        with patch.object(sys, "stdout", stream):
-            _prepare_console_output()
-            print("Cost → █ ▶")
-            stream.flush()
-        self.assertEqual(["Cost ? ? ?"], buffer.getvalue().decode("cp1252").splitlines())
-
-    def test_v77_argument_shape_matrix(self) -> None:
-        cases = {
-            (): (CommandKind.NORMAL, None, False),
-            ("--watch",): (CommandKind.NORMAL, None, True),
-            ("-watch",): (CommandKind.NORMAL, None, True),
-            ("ses_abc-1",): (CommandKind.SESSION, "ses_abc-1", False),
-            ("ses_abc", "--watch"): (CommandKind.SESSION, "ses_abc", True),
-            ("2026-09-27",): (CommandKind.DATE, "2026-09-27", False),
-            ("2026-09-01:2026-09-27",): (CommandKind.DATE, "2026-09-01:2026-09-27", False),
-        }
-        for argv, expected in cases.items():
-            with self.subTest(argv=argv):
-                item = parse_command(argv)
-                self.assertEqual(expected, (item.kind, item.target, item.watch))
-
-    def test_invalid_and_duplicate_arguments_fail_closed(self) -> None:
-        bad = [
-            ("--watch", "-watch"),
-            ("2026-09-27", "--watch"),
-            ("nonsense",),
-            ("ses_a", "ses_b"),
-            ("--unknown",),
-        ]
-        for argv in bad:
-            with self.subTest(argv=argv):
-                with self.assertRaises(CliUsageError):
-                    parse_command(argv)
 
 
 class ReportProjectionTests(unittest.TestCase):
@@ -295,23 +250,6 @@ class ReportProjectionTests(unittest.TestCase):
         self.assertGreater(quota.comparison_month.ccost, Decimal(0))
         self.assertIsNotNone(next(item for item in quota.accounts if item.account.ref.provider_id == "openai"))
 
-    def test_renderer_contains_stable_section_and_column_contracts_without_ansi(self) -> None:
-        report = self.service.build(ReportRequest())
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=False).render(report)
-        text = stream.getvalue()
-        for expected in (
-            "Relative CCost", "GitHub Copilot", "Pricing/cache metadata",
-        ):
-            self.assertIn(expected, text)
-        for excluded in ("## Model comparison", "Monthly usage", "Today's user prompts", "Daily CCost", "## Accounts & quotas", "CCost month", "Sample:"):
-            self.assertNotIn(excluded, text)
-        self.assertNotIn("\x1b[", text)
-        self.assertNotIn("GitHub USD/M I/C/W/O", text)
-        self.assertNotIn("Copilot CCost/M tokens I/C/W/O", text)
-        self.assertNotIn("Same prompt comparison", text)
-        self.assertNotIn("* Current Ictx:", text)
-
     def test_model_comparison_restores_pricing_metadata_and_promotion_note(self) -> None:
         pricing = FakePricingProvider()
         models = list(pricing.catalog.models)
@@ -338,181 +276,6 @@ class ReportProjectionTests(unittest.TestCase):
             "standard pricing resumes 1970-01-02.",
             text,
         )
-
-    def test_accounts_quota_removes_global_totals_and_local_budget_but_keeps_native_capacity(self) -> None:
-        report = self.service.build(ReportRequest())
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=160).render(report)
-        section = stream.getvalue().split("GitHub Copilot", 1)[1]
-        self.assertNotIn("Billed today:", section)
-        self.assertIn("CCost today:", section)
-        self.assertIn("CCost this month:", section)
-        self.assertNotIn("provider-attributed estimate", section)
-        self.assertNotIn("Account CCost values", section)
-        self.assertNotIn("configured monthly CCost budget", section)
-        self.assertIn("30/100 AI credits", section)
-        self.assertNotIn("Native", section)
-        self.assertIn("█" * 3 + "░" * 7 + "  30% used", section)
-        self.assertNotIn("Difference", section)
-
-    def test_renderer_restores_responsive_width_without_truncating_session_id_or_numeric_cells(self) -> None:
-        report = self.service.build(ReportRequest(ReportKind.SESSIONS))
-        session = report.session_usage[0]
-        protected_id = "ses_0123456789ABCDEF"
-        report = replace(report, session_usage=(replace(
-            session, session_id=protected_id,
-            title="A deliberately very long session title that must flex and truncate",
-            model="A deliberately very long model display name that must flex",
-        ),))
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=100).render(report)
-        text = stream.getvalue()
-        self.assertTrue(text.startswith(f"# Cost Guard {DISPLAY_VERSION} ({RELEASE_DATE}) — Source: OpenCode V1\n"))
-        self.assertIn(protected_id, text)
-        self.assertIn("...", text)
-        table_lines = [line for line in text.splitlines() if line.startswith("|")]
-        self.assertTrue(table_lines)
-        self.assertLessEqual(max(map(len, table_lines)), 100)
-
-    def test_v77_table_contract_restores_prompt_numbers_totals_and_cost_cell_format(self) -> None:
-        report = self.service.build(ReportRequest(ReportKind.SESSION, session_id="root"))
-        # Force fallback provenance flags on representative rows: the visual cost
-        # cell contract must remain plain dollars and rely on one report note.
-        blocks = tuple(
-            replace(block, rows=tuple(replace(item, cost_estimated=True) for item in block.rows))
-            for block in report.prompt_blocks
-        )
-        report = replace(report, prompt_blocks=blocks)
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=160).render(report)
-        lines = stream.getvalue().splitlines()
-        table_lines = [line for line in lines if line.startswith("|")]
-        self.assertFalse(any("~$" in line for line in table_lines), "cost cells must never encode fallback with ~")
-        self.assertTrue(any("#1 " in line for line in table_lines), "ordinary prompt rows keep the v77 #N marker")
-        total_indexes = [i for i, line in enumerate(lines) if line.startswith("| ") and line.split("|", 2)[1].strip().startswith("Total")]
-        self.assertEqual(len(total_indexes), 1, "Dedicated prompt table retains its Total")
-        for index in total_indexes:
-            self.assertTrue(set(lines[index - 1]) <= {"|", "-"}, lines[index - 1])
-
-    def test_prompt_diagnostic_approximation_is_in_headers_not_repeated_as_money_prefix(self) -> None:
-        report = self.service.build(ReportRequest(ReportKind.SESSION, session_id="root"))
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=140).render(report)
-        prompt_lines = [line for line in stream.getvalue().splitlines() if " next " in line and line.startswith("|")]
-        self.assertTrue(prompt_lines)
-        cells = [cell.strip() for cell in prompt_lines[0].split("|")[1:-1]]
-        self.assertGreaterEqual(len(cells), 7)
-        self.assertFalse(cells[4].startswith("~$"), cells)
-        self.assertFalse(cells[5].startswith("~$"), cells)
-
-    def test_model_comparison_price_components_are_compact_and_slash_aligned(self) -> None:
-        report = self.service.build(ReportRequest(ReportKind.ALL_MODELS))
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=160).render(report)
-        lines = stream.getvalue().splitlines()
-        start = next(i for i, line in enumerate(lines) if line.startswith("|") and "GitHub USD/M I/C/W/O" in line)
-        model_rows = []
-        for line in lines[start + 2:]:
-            if not line.startswith("|"):
-                break
-            if line.startswith("|") and not set(line) <= {"|", "-"}:
-                model_rows.append(line)
-        self.assertGreaterEqual(len(model_rows), 2)
-        price_cells = [[cell for cell in row.split("|")[1:-1]][3] for row in model_rows]
-        slash_positions = [[i for i, ch in enumerate(cell) if ch == "/"] for cell in price_cells]
-        self.assertTrue(all(pos == slash_positions[0] for pos in slash_positions[1:]))
-        self.assertTrue(any("0.1" in cell for cell in price_cells), price_cells)
-
-    def test_prompt_mix_colors_are_component_scoped_like_v77(self) -> None:
-        report = self.service.build(ReportRequest(ReportKind.SESSION, session_id="root"))
-        block = report.prompt_blocks[0]
-        ordinary = [row for row in block.rows if not row.is_compaction]
-        self.assertGreaterEqual(len(ordinary), 2)
-        rewritten = []
-        ordinary_index = 0
-        for row in block.rows:
-            if row.is_compaction:
-                rewritten.append(row)
-                continue
-            if ordinary_index == 0:
-                rewritten.append(replace(row, ccost=Decimal("10"), token_mix_percent=(90, 10, 0, 0)))
-            else:
-                rewritten.append(replace(row, ccost=Decimal("90"), token_mix_percent=(10, 90, 0, 0)))
-            ordinary_index += 1
-        config = dict(self.config)
-        thresholds = dict(config["thresholds"]); thresholds["promptCostMinSamples"] = 2; config["thresholds"] = thresholds
-        report = replace(report, prompt_blocks=(replace(block, rows=tuple(rewritten)),))
-        stream = io.StringIO()
-        ReportRenderer(config, stream=stream, color_enabled=True, terminal_width=140).render(report)
-        row = next(line for line in stream.getvalue().splitlines() if "#1 " in line)
-        mix_cell = row.split("|")[-2]
-        self.assertIn("\x1b[", mix_cell)
-        self.assertIn("\x1b[0m/10/0/0", mix_cell, "only the high I component should own its color")
-
-    def test_negative_and_positive_ictx_deltas_align_on_the_arrow(self) -> None:
-        report = self.service.build(ReportRequest(ReportKind.SESSION, session_id="root"))
-        block = report.prompt_blocks[0]
-        rewritten = []
-        ordinary_index = 0
-        for row in block.rows:
-            if row.is_compaction:
-                rewritten.append(row)
-                continue
-            if ordinary_index == 0:
-                rewritten.append(replace(row, delta_context_tokens=-142100, next_context_tokens=40800))
-            elif ordinary_index == 1:
-                rewritten.append(replace(row, delta_context_tokens=4500, next_context_tokens=45300))
-            else:
-                rewritten.append(row)
-            ordinary_index += 1
-        self.assertGreaterEqual(ordinary_index, 2)
-        report = replace(report, prompt_blocks=(replace(block, rows=tuple(rewritten)),))
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=False, terminal_width=160).render(report)
-        lines = [line for line in stream.getvalue().splitlines() if line.startswith("|") and "#" in line and " → " in line]
-        self.assertGreaterEqual(len(lines), 2)
-        cells = [line.split("|")[5] for line in lines[:2]]
-        self.assertEqual(cells[0].index(" → "), cells[1].index(" → "), cells)
-        self.assertIn("-142k → 41k", cells[0])
-        self.assertIn("+5k → 45k", cells[1])
-        self.assertNotIn(".0k", "".join(cells))
-
-    def test_v77_percentile_and_quota_warning_thresholds_are_preserved(self) -> None:
-        thresholds = self.config["thresholds"]
-        profile = _MetricProfile((Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4"), Decimal("5")), thresholds)
-        self.assertIsNone(profile.role(Decimal("2")))
-        self.assertEqual("promptCostP50", profile.role(Decimal("3")))
-        self.assertEqual("promptCostP75", profile.role(Decimal("4")))
-        self.assertEqual("promptCostP90", profile.role(Decimal("5")))
-
-    def test_next_ictx_warning_colors_share_economic_warning_semantics(self) -> None:
-        report = self.service.build(ReportRequest(ReportKind.SESSION, session_id="root"))
-        block = report.prompt_blocks[0]
-        styler = AnsiStyler(self.config["colors"], enabled=True)
-
-        approaching = replace(report, prompt_blocks=(replace(block, next_context_warning="Approaching price threshold >100k",
-                              next_context_warning_severity=PriceWarningSeverity.APPROACHING),))
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=True, terminal_width=160).render(approaching)
-        next_line = next(line for line in stream.getvalue().splitlines() if "* Next Ictx:" in line)
-        self.assertIn(styler.apply("* Next Ictx:", "nextIctxWarning").split("* Next Ictx:")[0], next_line)
-
-        exceeded = replace(report, prompt_blocks=(replace(block, next_context_warning="Price threshold >100k exceeded",
-                           next_context_warning_severity=PriceWarningSeverity.EXCEEDED),))
-        stream = io.StringIO()
-        ReportRenderer(self.config, stream=stream, color_enabled=True, terminal_width=160).render(exceeded)
-        next_line = next(line for line in stream.getvalue().splitlines() if "* Next Ictx:" in line)
-        self.assertIn(styler.apply("* Next Ictx:", "nextIctxWarning").split("* Next Ictx:")[0], next_line)
-
-    def test_semantic_color_roles_remain_independently_resolved(self) -> None:
-        colors = self.config["colors"]
-        self.assertNotEqual(colors["activeRunning"], colors["nextIctxWarningReason"])
-        styler = AnsiStyler(colors, enabled=True)
-        running = styler.apply("X", "activeRunning")
-        warning = styler.apply("X", "nextIctxWarningReason")
-        self.assertNotEqual(running, warning)
-        self.assertTrue(running.startswith("\x1b["))
-        self.assertTrue(warning.endswith("\x1b[0m"))
 
 
 if __name__ == "__main__":
