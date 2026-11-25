@@ -20,6 +20,8 @@ from src.analysis.session_cost import SessionCostGroup
 from src.application.live_projection import project_live
 from src.application.session_archive import DOMAIN
 from src.application.session_catalog import SessionCatalog
+from src.application.session_epoch_page import sort_value
+from src.cache.session_projection import SORT_COLUMNS
 from src.cache.web_archive import ArchiveFact, WebArchive, source_partition
 from src.reports.models import SessionUsageRow
 from src.reports.session_models import SessionModel
@@ -30,12 +32,11 @@ from src.web.host import WebHost
 
 
 def seed(directory):
-    store = WebArchive(directory)
+    store = WebArchive(directory, retain_writer=True)
     store.initialize()
     partition = source_partition('v2', 'synthetic-month', 'registered')
-    for start in range(0, 10_000, 250):
-        batch = {}
-        for i in range(start, start + 250):
+    try:
+        for i in range(10_000):
             key = f'root-{i:04d}'
             cost = Decimal(i)
             model = f'Model {9999-i:04d}'
@@ -45,9 +46,12 @@ def seed(directory):
                                   duration_ms=i+1, last_activity_ms=at, context_tokens=10000-i,
                                   contributor_models=(f'fixture/{model}',), main_models=(SessionModel('fixture', model),),
                                   cost_groups=(group,), main_ccost=cost)
-            batch[key] = ArchiveFact('original', NOV_5-60_000, dict(row=encode_summary(row),
-                                                                     dependencies='fixture', models=[]))
-        store.publish(partition, DOMAIN, batch)
+            fact = ArchiveFact('original', NOV_5-60_000, dict(row=encode_summary(row),
+                                                               dependencies='fixture', models=[]))
+            assert store.publish_session(partition, {DOMAIN: {key: fact}}, key,
+                {sort: sort_value(row, sort) for sort in SORT_COLUMNS}, at, row.activity_latest_ms)
+    finally:
+        store.close_writer()
 
 
 def main():

@@ -226,7 +226,7 @@ async function checkPeriodLoading() {
     now += ms;
     for (const [fn, due] of [...timers]) if (due <= now) { timers.delete(fn); fn(); }
   };
-  const chart = new context.View((_, request) => new Promise(resolve => calls.push({request, resolve})), () => {});
+  const chart = new context.View((_, request) => new Promise((resolve, reject) => calls.push({request, resolve, reject})), () => {});
   chart.sharedHistory = chart.cacheEvents = true;
   chart.setScope('current');
   chart.active(true);
@@ -272,6 +272,42 @@ async function checkPeriodLoading() {
   advance(300);
   await answer(abandoned, 5, false);
   assert.ok(!spinning('7-days'), 'a retired route does not paint a late indicator');
+
+  chart.active(true);
+  const reject = async (call, retryable) => {
+    call.reject(Object.assign(new Error(retryable ? 'busy' : 'invalid_request'), {retryable}));
+    await new Promise(resolve => setImmediate(resolve));
+  };
+  const superseded = select('month'), failed = select('7-days');
+  advance(50);
+  await reject(superseded, false);
+  assert.ok(chart.historyError?.hidden !== false, 'superseded rejection stays quiet');
+  await reject(failed, false);
+  advance(250);
+  assert.equal(button('7-days').attributes['aria-pressed'], 'true');
+  assert.ok(!spinning('7-days') && !button('7-days').attributes['aria-busy']);
+  assert.equal(chart.historyError.hidden, false);
+  assert.match(chart.historyError.textContent, /retry/i);
+
+  const retry = select('7-days');
+  await reject(retry, true);
+  const beforeRetry = calls.length;
+  advance(350);
+  assert.equal(calls.length, beforeRetry + 1);
+  await reject(calls.at(-1), true);
+  advance(10_000);
+  assert.equal(calls.length, beforeRetry + 1, 'a retry is not an endless refresh loop');
+  assert.ok(!spinning('7-days') && !chart.historyError.hidden);
+  await answer(select('7-days'), 6, true);
+  assert.ok(chart.historyError.hidden);
+
+  chart.wake('new-cache-revision', false);
+  advance(0);
+  await reject(calls.at(-1), true);
+  const background = calls.length;
+  advance(10_000);
+  assert.equal(calls.length, background);
+  assert.ok(chart.historyError.hidden, 'a passive cache read is not a failed user selection');
 }
 
 async function checkLegendTotals() {

@@ -45,11 +45,17 @@ class ScriptedParentTests(unittest.TestCase):
         self.assertEqual(Decimal(0), parent.billed_cost)  # Observed fixture amount, not a child bill.
         for text in (wire["model_display_help"], session["model_display_help"], session["model_help"]):
             self.assertIn("Local scripted fixture", text)
-            self.assertIn("Selected/attempted subagents", text)
             self.assertIn("claude-agent/Claude Opus 5.5 · Max", text)
             self.assertIn("recorded claude-agent/opus", text)
             self.assertIn("Execution/inference and usage/cost unverified", text)
             self.assertNotIn("gpt-6-luna", text)
+        for text in (wire["model_display_help"], session["model_help"]):
+            self.assertIn("Selected/attempted subagents", text)
+        main, agents = session["model_display_help"].split("\n\n")
+        self.assertTrue(main.startswith("Session Models:\n"))
+        self.assertTrue(agents.startswith("Sub Agents:\nNo executed subagent model is verified."))
+        self.assertIn("Selected/attempted: claude-agent/", agents)
+        self.assertNotIn("• ", agents, "a selection is not an executed subagent request")
         mini = with_display(card_row(SimpleNamespace(prompt=parent, tool=None, marker=""), 200_000)).to_json()
         self.assertEqual(wire["model_display_help"], mini["prompt"]["model_display_help"])
         self.assertIn("not a proven zero upstream bill", mini["prompt"]["display"]["mini_cost_coverage_help"])
