@@ -3,7 +3,7 @@ from collections import defaultdict
 from dataclasses import replace
 from functools import lru_cache
 
-from src.analysis.account_timeline import period_start, timeline_window
+from src.analysis.account_timeline import period_start
 from src.analysis.account_timeline_cost import TimelineValuation
 from src.analysis.period_ccost import PeriodCCostIndex, usage_provider
 from src.application.account_timeline import AccountSeries, timeline_view
@@ -92,10 +92,6 @@ class ArchivedAccountTimeline:
         # Without a current catalog we have values, not proof of absence.
         oldest = 0 if source_available and observation is not None and not more else None
         starts = {name: period_start(name, now_ms, zone) for name in periods}
-        if 'month' in starts:
-            starts['month'] = timeline_window('month', now_ms, zone, native_bounds=tuple(
-                (month.start, month.reset) for month in months.values()
-                if month is not None and month.start is not None)).start
         self.initial_periods = set()
         values = {}
         for name, start in starts.items():

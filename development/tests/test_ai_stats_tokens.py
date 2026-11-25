@@ -9,7 +9,9 @@ import json
 import unittest
 
 from development.tests.fixtures.active_hour import epoch
-from src.analysis.ai_stats import DAY_MS, StatsRoot, period_stats, windows
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.ai_stats import StatsRoot, period_stats
+from src.analysis.timezones import calendar_periods
 from src.analysis.active_hour import HOUR_MS
 from src.analysis.models import TraceEntry
 from src.application.projection import project
@@ -26,7 +28,7 @@ def entry(sid, stamp, tokens, *, message='m', step=None):
 
 
 def calculate(roots, now, period='all', *, complete=True, calendar='SE', zone='Europe/Stockholm'):
-    row = period_stats(roots, lambda *_: None, period=period, start=dict(windows(zone, now))[period],
+    row = period_stats(roots, lambda *_: None, period=period, start=dict(calendar_periods(zone, now))[period],
         now=now, zone=zone, workday_calendar=calendar, source_complete=complete)
     dto = project(ReportProjection(ReportKind.AI_STATS, 'AI Stats', 'SYNTHETIC', ai_stats=(row,))).to_json()
     return {m.metric: m for m in row.metrics}, {m['metric']: m for m in dto['ai_stats'][0]['metrics']}

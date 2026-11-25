@@ -178,11 +178,19 @@ def local_month_start_ms(timezone_id: str, *, now_ms: int) -> int:
 
 
 def calendar_periods(zone, now):
-    return (('today', local_day_start_ms(zone, now_ms=now)),
-            ('7-days', local_day_start_ms(zone, now_ms=now, days_ago=6)),
-            ('30-days', local_day_start_ms(zone, now_ms=now, days_ago=29)),
-            ('month', local_month_start_ms(zone, now_ms=now)),
+    tz = resolve_timezone(zone)
+    day = datetime.fromtimestamp(now / 1000, timezone.utc).astimezone(tz).date()
+
+    def midnight(value):
+        return int(datetime.combine(value, datetime.min.time(), tz).timestamp() * 1000)
+
+    return (('today', midnight(day)), ('7-days', midnight(day - timedelta(days=6))),
+            ('30-days', midnight(day - timedelta(days=29))), ('month', midnight(day.replace(day=1))),
             ('all', None))
+
+
+def next_local_midnight_ms(zone, now):
+    return local_day_start_ms(zone, now_ms=now, days_ago=-1)
 
 
 def utc_month_start_ms(*, now_ms: int | None = None) -> int:

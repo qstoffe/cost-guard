@@ -15,7 +15,7 @@ from development.tests.fixtures.account_periods import subscription
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.test_account_timeline import NOV_5, projected
-from src.analysis.account_timeline import DAY_MS
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
 from src.application.account_timeline import account_roster
 from src.application.detail_archive import load_detail
 from src.application.session_archive import DOMAIN as SESSIONS, SessionArchive
@@ -23,7 +23,7 @@ from src.application.session_catalog import SessionCatalog
 from src.application.session_quota import source_scope
 from src.cache import CacheDatabase, CacheRepository
 from src.cache import session_projection
-from src.cache.web_archive import PREVIOUS_ARCHIVE_FILENAME, WebArchive
+from src.cache.web_archive import ArchiveFact, PREVIOUS_ARCHIVE_FILENAME, WebArchive
 from src.reports.models import SessionUsageRow
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.reports import ai_stats_warm
@@ -426,6 +426,11 @@ class DisplayHistoryTests(unittest.TestCase):
         archive = WebArchive(self.directory)
         archive.initialize()
         frames = AccountTimelineSnapshots(archive, None)
+        old_week = ArchiveFact('old', self.now, dict(zone='UTC', day=period_start('today', self.now, 'UTC'),
+            scope='old', view={'period': '7-days', 'series': []}, series=[], ready=True, active_until=0))
+        archive.publish_checkpoint('account-timeline-view/1', {'7-days': old_week})
+        self.assertIsNone(frames.lookup('7-days', None, zone='UTC', now=self.now)['view'],
+                          'a rolling-week frame is incompatible even on the same local day')
         view = {'period': 'today', 'series': [{'id': 'A', 'amount': '27'}]}
         frames.publish(zone='UTC', day=period_start('today', self.now, 'UTC'), marker='A-scope',
                        now=self.now, periods=('today',), results={'today': view}, roster=(),

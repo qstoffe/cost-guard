@@ -121,10 +121,7 @@ class SessionsCalendarCacheTests(unittest.TestCase):
                             report = service.build_token_mix_history(scope=period)
                             self.assertEqual(report.token_mix_period["start_ms"], start)
                         stats = service.build(ReportRequest(ReportKind.AI_STATS, stats_scope="30-days"))
-                        rolling = {period: now - days * 86_400_000 for period, days in
-                                   (("today", 1), ("7-days", 7), ("30-days", 30))}
-                        self.assertEqual({item.period: item.start_ms for item in stats.ai_stats},
-                                         {**expected, **rolling})
+                        self.assertEqual(expected, {item.period: item.start_ms for item in stats.ai_stats})
 
     def test_5000_root_metadata_and_warm_page_four_ignore_offscreen_running_age(self):
         now = int(datetime(2026, 11, 15, 12, tzinfo=timezone.utc).timestamp() * 1000)

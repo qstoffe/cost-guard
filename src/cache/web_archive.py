@@ -6,13 +6,13 @@ import logging
 import sqlite3
 from threading import Lock
 
-from . import session_projection
+from . import prompt_range, session_projection
 from .legacy_report_cache import retire_cache
 from .signature import dependency_signature
 
 
 APPLICATION_ID = 0x43475231  # CGR1
-SCHEMA = 3
+SCHEMA = 4
 EVIDENCE_ENVELOPE = 'web-fact-envelope/1'
 REPORT_CHECKPOINTS = 'shared-history'
 WEB_ARCHIVE_FILENAME = 'cost-guard-report-v1.sqlite3'
@@ -170,13 +170,15 @@ class WebArchive:
                 if db.execute('PRAGMA journal_mode').fetchone()[0] != 'wal':
                     raise sqlite3.DatabaseError('report cache requires WAL')
                 return
-            if current_id == APPLICATION_ID and current_version in (1, 2):
+            if current_id == APPLICATION_ID and current_version in (1, 2, 3):
                 db.execute('BEGIN IMMEDIATE')
                 current_version = db.execute('PRAGMA user_version').fetchone()[0]
                 if current_version == 1:
                     session_projection.create_runtime_schema(db)
                 if current_version in (1, 2):
                     self._create_detail_runtime(db)
+                if current_version in (1, 2, 3):
+                    prompt_range.create_schema(db, upgrade=True)
                     db.execute(f'PRAGMA user_version={SCHEMA}')
                 return
             if current_id or current_version or db.execute('SELECT 1 FROM sqlite_schema LIMIT 1').fetchone():
@@ -214,6 +216,7 @@ class WebArchive:
             session_projection.create_schema(db)
             session_projection.create_runtime_schema(db)
             self._create_detail_runtime(db)
+            prompt_range.create_schema(db)
             db.execute(f'PRAGMA application_id={APPLICATION_ID}')
             db.execute(f'PRAGMA user_version={SCHEMA}')
 
@@ -264,6 +267,34 @@ class WebArchive:
             if not rows:
                 return cursor, ()
         return max((row[0] for row in rows), default=cursor), tuple(self._historical_facts(row[1:] for row in rows))
+
+    def earliest_prompt(self, run, now):
+        with self._connect() as db:
+            return prompt_range.read(db, run, now)
+
+    def record_first_prompt(self, partition, item, first):
+        with self._connect(write=True) as db:
+            prompt_range.save(db, partition, item, first)
+
+    def backfill_prompt_range(self):
+        with self._connect() as db:
+            before = prompt_range.backfill_cursor(db)
+        if before is None:
+            return False
+        after, batch, more = self.history_changes(prompt_range.DETAIL_DOMAIN, before,
+                                                  limit=prompt_range.BACKFILL_BATCH)
+        prompts = [(fact.partition, key, prompt_range.first_prompt(fact.value)) for key, fact in batch]
+        with self._connect(write=True) as db:
+            db.execute('BEGIN IMMEDIATE')
+            if prompt_range.backfill_cursor(db) != before:
+                return True  # A concurrent instance advanced the durable cursor.
+            for partition, key, first in prompts:
+                prompt_range.save(db, partition, key, first)
+            if more:
+                db.execute('UPDATE prompt_range_backfill SET cursor=? WHERE slot=1', (after,))
+            else:
+                db.execute('DELETE FROM prompt_range_backfill WHERE slot=1')
+        return more
 
     @staticmethod
     def _history_item_rows(db, domain, key, after):
@@ -375,6 +406,10 @@ class WebArchive:
             total, offset, values = session_projection.read_ready(db, **page)
             return total, offset, tuple(self._historical_facts(values))
 
+    def next_ready_activity(self, now):
+        with self._connect() as db:
+            return session_projection.next_ready_activity(db, now)
+
     def sessions_page(self, **page):
         with self._connect() as db:
             total, offset, values, live, cached, runtime, pending = session_projection.read_runtime_page(db, **page)
@@ -439,6 +474,9 @@ class WebArchive:
                     db.execute('INSERT OR REPLACE INTO fact_cursors (partition, domain, item, algorithm) VALUES (?, ?, ?, ?)',
                                value[:4])
                     changed.add(value[1])
+                    if value[1] == prompt_range.DETAIL_DOMAIN:
+                        first = prompt_range.first_prompt(domains[value[1]][value[2]].value)
+                        prompt_range.save(db, partition, value[2], first)
                 else:
                     db.execute('''UPDATE facts SET observed_ms=?
                         WHERE partition=? AND domain=? AND item=? AND algorithm=? AND observed_ms<?''',

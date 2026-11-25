@@ -76,19 +76,17 @@ const AccountTimelineView = (() => {
     return a && b && a.period === b.period && a.timezone_id === b.timezone_id &&
       a.buckets.length === b.buckets.length && b.buckets.every(([start], i) => a.buckets[i][0] === start);
   }
-  function rangeLabel(view, layout, future) {
+  function rangeLabel(view, layout) {
     const mode = layout.hourly ? ReportView.DateTimeMode.DATE_TIME : DATE;
     const start = ReportView.formatDateTime(view.start_ms, mode, view.timezone_id);
-    const end = ReportView.formatDateTime(view.end_ms, layout.hourly ? TIME : DATE, view.timezone_id);
+    const end = ReportView.formatDateTime(view.end_ms, layout.hourly ? TIME : ReportView.DateTimeMode.DATE_TIME,
+      view.timezone_id);
     if (start === 'N/A' || end === 'N/A') return '—';
     if (layout.hourly) {
       const occurrence = view.end_occurrence ? ` (${view.end_occurrence === 1 ? 'first' : 'second'})` : '';
       return `${start}–${end}${occurrence}`;
     }
-    // Use the last represented date, not a reserved date or the next day's
-    // midnight (the exclusive end of a rolling window on that boundary).
-    const last = layout.slots.findLast(slot => !future.has(slot.index));
-    return `${start} – ${last?.day ?? end}`;
+    return `${start} – ${end}`;
   }
   function axisLabels(layout, future, nonWorking) {
     const {slots, hourly, shortDates, months, group, crossYear} = layout;
@@ -149,6 +147,7 @@ const AccountTimelineView = (() => {
       this.buttons = periods.map(([period, text]) => {
         const button = e('button', text);
         button.type = 'button';
+        if (typeof PeriodHelp !== 'undefined') PeriodHelp.attach(button, period);
         button.addEventListener('click', () => this.select(period));
         filters.append(button);
         return [period, button];
@@ -475,12 +474,13 @@ const AccountTimelineView = (() => {
       const legend = this.series.map(item => [
         this.colors.get(item.id), item.account,
         item.provider_monthly_total ? totalText(item.month_total) : totalText(item.total),
-        item.provider_monthly_total ? totalText(item.observed_total) : null
+        item.provider_monthly_total ? totalText(item.observed_total) : null,
+        item.provider_window_matches
       ]);
       const legendKey = JSON.stringify(legend);
       if (legendKey !== this.legendKey) {
         this.legendKey = legendKey;
-        this.selectedLegend.replaceChildren(...legend.map(([ink, name, total, observed]) => {
+        this.selectedLegend.replaceChildren(...legend.map(([ink, name, total, observed, sameWindow]) => {
           const row = e('li');
           const value = e('span', total === '—' ? undefined : total, 'account-timeline-legend-value');
           if (total === '—') {
@@ -490,7 +490,7 @@ const AccountTimelineView = (() => {
           }
           row.append(swatch(ink), e('span', name));
           if (observed !== null) {
-            row.append(e('span', 'Provider monthly total:'), value,
+            row.append(e('span', sameWindow ? 'Provider monthly total:' : 'Provider billing-period total:'), value,
               e('span', `Observed OpenCode subtotal: ${observed}`));
           } else row.append(value);
           return row;
@@ -537,9 +537,8 @@ const AccountTimelineView = (() => {
       const layout = sameGeometry ? this.layout : this.layout = layoutSlots(view, width);
       const {slots, group} = layout;
       this.range.hidden = !!unselected;
-      this.range.title = layout.shortDates ? 'A rolling seven-day window; dates at either end may be partial.' : '';
       ReportView.text(this.range, (nativeMonth ? 'Observed OpenCode daily CCost · ' : '') +
-        `Range: ${rangeLabel(view, layout, this.future)}`);
+        `Range: ${rangeLabel(view, layout)}`);
       if (!sameGeometry) {
         const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
         this.plot.style.setProperty('--timeline-min-width', `${minimum}px`);

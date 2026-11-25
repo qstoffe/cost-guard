@@ -6,7 +6,7 @@ from src.analysis.account_timeline import period_start
 from src.cache.web_archive import ArchiveFact
 
 
-DOMAIN = 'account-timeline-view/1'
+DOMAIN = 'account-timeline-view/2'
 
 
 class AccountTimelineSnapshots:

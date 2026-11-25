@@ -32,7 +32,7 @@ const ContextHelp = (() => {
     panel.id = 'context-help'; panel.className = 'context-help'; panel.hidden = true;
     panel.setAttribute('role', 'tooltip'); panel.setAttribute('popover', 'manual');
     let active = null, blocked = null, timer, opening, pending = null, origin = null, keyboard = true, fragments = null;
-    let watchdog, hoverDeadline = 0, pointer = null;
+    let watchdog, timedRefresh, hoverDeadline = 0, pointer = null;
     const now = () => win.performance?.now() ?? Date.now();
     const cancel = () => { win.clearTimeout(timer); timer = undefined; };
     const cancelOpening = () => { win.clearTimeout(opening); opening = undefined; pending = null; };
@@ -124,6 +124,7 @@ const ContextHelp = (() => {
     function close(suppress = false) {
       cancel();
       cancelWatchdog();
+      win.clearTimeout(timedRefresh); timedRefresh = undefined;
       if (suppress && pending) blocked = pending;
       cancelOpening();
       if (active) {
@@ -152,6 +153,15 @@ const ContextHelp = (() => {
       if (panel.showPopover && !panel.matches(':popover-open')) panel.showPopover();
       refresh();
       if (active) watchHover();
+      if (active && entries.get(active).timed && timedRefresh === undefined) {
+        const tick = () => {
+          timedRefresh = undefined;
+          if (active !== target) return;
+          refresh();
+          if (active === target) timedRefresh = win.setTimeout(tick, 1000);
+        };
+        timedRefresh = win.setTimeout(tick, 1000);
+      }
     }
     function leave(target) {
       if (pending === target) cancelOpening();
@@ -280,6 +290,10 @@ const ContextHelp = (() => {
     entries.get(target).listeners.push([target, 'keydown', keydown]);
     return target;
   }
+  function timedAction(target, content) {
+    attach(target, content);
+    entries.get(target).timed = true;
+  }
   function clearValue(target) {
     const entry = entries.get(target);
     if (!entry) return;
@@ -291,5 +305,5 @@ const ContextHelp = (() => {
   }
   function refresh(target) { documents.get(target.ownerDocument)?.refresh(target); }
   function dismiss(target) { documents.get(target.ownerDocument)?.dismiss(target); }
-  return {attach, button, heading, value, clearValue, refresh, dismiss, runningDuration, warningParagraph, HOVER_DELAY};
+  return {attach, button, heading, value, timedAction, clearValue, refresh, dismiss, runningDuration, warningParagraph, HOVER_DELAY};
 })();

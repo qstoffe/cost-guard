@@ -10,7 +10,8 @@ import unittest
 from development.tests.fixtures.active_hour import epoch
 from development.tests.test_ai_stats_tokens import entry
 from src.analysis.active_hour import HOUR_MS
-from src.analysis.ai_stats import StatsRoot, period_stats, windows
+from src.analysis.ai_stats import StatsRoot, period_stats
+from src.analysis.timezones import calendar_periods
 from src.analysis.ai_stats_models import ModelActivity
 from src.application.projection import project
 from src.domain import ModelRef, TokenUsage
@@ -33,7 +34,7 @@ def root(calls, **kwargs):
 
 def calculate(roots, now=NOW, period='all', zone='UTC', valuation=None):
     row = period_stats(roots, valuation or (lambda _m, t: Decimal(t.input)),
-        period=period, start=dict(windows(zone, now))[period], now=now, zone=zone)
+        period=period, start=dict(calendar_periods(zone, now))[period], now=now, zone=zone)
     card = row.metrics[0]
     dto = project(ReportProjection(ReportKind.AI_STATS, 'Stats', 'SYNTHETIC', ai_stats=(row,))).to_json()
     return card, dto['ai_stats'][0]['metrics'][0]
@@ -112,7 +113,7 @@ class AIStatsRateTests(unittest.TestCase):
         self.assertIn('higher or lower', dto['display']['rate_help'])
         self.assertNotRegex(str(dto['display']), r'Calendar|Workday|Active AI average')
 
-    def test_older_untimed_peer_never_erases_recent_model_in_larger_rolling_period(self):
+    def test_older_untimed_peer_never_erases_recent_model_in_longer_period(self):
         timed = request('partial:timed', NOW - 2000, 1000, 1)
         untimed, _activity = request('partial:untimed', NOW - 48 * HOUR_MS, 1000, 1000, 'max')
         good = request('good', NOW - 2000, 1000, 1)
@@ -121,7 +122,7 @@ class AIStatsRateTests(unittest.TestCase):
         for period, total in [('today', 2), ('7-days', 1002), ('30-days', 1002)]:
             with self.subTest(period=period):
                 row = period_stats(roots, lambda _m, t: Decimal(t.input), period=period,
-                                   start=dict(windows('UTC', NOW))[period], now=NOW, zone='UTC')
+                                   start=dict(calendar_periods('UTC', NOW))[period], now=NOW, zone='UTC')
                 card, cost = row.metrics[:2]
                 self.assertEqual(['good', 'partial'], [r.model for r in card.podium])
                 self.assertEqual(7200, card.value, 'two paired CCost / one measured second')
@@ -178,7 +179,7 @@ class AIStatsRateTests(unittest.TestCase):
         for stamp in ('2026-03-29T20:00:00+00:00', '2026-10-25T20:00:00+00:00',
                       '2027-01-01T00:30:00+00:00'):
             now = epoch(stamp)
-            for period, cutoff in windows('Europe/Stockholm', now):
+            for period, cutoff in calendar_periods('Europe/Stockholm', now):
                 if cutoff is None:
                     continue
                 crossing = request('crossing', cutoff - 30000, 60000, 2)

@@ -179,7 +179,8 @@ async function main() {
     const blankRange=await evaluate(`(()=>{const value=structuredClone(current.result);
       value.view.token_mix_period={period:'all',start_ms:null,end_ms:null};current.tokenMix.update(value);
       current.tokenMix.title.focus();return document.getElementById('context-help').textContent;})()`);
-    assert.match(blankRange,/^\d[\d,]* recorded tokens for the selected period$/,'missing boundaries are omitted, not invented');
+    assert.match(blankRange,/^\d[\d,]* recorded tokens for the selected period\nStart not yet known – \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+      'missing prompt provenance is explicit; the live end is still shown');
     await evaluate(`(()=>{const value=structuredClone(current.result);
       value.view.source_warnings=['ERROR: Token source connectivity failed.'];current.tokenMix.update(value);})()`);
     assert.equal(await evaluate(`current.tokenMix.status.textContent`),'','passive source diagnostics never become a route warning');

@@ -42,7 +42,7 @@ class TokenMixPeriodTests(unittest.TestCase):
             ('today', (6, 7), '2026-03-28T23:00:00+00:00'),
             ('7-days', (5, 6, 7), '2026-03-22T23:00:00+00:00'),
             ('30-days', tuple(range(2, 8)), '2026-02-27T23:00:00+00:00'),
-            ('month', tuple(range(2, 8)), stamps[2]), ('all', tuple(range(8)), stamps[0]),
+            ('month', tuple(range(2, 8)), stamps[2]), ('all', tuple(range(8)), None),
         ]:
             with self.subTest(scope=scope):
                 report = history_projection(service, reference, [*entries, entries[6]], prompts,
@@ -56,7 +56,7 @@ class TokenMixPeriodTests(unittest.TestCase):
                 self.assertEqual(Decimal(3 * len(members)), report.token_mix.costs[3])
                 self.assertEqual(report.token_mix, report.publisher_token_mix[0].mix)
                 self.assertEqual(1, report.token_mix.sample_size)
-                self.assertEqual(instant(start), report.token_mix_period['start_ms'])
+                self.assertEqual(instant(start) if start else None, report.token_mix_period['start_ms'])
                 self.assertEqual(now, report.token_mix_period['end_ms'])
 
     def test_fall_dst_month_rollover_undated_and_unpriced_are_not_fabricated(self):
@@ -75,7 +75,7 @@ class TokenMixPeriodTests(unittest.TestCase):
         self.assertIsNone(all_time.token_mix.total_tokens)
         self.assertFalse(all_time.token_mix.cost_complete)
         self.assertIsNone(all_time.token_mix_period['start_ms'])
-        self.assertIsNone(all_time.token_mix_period['end_ms'])
+        self.assertEqual(service.now_ms, all_time.token_mix_period['end_ms'])
         self.assertEqual(instant('2026-10-31T23:00:00+00:00'), month.token_mix_period['start_ms'])
         self.assertEqual(0, month.token_mix.request_count)
         self.assertTrue(any('Request time unavailable' in warning for warning in month.source_warnings))

@@ -40,7 +40,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
              "/ai-stats.js": ("ai-stats.js", "text/javascript; charset=utf-8"),
              "/cached-reports.js": ("cached-reports.js", "text/javascript; charset=utf-8"),
              "/data-demand.js": ("data-demand.js", "text/javascript; charset=utf-8"),
-            "/report-loading.js": ("report-loading.js", "text/javascript; charset=utf-8"),
+             "/report-loading.js": ("report-loading.js", "text/javascript; charset=utf-8"),
+             "/period-help.js": ("period-help.js", "text/javascript; charset=utf-8"),
              "/settings.js": ("settings.js", "text/javascript; charset=utf-8"),
              "/mini.js": ("mini.js", "text/javascript; charset=utf-8"),
              "/mini.css": ("mini.css", "text/css; charset=utf-8"),
@@ -442,6 +443,15 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/api/settings":
                 self.web_settings()
+                return
+            if self.path == "/api/period-ranges" and self.server.lifecycle:
+                try:
+                    zone = self.server.settings.read()['timezone_id']
+                    value = self.server.lifecycle.period_ranges(zone, time.time_ns() // 1_000_000)
+                except (SettingsError, ValueError):
+                    self.reply(503, {"error": "period_ranges_unavailable"})
+                else:
+                    self.reply(200, value)
                 return
             if self.path == "/api/live" and self.server.lifecycle:
                 self.reply(200, self.server.lifecycle.events.snapshot())

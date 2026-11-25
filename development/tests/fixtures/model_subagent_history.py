@@ -7,14 +7,16 @@ from .compact_reports import Availability, report_service
 from .pricing_catalog import catalog
 from .subagent_sessions import assistant, incident_source, user
 from .watch_runtime import MutableSource
-from src.analysis.ai_stats import DAY_MS
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
 from src.application.projection import project
 from src.domain import ModelRef
 from src.pricing.catalog import PricingCatalog
 from src.reports import ReportKind, ReportRequest
 
 SOL, ASTRA = 'gpt-6.1-sol', 'gpt-astra'
-NOW = 3 * DAY_MS + 20_000
+# Keep the whole 30-date fixture horizon after the Windows epoch.
+TODAY = 40 * DAY_MS
+NOW = TODAY + 20_000
 # Deliberately synthetic prices, not claims about the production catalog.
 PRICES = PricingCatalog(tuple(replace(price, model=ModelRef('github-copilot', identity, label))
     for price, identity, label in zip(catalog().models, (SOL, ASTRA), ('GPT-6.1 Sol', 'GPT Astra'))))
@@ -33,7 +35,7 @@ def shift_times(value, offset):
             shift_times(child, offset)
 
 
-def native_tree(child_model=SOL, *, multiple=False, older_astra=False, child_effort="max", day_offset=3 * DAY_MS):
+def native_tree(child_model=SOL, *, multiple=False, older_astra=False, child_effort="max", day_offset=TODAY):
     with incident_source() as (source, server):
         root = server.messages['ses_current']
         child = server.messages['ses_current_child']
@@ -54,7 +56,9 @@ def native_tree(child_model=SOL, *, multiple=False, older_astra=False, child_eff
             # Available child history outside the current initiating prompt.
             old = assistant('old-astra', 3400, 3800, model=ASTRA)
             old['model']['variant'] = 'max'
-            child[:0] = [user('old-cu', 3300), old]
+            earlier = [user('old-cu', 3300), old]
+            shift_times(earlier, day_offset - 3 * DAY_MS)
+            child[:0] = earlier
         return source.load_session_snapshot('ses_current')
 
 

@@ -3,6 +3,7 @@ import logging
 import sqlite3
 
 from src.cache.web_archive import ArchiveFact
+from src.cache.prompt_range import DETAIL_DOMAIN as DOMAIN
 
 from .projection import identity, project
 from .session_activity import ActivityHistory, activity_summary
@@ -10,7 +11,6 @@ from .session_values import value_authority
 
 
 LOG = logging.getLogger(__name__)
-DOMAIN = 'detail/1'
 
 
 def detail_fact(key, revision, report, metadata, *, projection=None):

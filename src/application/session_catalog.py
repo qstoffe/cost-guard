@@ -906,7 +906,7 @@ class SessionCatalog:
                     on_stage=lambda stage: self._stage(stage, retrying),
                     on_dependencies=identity_values.extend,
                     on_prompt_ends=ended_prompts.update if active else None,
-                    on_evidence=(lambda item: evidence.append(item)) if partition and not active else None,
+                     on_evidence=evidence.append if partition else None,
                     activity_end_ms=min((window.end_ms for window in windows), default=None),
                     on_activity=lambda values, complete: memberships.update(
                         (window, any(in_window(at, window) for at in values)) for window in windows if complete))
@@ -990,6 +990,11 @@ class SessionCatalog:
                                 self.failure_counts.pop(key, None)
                                 self.failure_reasons.pop(key, None)
                             if self.archive is not None:
+                                if active and evidence and evidence[0].snapshot.complete:
+                                    first = min((prompt.prompt_time_ms for prompt in evidence[0].bundle.prompts
+                                                 if 0 < prompt.prompt_time_ms <= captured_at), default=None)
+                                    if first is not None:
+                                        self.archive.record_live_prompt(partition, key, first)
                                 if self.rows[key] != previous_row:
                                     self.wake_revision += 1
                                 if saved:

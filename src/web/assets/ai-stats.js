@@ -142,9 +142,7 @@ const AIStatsView = (() => {
       this.buttons = new Map(); this.cards = new Map();
       for (const [id, label] of periods) {
         const button = e('button', label); button.type = 'button';
-        ContextHelp.heading(button, {today: 'Activity in the last 24 hours.', '7-days': 'Activity in the last 7 × 24 hours.',
-          '30-days': 'Activity in the last 30 × 24 hours.', month: 'Activity since local midnight on the first of this month.',
-          all: 'All available history through now.'}[id], true);
+        if (typeof PeriodHelp !== 'undefined') PeriodHelp.attach(button, id);
         button.addEventListener('click', () => select(id));
         this.buttons.set(id, button); this.selector.append(button);
       }

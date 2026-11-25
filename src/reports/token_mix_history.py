@@ -179,10 +179,7 @@ def prepared_history_projection(service, reference, prepared, *, valuation=None,
     total = priced_token_mix(((entry.model, entry.tokens) for entry in shown_usage),
                              valuation,
                               sample_size=len({prompt_of[entry] for entry in shown_usage if entry in prompt_of}))
-    if scope == 'all':
-        stamps = [entry.completed_at_ms for entry in shown_usage if entry.completed_at_ms > 0]
-        period.update(start_ms=min(stamps) if stamps else None, end_ms=max(stamps) if stamps else None)
-    elif scope is not None and undated:
+    if scope not in (None, 'all') and undated:
         period['coverage'] = 'partial' if shown_usage else 'unknown'
     return ReportProjection(
         ReportKind.TOKEN_MIX, "Token Mix % by model", service.selection.selected.upper(), warnings,

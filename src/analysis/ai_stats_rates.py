@@ -27,19 +27,12 @@ class HourlyRates:
     robot_period: Decimal
 
 
-def hourly_rates(total, duration, *, period, now, zone, calendar, evidence_start):
-    """Nominal local date slots never change rolling cost membership or active time."""
+def hourly_rates(total, duration, *, start, now, zone, calendar, evidence_start):
+    """Normalize by nominal local date slots, separately from measured execution time."""
     tz = resolve_timezone(zone)
     today = datetime.fromtimestamp(now / 1000, timezone.utc).astimezone(tz).date()
-    if period in ('7-days', '30-days'):
-        first = today - timedelta(days=6 if period == '7-days' else 29)
-    elif period == 'month':
-        first = today.replace(day=1)
-    elif period == 'today':
-        first = today
-    else:
-        first = (datetime.fromtimestamp(evidence_start / 1000, timezone.utc).astimezone(tz).date()
-                 if evidence_start is not None else None)
+    lower = start if start is not None else evidence_start
+    first = datetime.fromtimestamp(lower / 1000, timezone.utc).astimezone(tz).date() if lower is not None else None
     days = max(0, (today - first).days + 1) if first is not None else 0
     workdays = sum(is_workday(first + timedelta(days=offset), calendar) for offset in range(days))
     calendar_hours, workday_hours = days * 24, workdays * 8

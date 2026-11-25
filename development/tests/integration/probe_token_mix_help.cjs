@@ -18,10 +18,16 @@ module.exports = async function probe({evaluate, until, command, tab, checks}) {
       await evaluate(`current.tokenMix.update({...originalMix, observed_at_ms:Date.parse('${instant}'),
         view:{...originalMix.view,timezone_id:'Europe/Stockholm',token_mix_period:{
           period:'all',start_ms:Date.parse('${instant}'),end_ms:Date.parse('${instant}')}}})`);
-      const text = await focus();
-      assert.ok(text.includes(`${expected} – ${expected}`), text);
-      assert.match(text, /^\d[\d,]* recorded tokens for the selected period\n\d{4}-\d{2}-\d{2} \d{2}:\d{2} – \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
-      assert.doesNotMatch(text, /GMT|Europe|[+-]\d{2}:\d{2}|\d{2}:\d{2}:\d{2}/);
+      await focus();
+      const text = await evaluate(`(() => { const live = Date.now;
+        try {
+          Date.now = () => Date.parse('${instant}') + 8000;
+          ContextHelp.refresh(current.tokenMix.title);
+          return ${help}.textContent;
+        } finally { Date.now = live; }
+      })()`);
+      assert.ok(text.endsWith(`Start not yet known – ${expected}:08`), text);
+      assert.doesNotMatch(text, /GMT|Europe|[+-]\d{2}:\d{2}/);
       assert.doesNotMatch(text, /Observed|CLI|Partial pricing|CCost|Deleted|telemetry/);
       assert.doesNotMatch(await evaluate(`current.tokenMix.root.textContent`), /Partial|\?|Incomplete token telemetry/);
       assert.equal(await evaluate(`current.tokenMix.root.querySelectorAll('.partial').length`), 0);

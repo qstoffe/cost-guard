@@ -11,6 +11,7 @@ import sys
 import tempfile
 from threading import Event, current_thread
 import time
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
@@ -21,7 +22,8 @@ from development.tests.fixtures.watch_runtime import make_service
 from development.tests.integration.serve_data_dispatch import DispatchJobs
 from development.tests.test_account_timeline import NOV_1, NOV_5, stamp
 from src.accounts.acquisition import AccountUpdate
-from src.analysis.account_timeline import DAY_MS, PERIODS
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.account_timeline import PERIODS
 from src.application.account_timeline import timeline_view
 from src.domain import QuotaComponent, TokenUsage
 from src.sources.errors import SourceConcurrentChangeError
@@ -390,23 +392,23 @@ def stress_plot(page, chart, screenshots, *, sample):
 
     replace_geometry(page, '30-days', stamp('2027-01-02T11:00:00+01:00'), 'Europe/Stockholm')
     assert bands.all_text_contents() == ['December', '2026', 'Jan', '2027']
-    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-12-04 – 2027-01-02')
+    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-12-04 – 2027-01-02 11:00')
     replace_geometry(page, '7-days', stamp('2026-11-22T00:15:00+01:00'), 'Europe/Stockholm')
-    expect(labels.first).to_have_text('15/11')
-    expect(labels.first.locator('.account-timeline-non-working')).to_have_text('15')
-    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-11-15 – 2026-11-22')
-    assert page.evaluate('current.accountTimeline.view.partial_buckets') == [0, 7]
+    expect(labels.first).to_have_text('16/11')
+    expect(labels.last.locator('.account-timeline-non-working')).to_have_text('22')
+    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-11-16 – 2026-11-22 00:15')
+    assert page.evaluate('current.accountTimeline.view.partial_buckets') == [6]
     assert_loading_cues(plot, [])
     plot.focus()
     page.keyboard.press('End')
     expect(tip.locator('strong')).to_have_text('2026-11-22 Sunday')
     expect(status).to_contain_text('Swedish non-working day')
-    assert_highlight(plot, 7)
+    assert_highlight(plot, 6)
     scroller.evaluate('el => el.scrollIntoView({block:"center"})')
-    plot.locator('.account-timeline-target[data-slot="7"]').tap()
+    plot.locator('.account-timeline-target[data-slot="6"]').tap()
     expect(tip.locator('strong')).to_have_text('2026-11-22 Sunday')
     replace_geometry(page, '7-days', stamp('2027-01-01T00:00:00+01:00'), 'Europe/Stockholm')
-    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-12-25 – 2026-12-31')
+    expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-12-26 – 2027-01-01 00:00')
     replace_geometry(page, 'today', stamp('2026-10-25T02:25:00+01:00'), 'Europe/Stockholm')
     expect(chart.locator('.account-timeline-range')).to_have_text('Range: 2026-10-25 00:00–02:25 (second)')
     replace_geometry(page, 'today', stamp('2026-10-25T23:50:00+01:00'), 'Europe/Stockholm')
@@ -607,7 +609,7 @@ def check(browser, root, screenshots=None):
         rows = selected.get_by_role('listitem')
         total = selected.locator('.account-timeline-legend-value')
         range_line = chart.locator('.account-timeline-range')
-        expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05')
+        expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05 05:00')
         assert rows.evaluate_all('''rows => rows.every((row, i) => row.getBoundingClientRect().top >=
             (i ? rows[i - 1] : row.parentElement.previousElementSibling).getBoundingClientRect().bottom)''')
         expect(rows.filter(has_text=low_label)).to_have_text(f'{low_label}$601.00')
@@ -676,13 +678,13 @@ def check(browser, root, screenshots=None):
         expect(range_line).not_to_be_visible()
         chart.get_by_role('checkbox', name=today_label, exact=True).check()
         expect(selected.get_by_role('listitem')).to_have_count(1)
-        expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05')
+        expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05 05:00')
         chart.get_by_role('heading', name='CCost').click()
         expect(legend).not_to_be_visible()
         # Accept normal passive lookup cadence, but never let a legend toggle
         # submit report/provider work or a second history acquisition.
         assert len(source.timeline_reads) == 14 and set(source.timeline_reads.values()) == {1}, source.timeline_reads
-        for name, period, count in (('Today', 'today', 6), ('7 days', '7-days', 8),
+        for name, period, count in (('Today', 'today', 6), ('7 days', '7-days', 7),
                                      ('30 days', '30-days', 30), ('This month', 'month', 30)):
             button = chart.get_by_role('button', name=name, exact=True)
             button.click()
@@ -762,6 +764,40 @@ def check(browser, root, screenshots=None):
               f'{sum(source.timeline_reads.values())} history root reads, {len(provider_refreshes)} quota refresh; '
               f'card-ready → first paint {(first_paint - card_seen) * 1000:.0f} ms, '
               f'card-ready → complete chart paint {(completed_paint - card_seen) * 1000:.0f} ms (gated reads)')
+
+
+def check_period_help(browser, root):
+    """Real controls and tooltip lifecycle, independent of the device timezone."""
+    from playwright.sync_api import expect
+
+    with chart_fixture(browser, root) as (page, host, _, source, *_):
+        source.first_read.set()
+        source.continue_history.set()
+        local_now = '2026-12-31T23:59:58+01:00'
+        read = host.period_ranges
+
+        def ranges(_zone, _now):
+            return read('Europe/Stockholm', stamp(local_now))
+
+        with patch.object(host, 'period_ranges', side_effect=ranges):
+            page.clock.set_fixed_time(local_now)
+            page.goto(host.browser_url())
+            tip = page.locator('#context-help')
+            for section in ('Sessions', 'Token Mix', 'AI Stats', 'Accounts'):
+                page.get_by_role('link', name=section, exact=True).click()
+                for label, start in [('7 days', '2026-12-25'), ('30 days', '2026-12-02'),
+                                     ('This month', '2026-12-01'), ('Today', '2026-12-31')]:
+                    button = page.get_by_role('button', name=label, exact=True)
+                    button.hover()
+                    expect(tip).to_have_text(f'{start} 00:00:00 – 2026-12-31 23:59:58')
+                if section != 'Accounts':
+                    page.get_by_role('button', name='All time', exact=True).hover()
+                    expect(tip).to_have_text('Start not yet known – 2026-12-31 23:59:58')
+            # Stay on the same button while the clock crosses year-end.
+            local_now = '2027-01-01T00:00:03+01:00'
+            page.clock.set_fixed_time(local_now)
+            expect(tip).to_have_text('2027-01-01 00:00:00 – 2027-01-01 00:00:03')
+            print('Period help PASS: all 19 buttons, configured timezone, open tooltip across year-end')
 
 
 def check_unvisited(browser, root):
@@ -887,6 +923,9 @@ def main():
             unvisited = root / 'unvisited'
             unvisited.mkdir()
             check_unvisited(browser, unvisited)
+            periods = root / 'periods'
+            periods.mkdir()
+            check_period_help(browser, periods)
         finally:
             browser.close()
 

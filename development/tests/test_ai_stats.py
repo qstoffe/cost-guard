@@ -13,7 +13,9 @@ from development.tests.fixtures.active_hour import epoch
 from development.tests.fixtures.compact_reports import report_service, START, NOW
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.fixtures.ai_stats_views import stats_report
-from src.analysis.ai_stats import StatsObservation, StatsRoot, calendar_activity, period_stats, windows, DAY_MS
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.ai_stats import StatsObservation, StatsRoot, calendar_activity, period_stats
+from src.analysis.timezones import calendar_periods
 from src.analysis.active_hour import HOUR_MS
 from src.analysis.ai_stats_models import ModelActivity
 from src.analysis.models import TraceEntry
@@ -190,14 +192,15 @@ class AIStatsAnalysisTests(unittest.TestCase):
 
     def test_windows_31_day_month_timezone_and_calendar_edges(self):
         now = epoch('2026-10-31T22:30:00+00:00')
-        local = dict(windows('Europe/Stockholm', now))
-        utc = dict(windows('UTC', now))
+        local = dict(calendar_periods('Europe/Stockholm', now))
+        utc = dict(calendar_periods('UTC', now))
         self.assertLess(local['month'], local['30-days'])
         self.assertEqual(epoch('2026-09-30T22:00:00+00:00'), local['month'])
         self.assertEqual(epoch('2026-10-01T00:00:00+00:00'), utc['month'])
-        for period, days in [('today', 1), ('7-days', 7), ('30-days', 30)]:
-            self.assertEqual(now - days * 24 * HOUR_MS, local[period])
-            self.assertEqual(local[period], utc[period])
+        for period, day, offset in [('today', '2026-10-31', '+01:00'), ('7-days', '2026-10-25', '+02:00'),
+                                    ('30-days', '2026-10-02', '+02:00')]:
+            self.assertEqual(epoch(f'{day}T00:00:00{offset}'), local[period])
+            self.assertEqual(epoch(f'{day}T00:00:00+00:00'), utc[period])
         self.assertIsNone(local['all'])
 
     def test_shared_observation_reuses_only_identical_populations_and_keeps_period_clipping(self):

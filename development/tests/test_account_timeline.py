@@ -13,7 +13,8 @@ from development.tests.fixtures.account_periods import request, subscription
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
-from src.analysis.account_timeline import DAY_MS, PERIODS, timeline_window
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.account_timeline import PERIODS, timeline_window
 from src.analysis.account_timeline_cost import TimelineValuation
 from src.analysis.period_ccost import PeriodCCostIndex
 from src.application.account_timeline import account_roster, timeline_view
@@ -58,18 +59,17 @@ class TimelineBucketsTests(unittest.TestCase):
                 self.assertEqual(tuple(zip(left, [*left[1:], stamp(now)])), window.buckets)
                 self.assertEqual((len(left) - 1,), window.partial)
 
-    def test_seven_days_is_still_rolling_with_partial_calendar_edges(self):
+    def test_seven_days_starts_at_midnight_six_dates_ago_even_on_year_rollover(self):
         now = stamp('2026-11-01T11:25:00+01:00')
         window = timeline_window('7-days', now, 'Europe/Stockholm')
-        self.assertEqual(now - 7 * DAY_MS, window.start)
-        self.assertEqual(8, len(window.buckets))
+        self.assertEqual(stamp('2026-10-26T00:00:00+01:00'), window.start)
+        self.assertEqual(7, len(window.buckets))
         self.assertEqual((stamp('2026-11-01T00:00:00+01:00'), now), window.buckets[-1])
-        self.assertEqual((0, 7), window.partial)
-        self.assertEqual(stamp('2026-10-26T00:00:00+01:00'), window.buckets[0][1])
+        self.assertEqual((6,), window.partial)
         midnight = stamp('2027-01-01T00:00:00+00:00')
         window = timeline_window('7-days', midnight, 'UTC')
-        self.assertEqual((stamp('2026-12-31T00:00:00+00:00'), midnight), window.buckets[-1])
-        self.assertEqual((), window.partial)
+        self.assertEqual((midnight, midnight), window.buckets[-1])
+        self.assertEqual((6,), window.partial)
 
     def test_thirty_days_includes_today_and_exactly_29_prior_dates(self):
         now = stamp('2026-11-20T00:45:00+01:00')
@@ -102,7 +102,7 @@ class TimelineBucketsTests(unittest.TestCase):
         self.assertEqual((now, now), window.buckets[-1])
         self.assertEqual((3,), window.partial)
 
-    def test_calendar_and_rolling_buckets_cover_both_dst_day_lengths(self):
+    def test_calendar_buckets_cover_both_dst_day_lengths(self):
         for now, date, hours in (('2026-03-30T12:00:00+02:00', '2026-03-29', 23),
                                  ('2026-10-26T12:00:00+01:00', '2026-10-25', 25)):
             with self.subTest(date=date):
@@ -146,10 +146,20 @@ class TimelineProjectionTests(unittest.TestCase):
 
         series, = chart['series']
         self.assertTrue(series['provider_monthly_total'])
+        self.assertTrue(series['provider_window_matches'])
         self.assertEqual('$7.95', series['month_total']['display']['usd'])
         self.assertEqual('$0.40', series['observed_total']['display']['usd'])
         self.assertEqual(['40', '0', '0', '0', '0'], [p['amount'] for p in series['points'][:5]])
         self.assertFalse(chart['pending_buckets'])
+
+        # November starts an hour earlier in Stockholm than the native UTC billing month.
+        local_call = request('local-only', NOV_1 - 1000, amount=5, provider='github-copilot', ref=account.ref)
+        index = PeriodCCostIndex((local_call, call), lambda _, tokens: Decimal(tokens.input), account_only=True)
+        local = timeline_view('month', NOV_5, 'Europe/Stockholm', roster, index,
+                              first_covered_ms=NOV_1 - DAY_MS, gaps=()).to_json()['series'][0]
+        self.assertFalse(local['provider_window_matches'])
+        self.assertEqual('$7.95', local['month_total']['display']['usd'])
+        self.assertEqual('$0.45', local['observed_total']['display']['usd'])
 
     def test_covered_zero_differs_from_partial_pricing_attribution_and_source_gaps(self):
         a, b = subscription(identity='first'), subscription(identity='second')
@@ -257,7 +267,7 @@ class TimelineProjectionTests(unittest.TestCase):
         child = replace(request('physical', NOV_1 + 55, amount=9, ref=native.ref),
                         session_id='child', root_session_id='root', parent_session_id='root')
         other = request('other model', NOV_1 + 58, amount=33, model='other')
-        future = request('exact end', NOV_5, amount=500, ref=native.ref)
+        future = request('future', NOV_5 + 1, amount=500, ref=native.ref)
         series = self.view(projected(native), (child, child, other, future))
         self.assertEqual(1, len(series))
         self.assertEqual('42', series[0]['points'][0]['amount'])
@@ -287,7 +297,7 @@ class TimelineProjectionTests(unittest.TestCase):
         facts = (request('1', NOV_1 + 5, amount=1, ref=a.ref),
                  request('2', NOV_1 + DAY_MS + 5, amount=2, ref=a.ref),
                  request('3', NOV_1 + DAY_MS + 6, amount=1, ref=b.ref),
-                 request('future', NOV_5, amount=10_000, ref=a.ref))
+                 request('future', NOV_5 + 1, amount=10_000, ref=a.ref))
         rows = self.view(accounts, facts, value=lambda _, tokens: Decimal('.004') * tokens.input)
 
         self.assertEqual(3, len({row['id'] for row in rows}))
@@ -308,7 +318,7 @@ class TimelineProjectionTests(unittest.TestCase):
     def test_non_working_days_follow_displayed_swedish_dates_in_all_daily_windows(self):
         cases = (
             ('7-days', '2027-01-02T00:30:00+01:00',
-             ('2026-12-26', '2026-12-27', '2027-01-01', '2027-01-02')),
+             ('2026-12-27', '2027-01-01', '2027-01-02')),
             ('30-days', '2027-01-02T00:30:00+01:00',
              ('2026-12-05', '2026-12-06', '2026-12-12', '2026-12-13', '2026-12-19', '2026-12-20',
               '2026-12-25', '2026-12-26', '2026-12-27', '2027-01-01', '2027-01-02')),
@@ -366,25 +376,26 @@ class TimelineProjectionTests(unittest.TestCase):
 
         index.cost = observed_cost
         view = timeline_view('month', now, 'UTC', account_roster(projected(native)), index,
-                             first_covered_ms=NOV_1, gaps=(), pending=((now, now + DAY_MS),)).to_json()
-        self.assertEqual({(NOV_1, first), (first, now)}, set(calls))
+                             first_covered_ms=NOV_1, gaps=(), pending=((now + 1, now + DAY_MS),)).to_json()
+        self.assertEqual({(NOV_1, first), (first, now + 1)}, set(calls))
         self.assertEqual(now, view['end_ms'])
         self.assertEqual(list(range(2, 30)), view['future_buckets'])
         self.assertEqual([], view['pending_buckets'])
         self.assertEqual([None] * 28, view['series'][0]['points'][2:])
 
-    def test_thirty_day_cost_boundaries_are_half_open_including_local_midnight(self):
+    def test_thirty_day_cost_boundaries_include_local_midnight_and_now_once(self):
         first = stamp('2026-10-22T00:00:00+02:00')
         second = stamp('2026-10-23T00:00:00+02:00')
         now = stamp('2026-11-20T00:01:00+01:00')
         account = subscription()
         facts = tuple(request(str(at), at, amount=amount, ref=account.ref)
-                      for at, amount in ((first - 1, 700), (first, 1), (second, 2), (now - 1, 3), (now, 900)))
+                      for at, amount in ((first - 1, 700), (first, 1), (second, 2),
+                                         (now - 1, 3), (now, 4), (now + 1, 900)))
         index = PeriodCCostIndex(facts, lambda _, tokens: Decimal(tokens.input), account_only=True)
         view = timeline_view('30-days', now, 'Europe/Stockholm', account_roster(projected(account)), index,
                              first_covered_ms=first - DAY_MS, gaps=()).to_json()
-        self.assertEqual(['1', '2'] + ['0'] * 27 + ['3'], [point['amount'] for point in view['series'][0]['points']])
-        self.assertEqual({'amount': '6', 'display': {'credits': '6', 'usd': '$0.06'}}, view['series'][0]['total'])
+        self.assertEqual(['1', '2'] + ['0'] * 27 + ['7'], [point['amount'] for point in view['series'][0]['points']])
+        self.assertEqual({'amount': '10', 'display': {'credits': '10', 'usd': '$0.10'}}, view['series'][0]['total'])
 
 
 class TimelineDOMTests(unittest.TestCase):

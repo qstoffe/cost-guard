@@ -6,7 +6,8 @@ import unittest
 
 from development.tests.test_ai_stats_tokens import entry, calculate
 from development.tests.fixtures.active_hour import epoch
-from src.analysis.ai_stats import StatsRoot, StatsObservation, period_stats, DAY_MS
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.ai_stats import StatsRoot, StatsObservation, period_stats
 from src.analysis.ai_stats_models import ModelActivity
 from src.analysis.ai_stats_responses import ResponseCall, sample, model_key
 from src.analysis.ai_stats_buckets import friendly_model

@@ -104,7 +104,7 @@ def save_ready(db, item, partition, algorithm, revision, observed_ms, keys, last
 def _overlay_window(start_ms, end_ms, finish_cutoff):
     running = '(start_ms IS NOT NULL AND start_ms<?)'
     if start_ms is None:
-        return f'({running} OR finish_ms>=?)', (end_ms, finish_cutoff)
+        return f'({running} OR (finish_ms>=? AND finish_ms<?))', (end_ms, finish_cutoff, end_ms)
     lower = max(1, start_ms)
     return (f'''({running} OR (finish_ms>=? AND (
             (finish_ms>=? AND finish_ms<?) OR
@@ -115,10 +115,18 @@ def _overlay_window(start_ms, end_ms, finish_cutoff):
 
 def _ready_window(start_ms, end_ms):
     if start_ms is None:
-        return '1', ()
+        # Preserve recorded sessions with unknown activity; known future-only ones are not yet eligible.
+        return '''(last_activity_ms < ? OR latest_activity_ms < ? OR
+                   (last_activity_ms IS NULL AND latest_activity_ms IS NULL))''', (end_ms, end_ms)
     return ('''((last_activity_ms >= ? AND last_activity_ms < ?) OR
                 (latest_activity_ms >= ? AND latest_activity_ms < ?))''',
-            (max(1, start_ms), end_ms) * 2)
+             (max(1, start_ms), end_ms) * 2)
+
+
+def next_ready_activity(db, now):
+    stamps = (db.execute(f'SELECT min({column}) FROM ready_sessions WHERE {column}>?', (now,)).fetchone()[0]
+              for column in ('last_activity_ms', 'latest_activity_ms'))
+    return min((stamp for stamp in stamps if stamp is not None), default=None)
 
 
 def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms):

@@ -1,6 +1,7 @@
 """One shutdown owner; native GUI remains on main thread, HTTP on an owned thread."""
 import os
 import secrets
+import sqlite3
 from threading import Event, Lock, Thread
 import time
 import webbrowser
@@ -8,6 +9,7 @@ import webbrowser
 from src.version import VERSION
 from src.application.live import LiveRuntime
 from src.analysis.account_timeline import PERIODS
+from src.analysis.timezones import calendar_periods, next_local_midnight_ms
 from src.cache.web_archive import WebArchive
 from src.reports import ReportKind
 from src.reports.archived_usage import ArchivedUsage
@@ -88,7 +90,8 @@ class WebHost:
                 # authorization, lifecycle cleanup, or reading local history.
                 pass
         self.history_zone = str(self.history_config.get('timezone') or ('Europe/Stockholm' if archive else 'UTC'))
-        self.session_cache_events = SessionCacheEvents(self.events, self.history_zone) if archive else None
+        self.session_cache_events = SessionCacheEvents(self.events, self.history_zone,
+            archive.next_ready_activity) if archive else None
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
              timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher and not usage else None,
                archive=archive,
@@ -127,6 +130,18 @@ class WebHost:
         selection = driver.coordinator.report_service.selection if driver else None
         archive = self.history_reports.archive if self.history_reports else None
         return database_sizes(selection, self.cache_housekeeping.lifecycle.database.paths.database, archive=archive)
+
+    def period_ranges(self, zone, now):
+        first, complete = None, False
+        if self.history_reports is not None:
+            zone = self.history_zone
+            try:
+                first, complete = self.history_reports.archive.earliest_prompt(self.live.catalog.archive.run, now)
+            except (OSError, sqlite3.Error):
+                pass  # Calendar boundaries are available even when history is not.
+        return dict(timezone_id=zone, starts=dict(calendar_periods(zone, now)),
+                    valid_until=next_local_midnight_ms(zone, now), first_prompt_ms=first,
+                    history_complete=complete)
 
     def stop(self, reason="menu"):
         if reason not in {"menu", "launcher", "source_changed", "configuration_changed", "runtime_fault", "gui_unavailable"}:
@@ -218,7 +233,7 @@ class WebHost:
                             self.observations.lifecycle(self.store, 'configuration_recovered')
                 if not self.stopping.is_set():
                     if self.history_reports:
-                        self.session_cache_events.roll_calendar()
+                        self.session_cache_events.roll_calendar(storage_ready=self.live.catalog.archive.storage_ready)
                         self.live.catalog.archive_maintenance()
                         self.events.publish('history', dict(catalog_hint=self.live.catalog.live_hint(),
                                             detail_hints=self.live.details.archive_hints()))

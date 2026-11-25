@@ -6,11 +6,13 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
 from development.tests.fixtures.account_periods import request, subscription
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.test_account_timeline import NOV_1, NOV_5, projected
-from src.analysis.account_timeline import DAY_MS, PERIODS
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
+from src.analysis.account_timeline import PERIODS
 from src.analysis.cache import encode_trace_entry
 from src.application.account_timeline import account_roster
 from src.application.session_archive import SessionArchive
@@ -23,6 +25,7 @@ from src.reports.models import SessionUsageRow
 from src.reports.session_summary import encode_summary
 from src.watch.account_timeline_archive import ArchivedAccountTimeline
 from src.watch.account_timeline_projection import ArchivedAccountProjection
+from src.web.session_cache_events import SessionCacheEvents
 
 
 class ReportCacheSnapshotTests(unittest.TestCase):
@@ -31,6 +34,63 @@ class ReportCacheSnapshotTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.archive = WebArchive(Path(directory.name))
         self.archive.initialize()
+
+    def test_earliest_prompt_follows_committed_history_not_acquisition_order_or_activity(self):
+        owner = SessionArchive(self.archive)
+
+        def coverage(pending):
+            self.assertTrue(owner.update_runtime(state='observed', terminal=False, reset_pending=True,
+                                                 pending=pending, live={}))
+
+        def detail(root, prompts):
+            rows = [{'is_compaction': compact, 'at_ms': at} for compact, at in prompts]
+            fact = ArchiveFact('rev', NOV_5, {'view': {'prompt_blocks': [{'rows': rows}]}})
+            self.archive.publish('source', 'detail/1', {root: fact})
+
+        def earliest():
+            return self.archive.earliest_prompt(owner.run, NOV_5)
+
+        self.assertEqual((None, False), earliest(), 'inventory not observed')
+        coverage({})
+        self.assertEqual((None, True), earliest(), 'observed empty store')
+        coverage({'older': (NOV_1, False)})
+        detail('future', [(False, NOV_5 + 1)])
+        detail('recent', [(True, NOV_1), (False, NOV_5 - 1500)])
+        self.assertEqual((NOV_5 - 1500, False), earliest())
+        detail('older', [(False, NOV_1 + 3700)])
+        coverage({})
+        self.assertEqual((NOV_1 + 3700, True), earliest())
+        reopened = WebArchive(self.archive.path.parent)
+        self.assertEqual((NOV_1 + 3700, False), reopened.earliest_prompt(SessionArchive(reopened).run, NOV_5))
+
+    def test_committed_future_activity_triggers_a_read_at_eligibility_without_a_new_write(self):
+        later = NOV_5 + 1000
+        row = SessionUsageRow('later', 'Later', 'Model', False, None, 1, last_activity_ms=later)
+        self.archive.publish_session('source', {SESSIONS_DOMAIN: {'later': ArchiveFact(
+            'rev', NOV_5, {'row': encode_summary(row)})}}, 'later',
+            {name: sort_value(row, name) for name in SORT_COLUMNS}, later, later)
+        hub = Mock()
+        events = SessionCacheEvents(hub, 'UTC', self.archive.next_ready_activity)
+
+        def read(at):
+            _, _, rows = self.archive.ready_sessions_page(offset=0, size=25, sort='activity',
+                direction=-1, start_ms=None, end_ms=at + 1)
+            return [key for key, _ in rows]
+
+        with patch('src.web.session_cache_events.time_ns') as clock:
+            clock.return_value = NOV_5 * 1_000_000
+            events.roll_calendar(storage_ready=True)
+            hub.reset_mock()
+            self.assertEqual([], read(NOV_5))
+            clock.return_value = (later - 1) * 1_000_000
+            events.roll_calendar(storage_ready=True)
+            hub.publish.assert_not_called()
+            clock.return_value = later * 1_000_000
+            events.roll_calendar(storage_ready=True)
+            channel, notice = hub.publish.call_args.args
+            self.assertEqual('sessions_cache', channel)
+            self.assertEqual({notice['revision']}, set(notice['periods'].values()))
+            self.assertEqual(['later'], read(later))
 
     def test_only_eligible_live_rows_shadow_history_in_both_count_and_sorted_slice(self):
         def row(key, at):

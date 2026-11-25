@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from development.tests.integration.ci_account_timeline import ChartSource, chart_fixture
 from development.tests.test_account_timeline import NOV_1
-from src.analysis.account_timeline import DAY_MS
+from development.tests.fixtures.session_snapshots import DAY as DAY_MS
 from src.sources.errors import SourceConcurrentChangeError
 from src.watch import account_timeline
 
