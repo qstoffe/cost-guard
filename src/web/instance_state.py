@@ -14,11 +14,41 @@ import uuid
 from .process_identity import InstanceConflict
 
 SCHEMA = 1
+LIFECYCLE_CODES = frozenset({
+    "starting", "ready", "stopped", "source_changed", "source_check_unavailable",
+    "configuration_changed", "configuration_unavailable", "configuration_recovered",
+    "runtime_fault", "gui_unavailable", "tray_unavailable", "instance_start_timeout",
+    "browser_open_failed", "instance_conflict", "gui_or_server_start_failed",
+    "app_preparation_failed", "process_identity_access_denied", "process_identity_unavailable",
+    "process_identity_changed", "instance_lifetime_busy", "instance_lifetime_unavailable",
+    "instance_transition_busy", "instance_transition_unavailable", "corrupt_instance_state",
+    "unsafe_instance_path", "foreign_instance_path", "private_state_unavailable",
+    "instance_state_changed", "stale_instance_recovered", "instance_control_conflict",
+    "instance_control_unavailable", "instance_not_ready", "instance_start_conflict",
+    "instance_stop_timeout", "process_stop_unavailable", "safe_force_stop_unavailable",
+})
 
 
 def checkout_identity(root):
     canonical = os.path.normcase(str(Path(root).resolve(strict=True)))
     return hashlib.sha256(os.fsencode(canonical)).hexdigest()
+
+
+def private_web_directory(root, *, data_home=None):
+    """Resolve this installation's private state location without creating anything."""
+    if data_home is None:
+        if os.name == "nt":
+            data_home = os.environ.get("LOCALAPPDATA")
+            if not data_home:
+                raise InstanceConflict("local_app_data_unavailable")
+        elif os.uname().sysname == "Darwin":
+            data_home = Path.home() / "Library/Application Support"
+        else:
+            data_home = os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")
+    base = Path(data_home)
+    if not base.is_absolute():
+        raise InstanceConflict("invalid_app_data")
+    return base / "CostGuard" / "Web" / checkout_identity(root)
 
 
 def _safe(path):
@@ -56,25 +86,13 @@ def _private(path):
 
 class InstanceStore:
     def __init__(self, root, *, data_home=None):
-        self.key = checkout_identity(root)
-        if data_home is None:
-            if os.name == "nt":
-                value = os.environ.get("LOCALAPPDATA")
-                if not value:
-                    raise InstanceConflict("local_app_data_unavailable")
-                data_home = Path(value)
-            elif os.uname().sysname == "Darwin":
-                data_home = Path.home() / "Library/Application Support"
-            else:
-                data_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
-        base = Path(data_home)
-        if not base.is_absolute():
-            raise InstanceConflict("invalid_app_data")
+        self.directory = private_web_directory(root, data_home=data_home)
+        self.key = self.directory.name
+        base = self.directory.parents[2]
         base.mkdir(parents=True, exist_ok=True)
         # Reject reparse ancestors instead of silently redirecting private state.
         for item in (base, *base.parents):
             _safe(item)
-        self.directory = base / "CostGuard" / "Web" / self.key
         for item in (base / "CostGuard", base / "CostGuard/Web", self.directory):
             item.mkdir(exist_ok=True)
             _private(item)
@@ -175,19 +193,7 @@ class InstanceStore:
 
     def log(self, code):
         # No exceptions, URLs, paths, bootstrap credentials or source data in diagnostics.
-        if code not in {"starting", "ready", "stopped", "source_changed",
-                        "source_check_unavailable", "runtime_fault", "gui_unavailable",
-                        "tray_unavailable", "instance_start_timeout", "browser_open_failed",
-                         "configuration_unavailable", "instance_conflict", "gui_or_server_start_failed",
-                         "app_preparation_failed", "process_identity_access_denied",
-                         "process_identity_unavailable", "process_identity_changed",
-                         "instance_lifetime_busy", "instance_lifetime_unavailable",
-                         "instance_transition_busy", "instance_transition_unavailable",
-                         "corrupt_instance_state", "unsafe_instance_path", "foreign_instance_path",
-                         "private_state_unavailable", "instance_state_changed", "stale_instance_recovered",
-                         "instance_control_conflict", "instance_control_unavailable", "instance_not_ready",
-                         "instance_start_conflict", "instance_stop_timeout", "process_stop_unavailable",
-                         "safe_force_stop_unavailable"}:
+        if code not in LIFECYCLE_CODES:
             code = "runtime_fault"
         path = self.directory / "lifecycle.log"
         if path.exists():

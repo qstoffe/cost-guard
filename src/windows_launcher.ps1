@@ -52,10 +52,7 @@ public static class CostGuardLauncherConsole {
     $target = 'src/entrypoints/cli.py'
     $programArgs = @()
     if ($Mode -eq 'watch') { $programArgs = @('--watch') }
-    if ($Mode -eq 'diagnostics') {
-        $target = 'development\tools\collect_diagnostics.py'
-        $programArgs = @('--test-service-start')
-    }
+    if ($Mode -eq 'diagnostics') { $target = 'development\tools\collect_diagnostics.py' }
     & $python @pythonArgs $target @programArgs
     $code = $LASTEXITCODE
 } catch {

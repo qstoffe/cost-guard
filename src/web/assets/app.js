@@ -215,11 +215,15 @@ function connectionStatus(message, state = {}) {
   liveStatus = message;
   miniWatch?.health(hostState);
   // Health governs admission, not narration of automatic retries.
-  const recovery = hostState.terminal || ['authorization_required', 'identity_changed', 'stopped'].includes(hostState.kind) ?
-    'Reopen Cost Guard from the launcher to reconnect.' :
+  const hostRecovery = {
+    authorization_required: 'This browser is no longer authorized. Open a fresh link from Cost Guard.',
+    identity_changed: 'The Cost Guard host changed. Open a fresh link from Cost Guard.',
+    stopped: 'The Cost Guard host stopped. Start it again from the launcher.',
+  }[hostState.kind];
+  const recovery = hostRecovery || (
     ['http_auth_failure', 'source_permission_denied', 'permission_denied', 'registration_unreadable'].includes(hostState.sourceError) ?
       'Check OpenCode access, then reopen Cost Guard.' :
-    hostState.sourceBlocked ? 'Update OpenCode, then reopen Cost Guard.' : '';
+    hostState.sourceBlocked ? 'Update OpenCode, then reopen Cost Guard.' : '');
   const visibleMessage = recovery || (hostState.sourceOutage ? 'OpenCode connection lost. Trying to reconnect…' : '');
   ReportView.text(statusLine, '');
   statusLine.removeAttribute('aria-description');

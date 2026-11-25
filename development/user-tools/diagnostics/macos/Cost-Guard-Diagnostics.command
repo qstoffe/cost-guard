@@ -9,7 +9,7 @@ cg_find_python || {
   exit 1
 }
 
-"$PYTHON" "$CG_ROOT/development/tools/collect_diagnostics.py" --test-service-start
+"$PYTHON" "$CG_ROOT/development/tools/collect_diagnostics.py"
 RESULT=$?
 echo
 if [[ -t 0 && -t 1 ]]; then read -r '?Press Return to close...'; fi

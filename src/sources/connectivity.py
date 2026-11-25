@@ -13,8 +13,9 @@ from .connectivity_events import record
 
 
 class SourceConnectivity:
-    def __init__(self, generation: str):
+    def __init__(self, generation: str, *, persist: bool = True):
         self.generation = generation
+        self.persist = persist
         self.registration = "unknown"
         self.version = "unknown"
         self.last_failure: dict[str, object] = {}
@@ -33,15 +34,16 @@ class SourceConnectivity:
         self.started = time.monotonic() if self.started is None else self.started
         self.status = "incompatible" if error.terminal else "unavailable" if error.readiness_retryable else "unreadable"
         self.last_failure = evidence
-        if transition:
+        if transition and self.persist:
             record(self.generation, "retrying", self.status if self.status != "incompatible" else "unsupported",
                    **evidence, attempts=self.episode_attempts)
 
     def succeeded(self) -> None:
         if self.started is not None:
             self.recoveries += 1
-            record(self.generation, "recovered", "available", **self.last_failure,
-                   attempts=self.episode_attempts, duration_ms=int((time.monotonic() - self.started) * 1000))
+            if self.persist:
+                record(self.generation, "recovered", "available", **self.last_failure,
+                       attempts=self.episode_attempts, duration_ms=int((time.monotonic() - self.started) * 1000))
         self.started = None
         self.episode_attempts = 0
         self.status = "healthy"

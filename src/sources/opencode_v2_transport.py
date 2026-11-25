@@ -144,7 +144,6 @@ class V2HttpClient:
         self._lock = threading.Lock()
         self._generation = 0
         self._cancelled = False
-        self._streams: set[http.client.HTTPConnection] = set()
         self._stream_stops: dict[http.client.HTTPConnection, threading.Event] = {}
         weakref.finalize(self, _close_idle, self._idle, self._lock)
         # Privacy-safe counters only (no paths, queries or payloads).
@@ -180,7 +179,6 @@ class V2HttpClient:
         with self._lock:
             self._generation += 1
         _close_idle(self._idle, self._lock)
-        self.close_events(intentional=False)
 
     def cancel(self) -> None:
         """Retire this owner's reads; never stop or mutate the shared service.
@@ -192,23 +190,11 @@ class V2HttpClient:
             self._cancelled = True
         self.close()
 
-    def close_events(self, *, intentional: bool = True) -> None:
-        """Wake blocked SSE readers without stopping the shared service."""
+    def close_events(self) -> None:
+        """Signal SSE readers; only the reader closes its HTTP response."""
         with self._lock:
-            streams = tuple(self._streams)
-            if intentional:
-                for connection in streams:
-                    stop = self._stream_stops.get(connection)
-                    if stop is not None:
-                        stop.set()
-        for connection in streams:
-            sock = connection.sock
-            if sock is not None:
-                try:
-                    sock.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
-            connection.close()
+            for stop in self._stream_stops.values():
+                stop.set()
 
     def _get(self, target: str, *, allow_reuse: bool = True) -> tuple[int, bytes]:
         if self.read_admission is not None:
@@ -324,10 +310,9 @@ class V2HttpClient:
         if stopped.is_set():
             return
         connection = self._new_connection(self.timeout_seconds)
-        generation = self._generation
-        connection.cancelled = lambda: self._cancelled or stopped.is_set() or generation != self._generation
         with self._lock:
-            self._streams.add(connection)
+            generation = self._generation
+            connection.cancelled = lambda: self._cancelled or stopped.is_set() or generation != self._generation
             self._stream_stops[connection] = stopped
         try:
             if not stopped.is_set():
@@ -337,7 +322,6 @@ class V2HttpClient:
                 raise
         finally:
             with self._lock:
-                self._streams.discard(connection)
                 self._stream_stops.pop(connection, None)
             connection.close()
 
@@ -358,6 +342,8 @@ class V2HttpClient:
         data_lines: list[str] = []
         try:
             for raw in response:
+                if connection.cancelled():
+                    raise ConnectionAbortedError()
                 line = raw.decode("utf-8").rstrip("\r\n")
                 if not line:
                     if data_lines:
@@ -371,7 +357,7 @@ class V2HttpClient:
                     continue
                 if line.startswith("data:"):
                     data_lines.append(line[5:].lstrip())
-            if data_lines:
+            if data_lines and not connection.cancelled():
                 value = _decode_event_data("\n".join(data_lines))
                 if value is not None:
                     yield value

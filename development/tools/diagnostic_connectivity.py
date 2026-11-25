@@ -5,6 +5,8 @@ from __future__ import annotations
 def connectivity_summary(data: dict) -> list[str]:
     lines = []
     events = data.get("watch_source_recovery_events") or []
+    if not isinstance(events, list):
+        events = []
     for generation, source in (data.get("sources") or {}).items():
         probe = source.get("probe") or {}
         read_failure = source.get("list_timing", {}).get("source_failure") or next(
@@ -14,7 +16,7 @@ def connectivity_summary(data: dict) -> list[str]:
         recovered = any(e.get("source") == generation and e.get("event") == "recovered" for e in events)
         read_failed = bool(read_failure) or source.get("list_timing", {}).get("ok") is False
         if probe.get("healthy") and not read_failed:
-            state = "temporarily unavailable but recovered; currently healthy" if recovered else "healthy"
+            state = "currently healthy; historical recovery also recorded" if recovered else "healthy"
         elif code in {"unsupported_schema", "unsupported_version", "registration_invalid"}:
             state = "incompatible"
         elif code in {"invalid_data", "concurrent_source_change"}:
@@ -26,5 +28,4 @@ def connectivity_summary(data: dict) -> list[str]:
     if metadata.get("failing_sources"):
         fallback = "cached fallback" if metadata.get("cache_fallback") else "cache availability recorded separately"
         lines.append(f"External HTTPS metadata acquisition degraded ({fallback}); not proof of a local HTTP failure.")
-    lines.append("Validation/test failures are independent of source connectivity and Diagnostics ZIP creation.")
     return lines

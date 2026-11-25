@@ -7,6 +7,7 @@ import sys
 from src.config import ConfigError, load_configuration
 from src.runtime_errors import RuntimeErrors
 from .instance_state import InstanceStore
+from .launch_messages import record_failure
 from .lifecycle import GUI_MODULES
 from .process_identity import InstanceConflict
 
@@ -15,7 +16,7 @@ def managed(root, nonce, module):
     store = InstanceStore(root)
     try:
         with store.lock(timeout=0, lifetime=True):
-            store.log("starting")
+            record_failure(store, "starting")
 
             def run():
                 # Missing native host fails before HTTP startup. No icon-free fallback.
@@ -27,16 +28,16 @@ def managed(root, nonce, module):
                 except InstanceConflict as error:
                     if str(error) != "tray_unavailable":
                         raise
-                    store.log("tray_unavailable")
+                    record_failure(store, "tray_unavailable")
                     return 3
                 if owner.failure:
                     raise owner.failure
                 return 0 if owner.ready else 1
 
             # Reuse existing sanitized fault machinery, rooted outside tracked source.
-            return RuntimeErrors(store.directory, mode="Web", private=True).run(run)
+            return RuntimeErrors(store.directory, mode="Web", private=True, source_root=root).run(run)
     except Exception:
-        store.log("runtime_fault")
+        record_failure(store, "runtime_fault")
         return 1
 
 

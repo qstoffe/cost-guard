@@ -137,6 +137,7 @@ class OpenCodeV2Source:
         *,
         candidate: ServiceRegistrationCandidate | None = None,
         timeout_seconds: float = 10.0,
+        record_connectivity: bool = True,
     ):
         if registration_path is not None and candidate is not None:
             raise ValueError("Specify registration_path or candidate, not both")
@@ -148,7 +149,7 @@ class OpenCodeV2Source:
                     Path(registration_path).expanduser().resolve(strict=False), "explicit"
                 )
         self._candidate = candidate
-        self._connectivity = SourceConnectivity("v2")
+        self._connectivity = SourceConnectivity("v2", persist=record_connectivity)
         self.read_recovery = None
         self._connection_lock = threading.RLock()
         self._reads_cancelled = threading.Event()

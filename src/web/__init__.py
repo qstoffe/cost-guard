@@ -1,1 +1,1 @@
-"""Optional loopback presentation. Never imported by CLI or Diagnostics."""
+"""Loopback presentation. Diagnostics reads the state/observations contracts, not the host."""
