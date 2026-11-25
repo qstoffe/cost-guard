@@ -108,10 +108,13 @@ def assert_geometry(plot, series_count):
         return {ticks: labels.length, cells: targets.length, bars: bars.length,
             fit: targets.every((target, i) => {
                 const tick = labels[i], columns = bars.filter(([slot]) => Number(slot) === i).map(([, box]) => box);
+                const center = target.x + target.width / 2;
                 return tick.x >= target.x && tick.x + tick.width <= target.x + target.width
                     && columns.every((bar, j) => bar.width >= .99 && bar.x >= target.x
                         && bar.x + bar.width <= target.x + target.width
-                        && (!j || columns[0].x === bar.x && columns[0].width === bar.width
+                        && Math.abs(bar.x + bar.width / 2 - center) < .001
+                        && (!j || (columns.length <= 5 ? bar.width < columns[j - 1].width
+                                                       : bar.width <= columns[j - 1].width)
                             && Math.abs(columns[0].y + columns[0].height - bar.y - bar.height) < .001));
             })};
     }''')
@@ -627,7 +630,11 @@ def check(browser, root, screenshots=None):
                 return {x, y, width, height, ink: bar.dataset.ink, fill: getComputedStyle(bar).fill};
             })''')
             assert [bar['ink'] for bar in shape] == order, shape
-            assert len({(bar['x'], bar['width'], round(bar['y'] + bar['height'], 3)) for bar in shape}) == 1
+            assert all(back['width'] > front['width'] for back, front in zip(shape, shape[1:])), shape
+            center = shape[0]['x'] + shape[0]['width'] / 2
+            baseline = shape[0]['y'] + shape[0]['height']
+            assert all(abs(bar['x'] + bar['width'] / 2 - center) < .001 and
+                       abs(bar['y'] + bar['height'] - baseline) < .001 for bar in shape), shape
             assert len({bar['fill'] for bar in shape}) == 3
         heights = first.evaluate_all("bars => bars.map(bar => bar.getBBox().height)")
         assert all(abs(height / heights[0] - ratio) < .001 for height, ratio in zip(heights, (1, .6, .2)))

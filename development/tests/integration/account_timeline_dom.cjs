@@ -234,5 +234,45 @@ async function checkLegendTotals() {
   }
 }
 
-check().then(checkWaitingProgress).then(checkLegendTotals)
+async function checkOverlayRanks() {
+  const amounts = [99, 100, 98, 100, 50];
+  const value = n => ({amount: String(n), display: {credits: String(n), usd: `$${(n / 100).toFixed(2)}`}});
+  const series = Array.from({length: 200}, (_, i) => ({
+    ...first, id: i.toString(16).padStart(8, '0'), account: `Account ${i}`,
+    points: [i < 5 ? value(amounts[i]) : i % 2 ? null : value(0), value(i === 4 ? 100 : 50)]
+  }));
+  let response = frame('current', 1, [], series.slice(0, 5));
+  const chart = new context.View(async () => response, () => {});
+  chart.setScope('current');
+  chart.active(true);
+  await chart.refresh();
+
+  const bars = bucket => chart.layers.children.map(node => node.attributes)
+    .filter(attrs => attrs.class === 'account-timeline-bar' && Number(attrs['data-bucket']) === bucket);
+  const fiveWidths = bars(0).map(bar => bar.width);
+  response = frame('current', 2, [], series);
+  await chart.refresh();
+  const ink = i => chart.entries.get(series[i].id).root.children[1].attributes['data-ink'];
+  const sparse = bars(0), crowded = bars(1);
+  assert.deepEqual(sparse.map(bar => bar.width), fiveWidths, 'missing and zero values take no overlay ranks');
+  assert.deepEqual(sparse.map(bar => bar['data-ink']), [1, 3, 0, 2, 4].map(ink),
+    'only positive accounts paint, highest first, with stable account colors on a tie');
+  const fullHeight = Number(sparse[0].height);
+  for (const [i, percent] of [100, 100, 99, 98, 50].entries()) {
+    assert.ok(Math.abs(Number(sparse[i].height) - fullHeight * percent / 100) < .001);
+    if (i) assert.ok(Number(sparse[i].width) < Number(sparse[i - 1].width), `sparse rank ${i}`);
+  }
+  assert.equal(crowded.length, 200);
+  assert.equal(crowded[0]['data-ink'], ink(4), 'the shortest account yesterday leads today');
+  assert.equal(crowded[0].width, sparse[0].width, 'both buckets start with the full bar');
+  const target = chart.targets.children[1].attributes;
+  const center = Number(target.x) + Number(target.width) / 2;
+  for (const [i, bar] of crowded.entries()) {
+    const width = Number(bar.width);
+    assert.ok(width > 0 && width <= Number(i ? crowded[i - 1].width : target.width), `crowded rank ${i}`);
+    assert.ok(Math.abs(Number(bar.x) + width / 2 - center) < .001, `crowded center ${i}`);
+  }
+}
+
+check().then(checkWaitingProgress).then(checkOverlayRanks).then(checkLegendTotals)
   .catch(error => { console.error(error); process.exitCode = 1; });
