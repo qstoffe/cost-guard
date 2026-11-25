@@ -1,4 +1,4 @@
-"""Advance catalog archive recovery and bounded effort backfill on its writer lane."""
+"""Advance catalog archive recovery and bounded backfills on its writer lane."""
 from functools import partial
 from itertools import islice
 
@@ -14,12 +14,16 @@ def advance_archive_maintenance(catalog):
         if catalog.archive_stopping.is_set() or catalog.archive_job is not None:
             return
         if archive.loaded:
-            if not archive.effort_backfill or now < catalog.effort_backfill_due:
+            if archive.effort_backfill and now >= catalog.effort_backfill_due:
+                candidates = tuple((key, archive.authorities[key])
+                                   for key in islice(archive.effort_backfill, EFFORT_BACKFILL_BATCH))
+                catalog.archive_job = job = catalog.archive_pool.submit(archive.upgrade_efforts, candidates)
+                complete = _effort_backfill_complete
+            elif archive.prompt_backfill and now >= archive.prompt_backfill_due:
+                catalog.archive_job = job = catalog.archive_pool.submit(archive.backfill_prompt_range)
+                complete = _prompt_backfill_complete
+            else:
                 return
-            candidates = tuple((key, archive.authorities[key])
-                               for key in islice(archive.effort_backfill, EFFORT_BACKFILL_BATCH))
-            catalog.archive_job = job = catalog.archive_pool.submit(archive.upgrade_efforts, candidates)
-            complete = _effort_backfill_complete
         else:
             if now < catalog.archive_retry_at:
                 return
@@ -28,6 +32,16 @@ def advance_archive_maintenance(catalog):
             complete = _archive_complete
     # A completed future calls back immediately; never attach under the catalog lock.
     job.add_done_callback(partial(complete, catalog))
+
+
+def _prompt_backfill_complete(catalog, job):
+    if job.cancelled():
+        return
+    more = job.result()
+    with catalog.lock:
+        catalog.archive_job = None
+        catalog.archive.prompt_backfill = more is not False
+        catalog.archive.prompt_backfill_due = catalog.clock() + (30 if more is None else 1)
 
 
 def _archive_complete(catalog, job):

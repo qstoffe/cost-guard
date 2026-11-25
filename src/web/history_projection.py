@@ -1,4 +1,5 @@
 """Render current reports from the display archive, without selecting OpenCode."""
+from bisect import bisect_right
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from functools import cache
@@ -6,7 +7,7 @@ from types import MappingProxyType, SimpleNamespace
 from uuid import uuid4
 
 from src.analysis.active_hour import deduplicated_requests
-from src.analysis.ai_stats import StatsObservation, outside_period, windows
+from src.analysis.ai_stats import StatsObservation, outside_period
 from src.analysis.ai_stats_buckets import friendly_model
 from src.analysis.matched_runs import period_fact
 from src.analysis.timezones import calendar_periods
@@ -24,6 +25,7 @@ class PreparedHistory:
     mix_usage: object
     matches: MappingProxyType
     costs: MappingProxyType
+    clock_points: tuple
 
     @classmethod
     def from_facts(cls, facts):
@@ -41,10 +43,19 @@ class PreparedHistory:
                     prompt_of[entry] = prompt
                 if parts is not None:
                     costs[entry.model, entry.tokens] = parts
+        points = {entry.completed_at_ms for entry in requests}
+        for root in roots:
+            points.update(entry.completed_at_ms for entry in root.entries)
+            for left, duration, _ in root.intervals:
+                points.add(left + 1)
+                if type(duration) is int and duration > 0:
+                    points.add(left + duration)
+        for match in matches.values():
+            points.add(match.started_at_ms)
         return cls(tuple(roots), deduplicated_requests(
             (entry for root in roots for entry in root.entries), shared_history=True),
             prepare_history_usage(requests, prompt_of, archived=True),
-            MappingProxyType(matches), MappingProxyType(costs))
+             MappingProxyType(matches), MappingProxyType(costs), tuple(sorted(points)))
 
 
 def observed_in_period(root, start, now):
@@ -71,6 +82,13 @@ class HistoryProjection:
             self._prepared_facts = facts
         return self._prepared
 
+    def next_clock_change(self, now):
+        if self._prepared is None:
+            return None
+        points = self._prepared.clock_points
+        index = bisect_right(points, now)
+        return points[index] if index < len(points) else None
+
     def render(self, *, identity, selection, config, reference, now, revisions, activity, available,
                only=None, defer_while_loading=False, unavailable=frozenset(),
                live_roots=frozenset(), refresh_roots=frozenset(), snapshot=None):
@@ -78,8 +96,7 @@ class HistoryProjection:
         if more and defer_while_loading:
             return {}, True
         zone = str(config.get('timezone') or 'Europe/Stockholm')
-        periods = windows(zone, now)
-        mix_starts = dict(calendar_periods(zone, now))
+        periods = calendar_periods(zone, now)
         prepared = self._prepare(facts)
         roots, matches = prepared.roots, prepared.matches
         pending = {key: activity.get(key) for key, revision in revisions.items()
@@ -124,8 +141,7 @@ class HistoryProjection:
                                     start, now, complete=complete and
                                     all(root.source_complete and root.session_id in matches for root in period_roots))))
             mix = prepared_history_projection(service, reference, prepared.mix_usage, scope=name, valuation=valuation)
-            mix_start = mix_starts[name]
-            mix_complete, mix_progress = coverage(mix_start, sum(not outside_period(root, mix_start) for root in roots))
+            mix_complete, mix_progress = coverage(start, len(period_roots))
             mix = replace(mix, token_mix_period={**mix.token_mix_period,
                             **({'coverage': 'partial'} if not mix_complete else {})})
             reports['token-mix', name] = self._result(mix, service, config, identity, mix_complete, mix_progress)

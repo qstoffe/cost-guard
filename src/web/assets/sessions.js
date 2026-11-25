@@ -39,6 +39,7 @@ const SessionsCatalog = (() => {
       this.periods.setAttribute('role', 'group'); this.periods.setAttribute('aria-label', 'Sessions period');
       this.periodButtons = periods.map(([key, label]) => {
         const button = el('button', label); button.type = 'button';
+        if (typeof PeriodHelp !== 'undefined') PeriodHelp.attach(button, key);
         button.addEventListener('click', () => this.navigateTo(destination(0, null, this.sort, this.direction, key), null, 'period'));
         this.periods.append(button); return {key, button};
       });

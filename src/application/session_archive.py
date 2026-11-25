@@ -35,6 +35,9 @@ class SessionArchive:
         self.authorities = {}
         self.effort_backfill = set()
         self.effort_refresh = set()
+        self.prompt_backfill = True
+        self.prompt_backfill_due = 0
+        self.live_first_prompt = None
         self.loaded = False
         self.storage_ready = False
         self.run = uuid4().hex
@@ -130,6 +133,23 @@ class SessionArchive:
             except (sqlite3.Error, OSError, ValueError, KeyError, TypeError, InvalidOperation):
                 LOG.warning('session_model_effort_backfill_unavailable')
         return results
+
+    def backfill_prompt_range(self):
+        try:
+            return self.storage.backfill_prompt_range()
+        except (OSError, sqlite3.Error):
+            LOG.warning('prompt_range_backfill_unavailable')
+            return None
+
+    def record_live_prompt(self, partition, key, at):
+        # The store's global minimum can only improve while history is retained.
+        if self.live_first_prompt is not None and self.live_first_prompt <= at:
+            return
+        try:
+            self.storage.record_first_prompt(partition, key, at)
+            self.live_first_prompt = at
+        except (OSError, sqlite3.Error):
+            LOG.warning('live_prompt_range_write_unavailable')
 
     def save(self, partition, key, revision, row, observed_ms, dependencies, models, usage, detail):
         from .session_epoch_page import sort_value

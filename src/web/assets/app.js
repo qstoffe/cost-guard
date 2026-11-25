@@ -789,6 +789,7 @@ async function connect() {
   try {
     const session = credential ? await api('/api/bootstrap', {credential}) : await api('/api/session');
     csrf = session.csrf;
+    if (typeof PeriodHelp !== 'undefined') PeriodHelp.configure(() => api('/api/period-ranges'));
     // Lightweight file read precedes reports; HTML already carries the early-paint theme.
     try { applySettings(await api('/api/settings')); }
    catch (_) { /* Saved settings are optional here; explicit Settings owns errors. */ }

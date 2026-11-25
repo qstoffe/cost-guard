@@ -468,11 +468,7 @@ class AccountTimeline:
         day = period_start('today', now_ms, zone)
         day_changed = day != self.day
         self.day = day
-        starts = {period: period_start(period, now_ms, zone) for period in periods if period != '7-days'}
-        if self.archive and 'month' in starts:
-            starts['month'] = timeline_window('month', now_ms, zone, native_bounds=tuple(
-                (item.month.start, item.month.reset) for item in roster
-                if item.month is not None and item.month.start is not None)).start
+        starts = {period: period_start(period, now_ms, zone) for period in periods}
         with self.lock:
             if self.archive or available or changed_source or terminal:
                 self.public_ready = bool(self.archive) or available and not terminal
@@ -536,7 +532,7 @@ class AccountTimeline:
                         # publication; keep its own coverage and converge normally.
                         refresh = 1000 if foreground else ARCHIVE_BACKGROUND_MS
                         self.due = min(self.due, now_ms + refresh)
-                    if rolled:
+                    if rolled or day_changed:
                         self.due = 0
                 recovered('account-timeline')
             except SourceError:

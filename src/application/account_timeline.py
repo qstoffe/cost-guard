@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
-from src.analysis.account_timeline import period_start, timeline_window
+from src.analysis.account_timeline import timeline_window
 from src.analysis.period_ccost import account_usage_routes, monthly_quota_window
 from src.analysis.quota_pace import is_workday
 from src.analysis.timezones import resolve_timezone
@@ -169,26 +169,21 @@ def _overlap(intervals, buckets):
 def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps, pending=(), initial_pending=None,
                   price_revision=None, month_index=None):
     months = {item.key: item.month for item in roster if period == 'month' and item.month is not None}
-    native_bounds = tuple((value.start, value.reset) for value in months.values() if value.start is not None)
-    window = timeline_window(period, now_ms, zone, native_bounds=native_bounds)
+    window = timeline_window(period, now_ms, zone)
     elapsed = window.buckets[:len(window.buckets) - len(window.future)]
-    acquiring = _overlap(pending, elapsed)
+    # Chart labels end at Now; the index consumes half-open millisecond ranges.
+    clips = (*elapsed[:-1], (elapsed[-1][0], now_ms + 1))
+    acquiring = _overlap(pending, clips)
     initial = acquiring if initial_pending is None else _overlap(initial_pending, elapsed)
     non_working, end_occurrence = _calendar_details(period, window, now_ms, zone)
     series = []
-    local_start = period_start(period, now_ms, zone)
     for item in roster:
         month = months.get(item.key)
-        clips = elapsed
         native = bool(month and month.provider_total)
-        if period == 'month' and month_index is not None:
-            start = month.start if month and month.start is not None else local_start
-            clips = tuple((max(left, start), right + (i == len(elapsed) - 1))
-                          for i, (left, right) in enumerate(elapsed))
+        comparable = bool(month and month.start == window.start)
         missing = _overlap(gaps, clips)
-        waiting = _overlap(pending, clips)
         partial = tuple(gap or queued or first_covered_ms is None or left < first_covered_ms
-                        for (left, _), gap, queued in zip(clips, missing, waiting))
+                        for (left, _), gap, queued in zip(clips, missing, acquiring))
         valuation = month_index if month and month.start is not None and not native and month_index is not None else index
         amounts = tuple(_bucket_cost(valuation, item, left, right, partial=uncertain,
                                      strict_attribution=valuation is not None and valuation is month_index)
@@ -196,19 +191,19 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
                         for (left, right), uncertain in zip(clips, partial))
         peak = max((point[0] for point in amounts if point is not None), default=Decimal(0))
         points = tuple(_point(*point) if point is not None else None for point in amounts) + (None,) * len(window.future)
-        # Ignore reserved dates and zero-duration boundary slots; neither adds
-        # time in the published window nor makes it incomplete.
-        total = _range_total(tuple(point for (left, right), point in zip(clips, amounts) if left < right))
+        # An empty boundary slot has no elapsed time, but may contain an event exactly at Now.
+        total = _range_total(tuple(point for (left, right), point in zip(elapsed, amounts)
+                                   if left < right or point is not None and point[0]))
         if total is not None:
             amount, mark = total
-            if not native and month and month.start is not None and month.used != amount:
+            if not native and comparable and month.used is not None and month.used != amount:
                 # Retained history remains visible but is not a final same-window
                 # total while the current card and chart differ.
                 mark = '~'
             total = _point(amount, mark)
         # The browser chooses the largest visible series' scale, without
         # reimplementing the product's Decimal/unit formatting.
-        authority = dict(provider_monthly_total=True, observed_total=total,
+        authority = dict(provider_monthly_total=True, provider_window_matches=comparable, observed_total=total,
                          month_total=_point(month.used) if month.used is not None else None) if native else {}
         series.append(record(id=item.key, account=item.label, peak=peak, ticks=_ticks(peak), points=points,
                              total=total, **authority))

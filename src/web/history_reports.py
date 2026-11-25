@@ -6,7 +6,6 @@ import time
 from types import SimpleNamespace
 from uuid import uuid4
 
-from src.analysis.ai_stats import ROLLING_DAYS
 from src.analysis.cache import dependency_signature
 from src.analysis.timezones import calendar_periods
 from src.cache.web_archive import ArchiveFact, REPORT_CHECKPOINTS
@@ -21,13 +20,12 @@ from .history_projection import HistoryProjection
 
 LOG = logging.getLogger(__name__)
 KINDS = {ReportKind.AI_STATS, ReportKind.TOKEN_MIX}
-VIEWS = 'report-view/1'
+VIEWS = 'report-view/2'
 RENDER_INTERVAL = 1.0
 PROGRESS_INTERVAL = 2.5
 BACKGROUND_INTERVAL = 4.0
 BACKGROUND_CPU_SHARE = 0.08
 FOREGROUND_CPU_REST_LIMIT = 2.0
-ROLLING_REFRESH_MS = 60_000
 
 
 def checkpoint_stamp(config, zone, start, settings):
@@ -57,6 +55,7 @@ class HistoryReports:
         self.next_turn = 0
         self.next_background = 0
         self.foreground_due = {}
+        self.clock_due = {}
         self.foreground = frozenset()
         self.run = uuid4().hex
 
@@ -76,12 +75,12 @@ class HistoryReports:
         return {}
 
     def _load_checkpoint(self, period, stamp):
-        return self._read_checkpoint(period, stamp), False, 0.0
+        return self._read_checkpoint(period, stamp), False, 0.0, None
 
     def _measure_render(self, inputs, stamp, previous):
         started = time.thread_time()
         results, more = self._render(inputs, stamp, previous)
-        return results, more, time.thread_time() - started
+        return results, more, time.thread_time() - started, self.projection.next_clock_change(inputs['now'])
 
     def _render(self, inputs, stamp, previous):
         period = inputs['only']
@@ -132,7 +131,7 @@ class HistoryReports:
         else:
             row, = fresh['ai_stats']
             previous = next((item for item in saved['ai_stats'] if item['period'] == period
-                             and (period in ROLLING_DAYS or item['start_ms'] == row['start_ms'])), None)
+                             and item['start_ms'] == row['start_ms']), None)
             if previous:
                 known = {metric['metric']: metric for metric in previous['metrics'] if metric.get('value') is not None}
                 row['metrics'] = [known.get(metric['metric'], metric)
@@ -161,7 +160,7 @@ class HistoryReports:
         if self.job is not None and self.job.done():
             period, render_key = self.job_key
             try:
-                results, more, cpu = self.job.result()
+                results, more, cpu, clock_due = self.job.result()
             except Exception:
                 LOG.warning('history_projection_unavailable', exc_info=True)
                 self.next_turn = turn + 2
@@ -171,6 +170,10 @@ class HistoryReports:
                 if render_key is None:
                     self.restored.add(period)
                 else:
+                    if clock_due is None:
+                        self.clock_due.pop(period, None)
+                    else:
+                        self.clock_due[period] = clock_due
                     # A long render consumes its budget even if more facts
                     # arrived in the meantime. No budget state is read by HTTP.
                     self.next_background = max(self.next_background,
@@ -212,19 +215,17 @@ class HistoryReports:
             progress_key = catalog.generation, ready
             keys, scope_keys = {}, {}
             for name, start in scopes.items():
-                retained = self.published_keys.get(name)
-                # An open rolling view ages out old data without causing idle
-                # background rendering in unobserved periods.
-                bucket = (now // ROLLING_REFRESH_MS if name in foreground and name in ROLLING_DAYS
-                          else retained[0][-1] if retained else None)
-                keys[name] = ((revision, price_signature, settings, start, bucket), progress_key)
-                scope_keys[name] = (price_signature, settings, start, ready, backfill, catalog.index_terminal)
+                # Month and All-time rate denominators advance by local date even when their start is unchanged.
+                day = scopes['today'] if name in {'month', 'all'} else None
+                keys[name] = ((revision, price_signature, settings, start, day), progress_key)
+                scope_keys[name] = (price_signature, settings, start, day, ready, backfill, catalog.index_terminal)
             candidates = []
             for name, key in keys.items():
                 saved = self.published_keys.get(name)
                 scope_changed = self.rendered_scope.get(name) != scope_keys[name]
-                outstanding = key != saved or scope_changed
-                urgent = scope_changed or name in promoted
+                clock_changed = name in self.clock_due and now >= self.clock_due[name]
+                outstanding = key != saved or scope_changed or clock_changed
+                urgent = scope_changed or name in promoted or (clock_changed and name in foreground)
                 if backfill and not urgent:
                     due = self.foreground_due.get(name, 0) if name in foreground else self.next_background
                     if turn < due:

@@ -10,10 +10,8 @@ from .ai_stats_responses import response_rows
 from .ai_stats_buckets import model_key
 from .ai_stats_models import activity_groups, model_costs, model_time, observed_tokens, standings
 from .ai_stats_subagents import child_requests
-from .timezones import local_month_start_ms, resolve_timezone
+from .timezones import resolve_timezone
 
-DAY_MS = 24 * HOUR_MS
-ROLLING_DAYS = {'today': 1, '7-days': 7, '30-days': 30}
 FALLBACK_MS = 60_000
 MAX_GUESSED_MS = 4 * HOUR_MS
 GENERIC_TOKEN_COST = Decimal('.000003')
@@ -58,12 +56,6 @@ class StatsPeriod:
     end_ms: int
     metrics: tuple[Stat, ...]
     matched: Stat | None = None
-
-
-def windows(zone, now):
-    return (*((period, now - days * DAY_MS) for period, days in ROLLING_DAYS.items()),
-            ('month', local_month_start_ms(zone, now_ms=now)),
-            ('all', None))
 
 
 def union(intervals):
@@ -322,7 +314,7 @@ class StatsObservation:
         stamps = [entry.completed_at_ms for entry in entries if 0 < entry.completed_at_ms <= self.now]
         stamps.extend(left for root in roots for left, _duration, _running in root.intervals
                       if 0 < left <= self.now)
-        rates = hourly_rates(earned.cost, earned.duration_ms, period=period, now=self.now, zone=self.zone,
+        rates = hourly_rates(earned.cost, earned.duration_ms, start=start, now=self.now, zone=self.zone,
             calendar=self.workday_calendar, evidence_start=min(stamps, default=None))
         metrics = (replace(cost[0], rates=rates), cost[1],
             replace(timed[0], podium=model_time(activity, union)),

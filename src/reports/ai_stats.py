@@ -3,11 +3,12 @@ from dataclasses import replace
 from decimal import Decimal
 import sqlite3
 
-from src.analysis.ai_stats import StatsObservation, windows
+from src.analysis.ai_stats import StatsObservation
 from src.analysis.ai_stats_buckets import friendly_model
 from src.analysis.cache import dependency_signature
 from src.analysis.model_identity import current
 from src.analysis.matched_runs import period_fact
+from src.analysis.timezones import calendar_periods
 from src.cache.repository import CacheEntry
 from src.cache.session_scope import snapshot_scope
 from src.domain.progress import WorkProgress
@@ -66,7 +67,7 @@ class StatsAcquisition:
             self.reference = service._load_comparison_catalog()
         except PricingUnavailableError:
             self.reference = service.comparison_pricing_catalog = PricingCatalog(())
-        self.periods = windows(service.timezone_id, service.now_ms)
+        self.periods = calendar_periods(service.timezone_id, service.now_ms)
         service.progress(WorkProgress('Checking history revisions', 'catalog'))
         sessions = service.session_catalog()
         self.source_epoch = getattr(service.source, 'observation_epoch', None)

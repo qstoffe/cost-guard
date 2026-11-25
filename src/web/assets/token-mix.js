@@ -21,6 +21,8 @@ const TokenMixView = (() => {
   function titleHelp(result) {
     const {token_mix: mix, token_mix_period: period, timezone_id: zone} = result.view;
     const quantity = BigInt(mix.observed_total_tokens).toLocaleString('en-US');
+    if (typeof PeriodHelp !== 'undefined')
+      return `${quantity} recorded tokens for the selected period\n${PeriodHelp.range(period.period)}`;
     const boundary = value => {
       if (!Number.isSafeInteger(value)) return null;
       return ReportView.timestamp(value, zone);
@@ -131,6 +133,7 @@ const TokenMixView = (() => {
       this.selector.setAttribute('role', 'group'); this.selector.setAttribute('aria-label', 'Token Mix period');
       this.buttons = periods.map(([id, label]) => {
         const button = e('button', label); button.type = 'button';
+        if (typeof PeriodHelp !== 'undefined') PeriodHelp.attach(button, id);
         button.addEventListener('click', () => select(id)); this.selector.append(button); return {id, button};
       });
       this.content = e('div');
