@@ -453,7 +453,15 @@ def load_configuration(package_root: Path) -> LoadedConfig:
     # Shipped defaults must stand on their own; user overrides may never mask a bad package.
     validate_configuration(defaults, defaults, {})
 
-    user_present = user_path.is_file()
+    # Path.is_file() suppresses access errors in Python 3.14. An inaccessible
+    # override is not a verified absence and must not silently select defaults.
+    try:
+        user_path.stat()
+        user_present = True
+    except FileNotFoundError:
+        user_present = False
+    except OSError as exc:
+        raise ConfigError("File: config/user-config.jsonc\nSetting: file\nCould not check configuration file.") from exc
     overrides = read_jsonc(user_path) if user_present else {}
     resolved = validated_values(defaults, overrides)
     return LoadedConfig(resolved, default_path, user_path, user_present)

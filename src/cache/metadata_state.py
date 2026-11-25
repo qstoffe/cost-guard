@@ -13,12 +13,17 @@ import time
 
 STATE_FILE = Path("cache/state/model-metadata.json")
 LEGACY_STATE_FILE = Path("logs/recovery/model-metadata.json")
+_MAX_STATE_BYTES = 512 * 1024
 
 
 def _read(path: Path) -> dict:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, UnicodeError):
+        with path.open("rb") as stream:
+            content = stream.read(_MAX_STATE_BYTES + 1)
+        if len(content) > _MAX_STATE_BYTES:
+            return {}
+        raw = json.loads(content.decode("utf-8"))
+    except (OSError, ValueError, RecursionError):
         return {}
     return raw if isinstance(raw, dict) and raw.get("schema") == 1 else {}
 

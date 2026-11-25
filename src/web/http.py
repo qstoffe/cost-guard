@@ -221,7 +221,8 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def reply(self, status, value, *, content_type="application/json; charset=utf-8", cookie=None, disposition=None):
         if self.server.lifecycle:
-            self.server.lifecycle.observations.response(status)
+            reason = value.get("error") if status >= 400 and isinstance(value, dict) else None
+            self.server.lifecycle.observations.response(status, reason)
         data = value if isinstance(value, bytes) else json.dumps(value, allow_nan=False).encode("utf-8")
         if (cookie is None and 200 <= status < 300 and getattr(self, '_protected', False)):
             cookie = self.server.session.activity(self.headers.get('Cookie'))
@@ -579,6 +580,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             # and terminal shutdown still bound resource ownership.
             while True:
                 if not self.server.session.authenticated(self.headers.get("Cookie")):
+                    if self.server.lifecycle:
+                        self.server.lifecycle.observations.response(401, "authentication_required")
                     self.wfile.write(b"event: authorization_required\ndata: {}\n\n")
                     self.wfile.flush()
                     return

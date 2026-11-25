@@ -259,19 +259,6 @@ class SchedulingTests(unittest.TestCase):
             private.usable()
             self.assertIsNone(private.housekeeping)
 
-    def test_legacy_usable_boundary_starts_optional_maintenance_and_start_failure_is_quiet(self):
-        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"COST_GUARD_TEST_MODE": ""}):
-            reporter = RuntimeErrors(Path(tmp))
-            reporter.install()
-            try:
-                with patch.object(maintenance, "Thread", side_effect=RuntimeError("thread unavailable")):
-                    from src.runtime_errors import context
-                    context(mode="Watch", phase="Watch runtime")
-                    self.assertTrue(reporter.housekeeping.stopping.is_set())
-                    reporter.housekeeping.close()
-            finally:
-                reporter.uninstall()
-
     def test_package_copy_and_working_view_exclude_the_entire_generated_tree(self):
         from development.tests.fixtures import package_copy
         from development.tools import validate_package
@@ -337,12 +324,10 @@ class RoutingTests(unittest.TestCase):
         for custom in (False, True):
             with tempfile.TemporaryDirectory() as tmp, patch.object(diagnostics, "ROOT", Path(tmp)), \
                     patch.object(diagnostics, "collect", return_value=minimal_data()), \
-                    patch.object(diagnostics, "_macos_compatibility_checks", return_value={}), \
-                    patch.object(diagnostics, "run_full_validation", return_value={}), \
                     patch.object(diagnostics, "_support_email", return_value="support@example.invalid"), \
                     patch("sys.stdout", io.StringIO()):
                 root = Path(tmp)
-                args = ["--no-network", "--snapshots", "0"]
+                args = []
                 if custom:
                     args += ["--output-dir", str(root / "custom")]
                 self.assertEqual(0, diagnostics.main(args))

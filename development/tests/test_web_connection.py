@@ -6,7 +6,7 @@ import subprocess
 from threading import BoundedSemaphore
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from src.web.events import EventHub
 from src.web.http import RequestHandler
@@ -65,8 +65,9 @@ class ConnectionTests(unittest.TestCase):
             handler.deadline = None
             handler.headers = {'Cookie': cookie}
             slots = BoundedSemaphore(4)
+            record = Mock()
             handler.server = SimpleNamespace(_streams=slots, origin='http://127.0.0.1:12345',
-                lifecycle=SimpleNamespace(events=hub), session=session)
+                lifecycle=SimpleNamespace(events=hub, observations=SimpleNamespace(response=record)), session=session)
             handler.wfile = io.BytesIO()
             handler.send_response_only = lambda code: None
             sent_headers = {}
@@ -80,6 +81,10 @@ class ConnectionTests(unittest.TestCase):
             self.assertEqual(16 if polling else 7, len(reads))
             self.assertIn(b'event: terminal' if polling else b'event: authorization_required',
                           handler.wfile.getvalue())
+            if polling:
+                record.assert_not_called()
+            else:
+                record.assert_called_once_with(401, 'authentication_required')
 
     def test_healthy_idle_stream_survives_old_rotation_deadline(self):
         hub = EventHub('fixture')

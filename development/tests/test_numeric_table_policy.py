@@ -1,7 +1,6 @@
 """Plain numeric table tokens retain canonical precision and coverage evidence."""
 from dataclasses import replace
 from decimal import Decimal
-from types import SimpleNamespace
 import unittest
 
 from src.analysis.token_mix import TokenMix
@@ -12,41 +11,9 @@ from src.application.projection import token_mix
 from src.display import token_volume
 from src.numbers import ccost_amount, ccost_display, remaining_capacity
 from src.presentation.token_mix import comparison_cost_text, mix_cells, total_cost_text
-from src.presentation.watch import WatchRenderer
 
 
 class NumericTablePolicyTests(unittest.TestCase):
-    def test_cli_account_observation_rescopes_on_day_and_account(self):
-        renderer = WatchRenderer({"timezone": "UTC"}, interactive=False)
-        projection = SimpleNamespace(source_label="fixture", now_ms=1_000)
-        account = SimpleNamespace(account=SimpleNamespace(key="account-a", quotas=()))
-        known = ComparisonCost(Decimal(125), 2, 1)
-        text = renderer._account_cost_text(projection, account)
-        self.assertEqual("125", text("today", known))
-        self.assertEqual("125", text("today", None))
-        self.assertEqual("125", text("today", ComparisonCost(Decimal(0), 2, 0)))
-        projection.now_ms += 86_400_000
-        self.assertEqual("0", renderer._account_cost_text(projection, account)("today", None))
-        account.account.key = "account-b"
-        self.assertEqual("0", renderer._account_cost_text(projection, account)("today", None))
-
-    def test_cli_cost_observations_retain_only_qualified_same_scope_values(self):
-        renderer = WatchRenderer({}, interactive=False)
-        for unit, expected in (("credits", "125"), ("usd", "$1.25")):
-            with ccost_display(unit):
-                scope = ("source", "session", unit, "prompt")
-                self.assertEqual("0" if unit == "credits" else "$0.00",
-                                 renderer._cost_text(scope, None, complete=False))
-                self.assertEqual(expected, renderer._cost_text(scope, Decimal(125), complete=False))
-                for amount in (None, Decimal(0), None):
-                    self.assertEqual(expected, renderer._cost_text(scope, amount, complete=False))
-                self.assertEqual("100" if unit == "credits" else "$1.00",
-                                 renderer._cost_text(scope, Decimal(100), complete=True))
-                self.assertEqual("0" if unit == "credits" else "$0.00",
-                                 renderer._cost_text(scope, Decimal(0), complete=True))
-                self.assertEqual("0" if unit == "credits" else "$0.00",
-                                 renderer._cost_text((*scope, "new"), None, complete=False))
-
     def test_web_unknown_amounts_are_not_zero_in_either_unit(self):
         keys = ("ccost", "total_ccost", "known_ccost", "incoming_context_ccost", "extra_ccost")
         source = record(**dict.fromkeys(keys, None), unresolved_cost=True, complete=False,

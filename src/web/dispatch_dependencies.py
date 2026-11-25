@@ -13,9 +13,10 @@ class DispatchDependencies:
         self.config_signature = None
         self.price_signature = None
         self.reference_signature = None
+        self.config_status = 'unchecked'
 
     def check(self, dispatcher, *, baseline=None):
-        """False means changed/invalid runtime configuration needs a fresh host.
+        """False means a verified configuration change needs a fresh host.
 
         Web preferences remain hot-applicable. Other runtime owners pin their
         configuration, so do not mix newly configured children with old Live.
@@ -30,10 +31,13 @@ class DispatchDependencies:
             config = self.configuration()
             signature = dependency_signature({key: value for key, value in config.items() if key != 'webSettings'})
         except (ConfigError, OSError):
-            return False
+            self.config_status = 'configuration_unavailable'
+            return True
         if self.config_signature is not None and signature != self.config_signature:
+            self.config_status = 'configuration_changed'
             return False
         self.config_signature = signature
+        self.config_status = 'verified'
         try:
             catalog = self.prices()
         except (OSError, sqlite3.Error):

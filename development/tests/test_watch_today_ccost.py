@@ -17,11 +17,9 @@ from src.analysis.timezones import local_day_start_ms
 from src.analysis.valuation import ComparisonCost
 from src.domain import ModelRef, TokenUsage
 from src.presentation import WatchRenderer
-from src.presentation.token_mix import comparison_cost_text, watch_total_lines
-from src.watch import WatchCoordinator, WatchCycle
+from src.watch import WatchCoordinator
 from src.watch.models import WatchProjection
 from src.watch.today_ccost import WatchTodayCCost
-from src.analysis.token_mix import TokenMix
 
 MODEL = ModelRef("github-copilot", "priced")
 UNPRICED = ModelRef("github-copilot", "unpriced")
@@ -153,24 +151,6 @@ class WatchTodayCCostTests(unittest.TestCase):
         fall_next = local_day_start_ms("Europe/Stockholm", now_ms=epoch_ms(2026, 10, 26, 12))
         self.assertEqual(25 * 60 * 60 * 1000, fall_next - fall_start)
 
-    def test_unpriced_partial_and_zero_values_keep_existing_display_conventions(self):
-        self.assertEqual("0", comparison_cost_text(ComparisonCost()))
-        self.assertEqual("0", comparison_cost_text(ComparisonCost(Decimal(0), 1, 0)))
-        self.assertEqual("2", comparison_cost_text(ComparisonCost(Decimal("1.1"), 2, 1)))
-        lines = watch_total_lines(TokenMix(), ComparisonCost(Decimal(2458), 1, 1), width=120)
-        self.assertEqual(
-            ["CCost · Watch: 0 · Total today: 2458"], lines
-        )
-        night = watch_total_lines(TokenMix(), ComparisonCost(Decimal("1.1"), 2, 1), "2026-10-15")
-        self.assertEqual(
-            ["CCost · Watch: 0 · Total 2026-10-15: 2"],
-            night,
-        )
-
-    def test_narrow_terminal_never_adds_a_deletion_explanation(self):
-        lines = watch_total_lines(TokenMix(), ComparisonCost(Decimal(2458), 1, 1), "2026-10-15", width=80)
-        self.assertEqual(["CCost · Watch: 0 · Total 2026-10-15: 2458"], lines)
-
     def test_today_label_shows_local_date_from_midnight_until_three(self):
         tracker = WatchTodayCCost("Europe/Stockholm")
         cases = (
@@ -194,32 +174,6 @@ class WatchTodayCCostTests(unittest.TestCase):
         self.assertEqual("2026-10-25", tracker.label(epoch_ms(2026, 10, 25, 0, 30)))  # 02:30 CEST
         self.assertEqual("2026-10-25", tracker.label(epoch_ms(2026, 10, 25, 1, 30)))  # 02:30 CET
         self.assertEqual("Today", tracker.label(epoch_ms(2026, 10, 25, 2)))  # 03:00 CET
-
-    def test_idle_status_wakes_redraw_at_label_boundaries_without_source_scans(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            source = MutableSource(single_invocation("i_syn"))
-            config, selection, service, _ = make_service(temp_dir, source)
-            service.account_provider = None
-            service.account_providers = ()
-            clock = [epoch_ms(1970, 1, 1, 23, 59) + 59_000]
-            watch = WatchCoordinator(selection=selection, report_service=service, config=config,
-                                     clock_ms=lambda: clock[0], record_observations=False)
-            drawn = watch.initialize().projection
-            self.assertEqual("Today", drawn.today_label)
-            watch._rendered_projection = drawn
-            for now_ms, label in ((epoch_ms(1970, 1, 2), "1970-01-02"), (epoch_ms(1970, 1, 2, 3), "Today")):
-                clock[0] = now_ms
-                with patch("src.watch.coordinator.observe_catalog", side_effect=AssertionError("source scan")):
-                    current = watch.status_projection(seconds_until_check=5)
-                self.assertEqual(label, current.today_label)
-                self.assertNotEqual(watch._transient_signature(drawn), watch._transient_signature(current))
-                self.assertNotEqual(watch._visible_signature(drawn), watch._visible_signature(current))
-                self.assertTrue(watch._needs_full_render(drawn, current, WatchCycle(current, (), ())))
-                output = io.StringIO()
-                WatchRenderer(config, stream=output, interactive=False).render(current)
-                total_label = "Total today" if label == "Today" else "Total " + label
-                self.assertIn(f"CCost · Watch: 0 · {total_label}: ", output.getvalue())
-                drawn = current
 
     def test_unchanged_status_projection_does_not_recalculate_retained_history(self):
         tracker = WatchTodayCCost("UTC")

@@ -472,6 +472,9 @@ async function main() {
   assert.equal(location.hash, '#/sessions/root-0000');
   assert.match(ids.heading.textContent, /Session root-0000/);
   // Legacy deep-link reload canonicalizes once. Back/Forward revisit the same entry.
+  vm.runInContext("connectionStatus('Disconnected', {kind:'identity_changed',terminal:true,writable:false})", reloaded);
+  assert.match(ids['host-message'].textContent, /host changed.*fresh link/i);
+  assert.equal(ids.refresh.disabled, true);
   location.hash = '#/live';
   const watchReload = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
@@ -489,7 +492,7 @@ async function main() {
    await until(() => vm.runInContext('Boolean(current?.result) && !current.loading && !current.withheld', watchReload));
   const retained = ids.result.textContent, terminalRequests = requests;
   vm.runInContext("connectionStatus('STOPPED — NOT LIVE. Use the OS launcher.', {kind: 'stopped', terminal: true, writable: false})", watchReload);
-  assert.match(ids['host-state'].textContent, /Reopen Cost Guard from the launcher/);
+  assert.match(ids['host-state'].textContent, /host stopped.*launcher/i);
   assert.equal(ids['host-state'].hidden, false, 'terminal notice is never hidden');
   assert.equal(ids['host-details'].textContent, '');
   assert.equal(ids.notice.textContent, '', 'host recovery is the single terminal surface');

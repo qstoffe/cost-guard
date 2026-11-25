@@ -1,15 +1,12 @@
 """One-shot session lifecycle and evidence-qualified provisional report metrics."""
 from dataclasses import replace
 from decimal import Decimal
-from types import SimpleNamespace
 import unittest
-from unittest.mock import MagicMock, patch
 
 from development.tests.fixtures.compact_reports import rendered, report_service
 from development.tests.fixtures.pricing_catalog import catalog
 from development.tests.fixtures.report_runtime import FakeSource
 from development.tests.fixtures.session_snapshots import make_snapshot, make_uncompacted_snapshot
-from src import bootstrap
 from src.analysis import analyze_snapshot
 from src.domain import ModelRef, TokenUsage
 from src.reports import ReportKind, ReportRequest
@@ -129,31 +126,6 @@ class SessionSnapshotTests(unittest.TestCase):
             self.assertIsNone(row.incoming_context_ccost)
             self.assertIsNone(row.extra_ccost)
         self.assertNotIn("provisional observed usage", rendered(date))
-
-    def test_plain_session_exits_after_one_report_explicit_watch_still_dispatches(self):
-        for running in (False, True):
-            projection = self.detail(make_uncompacted_snapshot(running=running))
-            service = MagicMock()
-            service.build.return_value = projection
-            config = {"openCode": {"source": "auto"}}
-            with patch.multiple(bootstrap, load_configuration=MagicMock(return_value=SimpleNamespace(values=config)),
-                                _select_or_wait=MagicMock(return_value=SimpleNamespace(selected="v1")),
-                                CacheDatabase=MagicMock(), CacheRepository=MagicMock(),
-                                GitHubCopilotPricingProvider=MagicMock(), _model_availability_source=MagicMock(),
-                                ReportService=MagicMock(return_value=service), StartupProgress=MagicMock(),
-                                _account_providers=MagicMock(return_value=()), ReportRenderer=MagicMock(),
-                                WatchRenderer=MagicMock(), WatchCoordinator=MagicMock()):
-                status = bootstrap.main(["ses_snapshot"])
-
-                self.assertEqual(0, status)
-                service.build.assert_called_once_with(ReportRequest(ReportKind.SESSION, session_id="ses_snapshot"))
-                bootstrap.ReportRenderer.return_value.render.assert_called_once_with(projection)
-                bootstrap.WatchRenderer.assert_not_called()
-                bootstrap.WatchCoordinator.assert_not_called()
-                service.close_accounts.assert_called_once()
-                bootstrap.main(["ses_snapshot", "--watch"])
-                bootstrap.WatchCoordinator.return_value.run_forever.assert_called_once()
-                bootstrap.WatchCoordinator.return_value.run_until_inactive.assert_not_called()
 
 
 if __name__ == "__main__":

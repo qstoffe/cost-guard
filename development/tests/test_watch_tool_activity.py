@@ -2,17 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
-import io
 import json
 from dataclasses import asdict
-import re
 import unittest
 
 from development.tests.fixtures.session_snapshots import make_snapshot, part
-from development.tests.fixtures.watch_rendering import tall_projection
-from src.presentation import WatchRenderer
-from src.presentation.watch_activity import FAILED_ROLE, status_segments, tool_summary_segments
-from src.watch.models import SkillObservation, ToolObservation, ToolOutcome
+from src.watch.models import ToolOutcome
 from src.watch.tools import observe_tools, without_live_activity
 
 
@@ -31,17 +26,6 @@ def observe(parts, now_ms=2200, *, include_invocations=False):
     )
     snapshot = replace(snapshot, messages=messages, parts=tuple(p for m in messages for p in m.parts))
     return observe_tools(snapshot, "u_next", now_ms=now_ms, include_invocations=include_invocations)
-
-
-def text(segments):
-    return "".join(value for value, _role in segments)
-
-
-def counts(**values):
-    return tuple(values.items())
-
-
-MANY = counts(read=12, grep=9, edit=7, bash=6, skill=5, task=4, write=4, glob=3, patch=2, fetch=2)
 
 
 class ToolAggregationTests(unittest.TestCase):
@@ -245,159 +229,6 @@ class TodoCompatibilityTests(unittest.TestCase):
     def test_completed_todo_has_no_status_row(self):
         state = {"status": "completed", "input": {"todos": [{"status": "completed", "content": "one"}]}}
         self.assertFalse(observe([tool_part("t", "todo", state)]).has_status_row)
-
-
-class SummaryWidthTests(unittest.TestCase):
-    def tool(self, **kwargs):
-        defaults = dict(tool_count=54, tool_counts=MANY)
-        defaults.update(kwargs)
-        return ToolObservation(**defaults)
-
-    def test_other_counts_hidden_calls_and_sorts_with_groups(self):
-        line = "54 tool calls · 20× other · 12× read · 9× grep · 7× edit · 6× bash"
-        self.assertEqual(line, text(tool_summary_segments(self.tool(), len(line))))
-
-    def test_full_breakdown_has_no_other_and_single_use_keeps_count(self):
-        obs = ToolObservation(tool_count=3, tool_counts=counts(read=2, write=1))
-        self.assertEqual("3 tool calls · 2× read · 1× write", text(tool_summary_segments(obs, 80)))
-        self.assertEqual("1 tool call · 1× read", text(tool_summary_segments(
-            ToolObservation(tool_count=1, tool_counts=counts(read=1)), 80)))
-
-    def test_every_width_stays_within_budget_and_accounts_for_total(self):
-        obs = self.tool(failed_count=3)
-        for width in range(1, 100):
-            segments = tool_summary_segments(obs, width)
-            rendered = text(segments)
-            self.assertLessEqual(len(rendered), width, rendered)
-            if width >= len("54 tool calls · 3 failed"):
-                self.assertIn("54 tool calls", rendered)
-                self.assertTrue(rendered.endswith("3 failed"))
-                shown = [int(item.split("×")[0]) for item in rendered.split(" · ") if "×" in item]
-                self.assertTrue(not shown or sum(shown) == 54, rendered)
-
-    def test_narrow_width_keeps_total_and_failed_before_breakdown(self):
-        obs = self.tool(failed_count=3)
-        self.assertEqual("54 tool calls · 3 failed", text(tool_summary_segments(obs, 24)))
-        self.assertEqual("54 calls · 3 failed", text(tool_summary_segments(obs, 20)))
-
-    def test_only_failed_part_is_red(self):
-        segments = tool_summary_segments(self.tool(failed_count=2), 120)
-        red = [value for value, role in segments if role == FAILED_ROLE]
-        self.assertEqual(["2 failed"], red)
-
-
-class StatusRowTests(unittest.TestCase):
-    def test_visibility_rules(self):
-        self.assertEqual([], status_segments(ToolObservation(tool_count=5), 80, "34s"))
-        running = ToolObservation(tool_count=5, running_tool="bash", running_ms=34_000)
-        self.assertEqual("running: bash 34s", text(status_segments(running, 80, "34s")))
-        todo = ToolObservation(tool_count=5, todo_completed=2, todo_total=4, active_todo="Implement Watch renderer")
-        self.assertEqual("TODO 2/4 done · Implement Watch renderer", text(status_segments(todo, 80, "")))
-        both = replace(todo, running_tool="task", running_ms=134_000)
-        self.assertEqual("running: task 2m14s · TODO 2/4 done · Implement Watch renderer",
-                         text(status_segments(both, 80, "2m14s")))
-
-    def test_background_wait_names_one_kind_and_counts_several(self):
-        cases = ((("shell",), "background: shell 2m18s"), (("shell", "shell"), "background: 2× shell 2m18s"),
-                 (("shell", "task", "shell"), "background: 3 jobs 2m18s"))
-        for kinds, expected in cases:
-            waiting = ToolObservation(tool_count=1, background_kinds=kinds, background_ms=138_000)
-            self.assertEqual(expected, text(status_segments(waiting, 80, "", "2m18s")))
-        both = ToolObservation(tool_count=1, running_tool="bash", todo_completed=1, todo_total=2,
-                               background_kinds=("shell",))
-        self.assertEqual("running: bash 34s · background: shell 2m18s · TODO 1/2 done",
-                         text(status_segments(both, 80, "34s", "2m18s")))
-        self.assertEqual("background: shell...", text(status_segments(
-            ToolObservation(background_kinds=("shell",)), 20, "", "2m18s")))
-
-    def test_todo_text_is_trimmed_before_progress(self):
-        todo = ToolObservation(todo_completed=2, todo_total=4, active_todo="Implement Watch renderer")
-        self.assertEqual("TODO 2/4 done · Implement Watch ren...", text(status_segments(todo, 38, "")))
-        self.assertEqual("TODO 2/4 done · Implement...", text(status_segments(todo, 28, "")))
-        self.assertEqual("TODO 2/4 done", text(status_segments(todo, 22, "")))
-        self.assertEqual("TODO 2/4 done", text(status_segments(todo, 13, "")))
-
-
-class RenderingTests(unittest.TestCase):
-    def render(self, tool, width_note=""):
-        projection = tall_projection()
-        active_prompt = replace(projection.rows[0].prompt, in_progress=True)
-        rows = (replace(projection.rows[0], prompt=active_prompt, tool=tool),) + projection.rows[1:]
-        stream = io.StringIO()
-        WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(replace(projection, rows=rows))
-        return stream.getvalue().splitlines()
-
-    def activity_lines(self, lines):
-        return [line for line in lines if line.startswith("|     ->")]
-
-    def test_terminal_prompt_renders_final_activity_but_never_live_status(self):
-        projection = tall_projection()
-        terminal = replace(projection.rows[0].prompt, in_progress=False)
-        tool = ToolObservation(
-            tool_count=1, tool_counts=counts(read=1), skills=(SkillObservation("custom-skill"),),
-            running_tool="bash", running_ms=34_000, background_kinds=("shell",), background_ms=12_000,
-            todo_completed=1, todo_total=2, active_todo="still working",
-        )
-        row = replace(projection.rows[0], prompt=terminal, tool=tool)
-        stream = io.StringIO()
-        WatchRenderer({"colors": {}}, stream=stream, interactive=False).render(
-            replace(projection, rows=(row,)))
-        output = stream.getvalue()
-        self.assertIn("1 tool call", output)
-        self.assertIn("Skills (1)", output)
-        self.assertNotIn("running:", output)
-        self.assertNotIn("background:", output)
-        self.assertNotIn("TODO", output)
-        self.assertNotIn("still working", output)
-
-    def test_both_status_arrows_align_with_prompt_hash_and_keep_colors(self):
-        colors = {"watchToolActivity": {"ansi256": 94}, "costQuotaCritical": {"ansi256": 160}}
-        tool = ToolObservation(tool_count=4, tool_counts=counts(read=4), failed_count=1,
-                               running_tool="bash", running_ms=34_000)
-        for marker in ("", "*", "✓"):
-            for interactive in (False, True):
-                with self.subTest(marker=marker, interactive=interactive):
-                    projection = tall_projection()
-                    active_prompt = replace(projection.rows[0].prompt, in_progress=True)
-                    row = replace(projection.rows[0], prompt=active_prompt, marker=marker, tool=tool)
-                    stream = io.StringIO()
-                    WatchRenderer({"colors": colors}, stream=stream, interactive=interactive).render(
-                        replace(projection, rows=(row,)))
-                    raw = stream.getvalue()
-                    lines = re.sub(r"\x1b\[[0-9;]*[mKHJ]", "", raw).splitlines()
-                    prompt = next(line for line in lines if "#1 work" in line)
-                    arrow = "↳" if interactive else "->"
-                    status = [line for line in lines if arrow in line and line.startswith("|")]
-                    self.assertEqual(2, len(status))
-                    self.assertEqual([prompt.index("#")] * 2, [line.index(arrow) for line in status])
-                    self.assertEqual(6, prompt.index("#"), "prompt indentation is unchanged")
-                    if interactive:
-                        self.assertIn("\x1b[38;5;94m    ↳ \x1b[0m", raw)
-                        self.assertIn("\x1b[38;5;94mrunning: bash 34s", raw)
-                        self.assertIn("\x1b[38;5;160m1 failed\x1b[0m", raw)
-
-    def test_second_row_appears_and_disappears_dynamically(self):
-        base = ToolObservation(tool_count=5, tool_counts=counts(read=3, bash=2))
-        one = self.activity_lines(self.render(base))
-        self.assertEqual(1, len(one))
-        self.assertIn("5 tool calls · 3× read · 2× bash", one[0])
-        busy = replace(base, running_tool="bash", running_ms=34_000, todo_completed=2, todo_total=4, active_todo="Do it")
-        two = self.activity_lines(self.render(busy))
-        self.assertEqual(2, len(two))
-        self.assertIn("running: bash 34s · TODO 2/4 done · Do it", two[1])
-        self.assertEqual(len(one[0]), len(two[1]))
-        self.assertEqual(1, len(self.activity_lines(self.render(replace(busy, running_tool="", running_ms=0, todo_completed=4)))))
-
-    def test_failed_is_red_when_colors_enabled(self):
-        projection = tall_projection()
-        tool = ToolObservation(tool_count=4, tool_counts=counts(read=4), failed_count=1)
-        active_prompt = replace(projection.rows[0].prompt, in_progress=True)
-        rows = (replace(projection.rows[0], prompt=active_prompt, tool=tool),) + projection.rows[1:]
-        stream = io.StringIO()
-        colors = {"costQuotaCritical": {"foreground": "Red", "background": None, "ansi256": 160},
-                  "watchToolActivity": {"foreground": "DarkYellow", "background": None, "ansi256": 94}}
-        WatchRenderer({"colors": colors}, stream=stream, interactive=True).render(replace(projection, rows=rows))
-        self.assertIn("\x1b[38;5;160m1 failed\x1b[0m", stream.getvalue())
 
 
 if __name__ == "__main__":

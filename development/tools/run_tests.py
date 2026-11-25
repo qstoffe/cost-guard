@@ -158,7 +158,6 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_windows_launcher.py",
     "test_launcher_feedback.py",
     "test_startup_progress.py",
-    "test_watch_screen.py",
     "test_effort_presentation.py",
     "test_default_effort_help.py",
     "test_context_warning_presentation.py",
@@ -172,7 +171,6 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_watch_idle_accounts.py",
     "test_watch_subtotals.py",
     "test_watch_today_ccost.py",
-    "test_watch_rendering.py",
     "test_watch_tool_activity.py",
     "test_watch_invocation.py",
     "test_watch_shell_timing.py",
@@ -215,7 +213,6 @@ REGRESSION_PATTERNS: tuple[str, ...] = (
     "test_quota_presentation.py",
     "test_quota_used.py",
     "test_account_status_layout.py",
-    "test_report_polish.py",
     "test_model_pricing_presentation.py",
     "test_model_comparison_tiers.py",
     "test_model_supersession.py",
@@ -261,7 +258,6 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_child_links.py",
     "test_context_warning_presentation.py",
     "test_startup_progress.py",
-    "test_watch_screen.py",
     "test_watch_grouping.py",
     "test_watch_session_groups.py",
     "test_watch_terminal_recency.py",
@@ -270,7 +266,6 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_watch_activity_lifecycle.py",
     "test_watch_account_refresh.py",
     "test_watch_today_ccost.py",
-    "test_watch_rendering.py",
     "test_card_service_timeline.py",
     "test_live_update_timeline.py",
     "test_owner_cost_timeline.py",
@@ -287,7 +282,6 @@ QUICK_PATTERNS: tuple[str, ...] = (
     "test_account_ordering.py",
     "test_quota_used.py",
     "test_account_status_layout.py",
-    "test_report_polish.py",
     "test_model_comparison_tiers.py",
     "test_model_supersession.py",
     "test_report_definitions.py",
@@ -315,10 +309,10 @@ FULL_ONLY_PATTERNS: tuple[str, ...] = (
 ) + tuple(pattern for pattern in REGRESSION_PATTERNS if pattern not in QUICK_PATTERNS)
 PROFILES: dict[str, tuple[str, ...]] = {
     "native-web": (),  # Explicit platform cases below; never expands to Full.
-    "startup": ("test_launcher_feedback.py", "test_windows_launcher.py", "test_startup_progress.py", "test_watch_screen.py", "test_watch_rendering.py", "test_watch_startup_recovery.py", "test_web_source_startup.py"),
+    "startup": ("test_launcher_feedback.py", "test_windows_launcher.py", "test_startup_progress.py", "test_watch_startup_recovery.py", "test_web_source_startup.py"),
     "sources": ("test_opencode_v1.py", "test_opencode_v2.py", "test_v2_normalization.py", "test_v2_tool_continuations.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_source_selection.py", "test_v7814_regressions.py"),
     "analysis": ("test_analysis_core.py", "test_step6_context_comparisons.py", "test_effort_presentation.py", "test_step6_pricing_accounts.py"),
-    "runtime": ("test_step7_reports_cli.py", "test_step8_watch.py", "test_watch_grouping.py", "test_watch_session_retention.py", "test_watch_idle_accounts.py", "test_watch_subtotals.py", "test_watch_today_ccost.py", "test_watch_rendering.py", "test_watch_tool_activity.py", "test_watch_skills.py", "test_watch_activity_lifecycle.py", "test_watch_source_recovery.py", "test_watch_lifecycle.py", "test_token_mix.py", "test_token_mix_economics.py", "test_priced_token_mix.py", "test_report_definitions.py", "test_session_move.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_v786_regressions.py", "test_v788_regressions.py", "test_v7810_regressions.py", "test_v7811_regressions.py", "test_v7814_regressions.py"),
+    "runtime": ("test_step7_reports_cli.py", "test_step8_watch.py", "test_watch_grouping.py", "test_watch_session_retention.py", "test_watch_idle_accounts.py", "test_watch_subtotals.py", "test_watch_today_ccost.py", "test_watch_tool_activity.py", "test_watch_skills.py", "test_watch_activity_lifecycle.py", "test_watch_source_recovery.py", "test_watch_lifecycle.py", "test_token_mix.py", "test_token_mix_economics.py", "test_priced_token_mix.py", "test_report_definitions.py", "test_session_move.py", "test_opencode_aborts.py", "test_opencode_terminal.py", "test_v786_regressions.py", "test_v788_regressions.py", "test_v7810_regressions.py", "test_v7811_regressions.py", "test_v7814_regressions.py"),
 }
 
 # Whole focused launcher files allow modest portable overlap. The lifecycle file

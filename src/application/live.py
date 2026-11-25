@@ -31,6 +31,7 @@ class LiveRuntime:
         self.working = Event()
         self.caught_up_web = Event()
         self.startup_health = SourceStatus()
+        self.observation_facts = None
 
     def start(self):
         if self.thread is not None:
@@ -87,6 +88,7 @@ class LiveRuntime:
                     ready.wait(max(0, deadline - time.monotonic()))
                     continue
                 self.working.set()
+                tick_started = time.monotonic()
                 try:
                     if self.catalog.archive is not None:
                         coordinator.caught_up_web = self.caught_up_web.is_set()
@@ -111,6 +113,11 @@ class LiveRuntime:
                     else:
                         self.details.tick(driver.coordinator.report_service, unavailable=driver.error is not None)
                     self._publish_frame(driver, frame)
+                    observation = getattr(coordinator, 'catalog_observation', None)
+                    if observation is not None and frame is not None and driver.error is None:
+                        self.observation_facts = dict(tick_ms=round((time.monotonic() - tick_started) * 1000),
+                            completed_at_ms=time.time_ns() // 1_000_000, sessions=len(observation.sessions),
+                            roots=len(observation.roots), active_candidates=len(observation.active_candidates))
                 finally:
                     self.working.clear()
                 if driver.terminal:

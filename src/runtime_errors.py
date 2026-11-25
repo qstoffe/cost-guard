@@ -33,6 +33,13 @@ def _cache_details(exc: BaseException) -> str:
     return f"Cache phase: {phase}\nSQLite code: unavailable\n"
 
 
+def _os_details(exc: BaseException) -> str:
+    if not isinstance(exc, OSError):
+        return ""
+    fields = (("OS errno", exc.errno), ("Windows error", getattr(exc, "winerror", None)))
+    return "".join(f"{label}: {code}\n" for label, code in fields if type(code) is int and 0 <= code < 2**32)
+
+
 def diagnostics_hint(root: Path | None = None) -> str:
     """Absolute Diagnostics launcher for this installation/OS; never starts it."""
     try:
@@ -63,8 +70,9 @@ def emergency(original: BaseException, reporting: BaseException, stream=None) ->
 
 
 class RuntimeErrors:
-    def __init__(self, root: Path, *, mode: str = "startup", stream=None, private=False):
+    def __init__(self, root: Path, *, mode: str = "startup", stream=None, private=False, source_root=None):
         self.root = Path(root).resolve()
+        self.source_root = Path(source_root).resolve() if source_root is not None else self.root
         self.log_directory = self.root / "logs" if private else log_root(self.root)
         self.private = private
         self.housekeeping = None
@@ -79,7 +87,7 @@ class RuntimeErrors:
 
     def _path(self, filename: str) -> str:
         try:
-            return Path(filename).resolve().relative_to(self.root).as_posix()
+            return Path(filename).resolve().relative_to(self.source_root).as_posix()
         except (OSError, ValueError):
             return "<external>/" + Path(filename).name
 
@@ -119,7 +127,7 @@ class RuntimeErrors:
                 local_frame = frame
             tb = tb.tb_next
         frame = local_frame or frame
-        cache_details = _cache_details(exc)
+        cache_details = _cache_details(exc) + _os_details(exc)
         identity = f"{component}|{type(exc).__name__}|{frame}" + ("|" + cache_details if cache_details else "")
         digest = hashlib.sha256(identity.encode()).hexdigest()[:16]
         return digest, frame
@@ -147,7 +155,7 @@ class RuntimeErrors:
         return (f"Timestamp: {datetime.now().astimezone().isoformat()}\nCost Guard: {self.version}\n"
                 f"Mode: {self.mode}\nPhase: {self.phase}\nSeverity: {severity}\nComponent: {component}\n"
                 f"Execution root: {thread}\nException: {type(exc).__name__}\nLocation: {frame}\n"
-                f"Fingerprint: {fingerprint}\nOccurrence: 1\n{_cache_details(exc)}{self._stack(exc)}")
+                f"Fingerprint: {fingerprint}\nOccurrence: 1\n{_cache_details(exc)}{_os_details(exc)}{self._stack(exc)}")
 
     def _close(self, component: str, outcome: str) -> None:
         episode = self._episodes.get(component)

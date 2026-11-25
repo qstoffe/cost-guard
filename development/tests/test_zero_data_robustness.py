@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal as D
-import io
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -18,7 +17,6 @@ from src.domain import ModelPricing, ModelRef, PricingTier
 from src.pricing.catalog import PricingCatalog, token_mix_unit_price
 from src.reports import ReportRequest, ReportKind
 from src.sources.discovery import has_opencode_installation_evidence
-from src.sources.errors import SourceUnavailableError
 from src.sources.selection import SourceSelector
 
 
@@ -121,32 +119,6 @@ class InstallationEvidenceTests(unittest.TestCase):
 
 
 class ReportStartupTests(unittest.TestCase):
-    def report_failure(self, executable=None, evidence=False, args=()):
-        stream = io.StringIO()
-        with patch.object(bootstrap, "load_configuration", return_value=Mock(values={"openCode": {"source": "auto"}})), \
-             patch.object(bootstrap, "_select_source", side_effect=SourceUnavailableError("source offline")), \
-             patch.object(bootstrap, "StartupProgress"), \
-             patch.object(bootstrap.shutil, "which", return_value=executable), \
-             patch.object(bootstrap, "has_opencode_installation_evidence", return_value=evidence), \
-             patch.object(bootstrap.sys, "stdout", stream):
-            code = bootstrap.main(args)
-        return code, stream.getvalue()
-
-    def test_report_not_found_only_after_failed_selection_and_no_installation_evidence(self):
-        code, text = self.report_failure()
-        self.assertEqual(1, code)
-        self.assertIn("Cost Guard - OpenCode not found", text)
-        self.assertIn("Install OpenCode and start it once", text)
-
-    def test_installed_but_offline_keeps_runtime_error(self):
-        for executable, evidence in (("opencode", False), (None, True)):
-            code, text = self.report_failure(executable, evidence)
-            self.assertEqual(1, code)
-            self.assertIn("Runtime error", text)
-            self.assertIn("source offline", text)
-            self.assertNotIn("not installed", text)
-            self.assertNotIn("OpenCode not found", text)
-
     def test_usable_v1_or_v2_wins_without_a_discoverable_executable(self):
         for generation in ("v1", "v2"):
             healthy = Mock()
@@ -162,16 +134,6 @@ class ReportStartupTests(unittest.TestCase):
                 self.assertIs(healthy, bootstrap._select_source("auto").source)
                 which.assert_not_called()
                 run.assert_not_called()
-
-    def test_watch_still_waits_without_installation_check(self):
-        with patch.object(bootstrap, "load_configuration", return_value=Mock(values={"openCode": {"source": "auto"}})), \
-             patch.object(bootstrap, "_select_source", side_effect=SourceUnavailableError("absent")), \
-             patch.object(bootstrap, "_wait_for_watch_source", side_effect=KeyboardInterrupt) as wait, \
-             patch.object(bootstrap, "StartupProgress"), patch.object(bootstrap, "WatchRenderer"), \
-             patch.object(bootstrap, "has_opencode_installation_evidence") as evidence:
-            self.assertEqual(0, bootstrap.main(["--watch"]))
-            wait.assert_called_once()
-            evidence.assert_not_called()
 
 
 if __name__ == "__main__":

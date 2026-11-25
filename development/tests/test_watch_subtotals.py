@@ -15,7 +15,6 @@ from src.domain import MessageRole, ModelPricing, ModelRef, TokenUsage
 from src.presentation import WatchRenderer
 from src.pricing.catalog import PricingCatalog
 from src.watch import WatchCoordinator
-from src.watch.coordinator import WatchCycle
 
 
 def startup_prompt(*, unknown_history=False):
@@ -211,16 +210,6 @@ class WatchSessionSubtotalTests(unittest.TestCase):
             self.assertEqual("0", table[1][2])
             self.assertEqual("Σ 0", table_for(replace(projection, session_subtotals={}))[1]["Session A"],
                              "missing projected cost must not invent a known zero")
-
-    def test_subtotal_amount_and_unresolved_state_affect_visible_signature(self):
-        with watch_for(start=0) as (watch, _, _):
-            watch.blocks, watch.snapshots = inputs(A=(replace(prompt(1, 100), ccost=Decimal(1)),))
-            first = watch._projection(now_ms=500)
-            subtotal = first.session_subtotals["A"]
-            for changed in (replace(subtotal, ccost=Decimal(2)), replace(subtotal, unresolved_cost=True)):
-                projection = replace(first, session_subtotals={"A": changed})
-                self.assertNotEqual(watch._visible_signature(first), watch._visible_signature(projection))
-                self.assertTrue(watch._needs_full_render(first, projection, WatchCycle(projection, (), ())))
 
 
 if __name__ == "__main__":

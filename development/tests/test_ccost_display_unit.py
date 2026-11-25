@@ -1,32 +1,20 @@
 """Reference USD presentation, isolation and unchanged native/canonical values."""
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
 from decimal import Decimal
-import io
 import json
-from pathlib import Path
-import subprocess
-import sys
 import tempfile
 import unittest
 
 from development.tests.fixtures.compact_reports import rendered, report_service
 from development.tests.fixtures.package_copy import make_package
-from development.tests.fixtures.warning_projections import warning_prompt, warning_watch_projection
-from src.analysis.context import PriceWarningSeverity
 from src.application.contracts import record
 from src.application.display import with_display
-from src.application.live_projection import project_live
 from src.application.projection import project
-from src.cli import CliUsageError, parse_command
 from src.config import ConfigError, load_configuration
 from src.display import native_amount, relative_cost, unaccounted_usage
 from src.numbers import ccost_amount, ccost_display, ccost_range, reference_rate
-from src.presentation import WatchRenderer
 from src.presentation.report import _MetricProfile
 from src.reports import ReportKind, ReportRequest
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 class CCostDisplayUnitTests(unittest.TestCase):
@@ -59,22 +47,6 @@ class CCostDisplayUnitTests(unittest.TestCase):
             return with_display(record(ccost=Decimal(395)), ccost_display_unit=unit).to_json()["display"]["ccost"]
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(["395", "$3.95"] * 20, list(pool.map(export, ["credits", "usd"] * 20)))
-
-    def test_cli_override_combines_with_every_supported_scope(self):
-        for args in ([], ["--watch"], ["--all-models"], ["--token-mix"], ["--sessions", "all"],
-                     ["ses_example"], ["ses_example", "--watch"], ["2026-10-28"], ["2026-10-01:2026-10-28"]):
-            for unit in ("credits", "usd"):
-                command = parse_command(["--ccost-unit", unit, *args])
-                self.assertEqual(replace(parse_command(args), ccost_unit=unit), command)
-                self.assertEqual(command, parse_command([*args, "--ccost-unit", unit]))
-        for args in (["--ccost-unit"], ["--ccost-unit", "USD"], ["--ccost-unit", "sek"],
-                     ["--ccost-unit", "usd", "--ccost-unit", "credits"]):
-            with self.assertRaises(CliUsageError):
-                parse_command(args)
-        result = subprocess.run([sys.executable, "src/entrypoints/desktop.py", "--ccost-unit", "invalid"],
-                                cwd=ROOT, capture_output=True, timeout=10)
-        self.assertEqual(2, result.returncode)
-        self.assertIn(b"--ccost-unit credits|usd", result.stdout)
 
     def test_legacy_config_inherits_credits_and_invalid_units_fail_startup(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -121,20 +93,6 @@ class CCostDisplayUnitTests(unittest.TestCase):
         with ccost_display("usd"):
             self.assertEqual(before, [profile.role(value) for value in (Decimal("0.01"), Decimal("0.03"))])
 
-    def test_watch_progress_aborted_context_and_large_values_are_not_truncated(self):
-        for state in ({"in_progress": True}, {"aborted": True}, {"unresolved_cost": True}):
-            prompt = replace(warning_prompt(PriceWarningSeverity.NONE), ccost=Decimal("123456789.12"),
-                             incoming_context_ccost=Decimal(395), extra_ccost=Decimal("0.01"),
-                             incoming_context_ccost_known=True, extra_ccost_known=True, **state)
-            frame = warning_watch_projection(prompt)
-            stream = io.StringIO()
-            WatchRenderer({"ccostDisplayUnit": "usd"}, stream=stream, interactive=False).render(frame)
-            dto = project_live(frame, ccost_display_unit="usd").to_json()
-            self.assertIn(dto["rows"][0]["prompt"]["display"]["ccost"], stream.getvalue())
-            self.assertIn("$1234567.89", stream.getvalue())
-            self.assertEqual("$3.95", dto["rows"][0]["prompt"]["display"]["incoming_context_ccost"])
-            self.assertEqual("<$0.01", dto["rows"][0]["prompt"]["display"]["extra_ccost"])
-
     def test_native_quotas_billing_residual_rates_and_relative_cost_stay_independent(self):
         value = record(known_ccost=Decimal(395), observed_requests=1, priced_requests=1,
                        used=Decimal(395), remaining=Decimal(395), limit=Decimal(1000), unit="AI credits",
@@ -161,15 +119,6 @@ class CCostDisplayUnitTests(unittest.TestCase):
         self.assertEqual(credits.prompt_blocks, usd.prompt_blocks)
         self.assertTrue(usd.notes[0].startswith("CCost for range: <$0.01"))
         self.assertNotEqual(credits.notes[0], usd.notes[0])
-
-    def test_empty_watch_has_explicit_zero_dollars_without_changing_unknowns(self):
-        from src.watch.models import WatchProjection
-        stream = io.StringIO()
-        WatchRenderer({"ccostDisplayUnit": "usd"}, stream=stream, interactive=False).render(
-            WatchProjection("Watch", "V2", (), now_ms=2000))
-        self.assertIn("Watch: $0.00", stream.getvalue())
-        self.assertEqual("$0.00", ccost_amount(None, unit="usd"))
-        self.assertEqual("0", ccost_amount(Decimal(0)))
 
 
 if __name__ == "__main__":

@@ -1,94 +1,120 @@
-"""Read only this checkout's bounded Web facts, without importing/starting Web."""
-from collections import Counter
-import hashlib
+"""Read this installation's private Web observations and probe only its recorded listener."""
+from collections import Counter, deque
+from http.client import HTTPConnection, HTTPException
 import json
-import os
-from pathlib import Path
 import re
-import stat
-import sys
 import time
 
-STATES = {"starting", "ready", "menu", "launcher", "source_changed", "runtime_fault", "gui_unavailable"}
-SOURCE_STATES = {"loading", "running", "recovering", "source_unavailable", "failed",
-                 "internal_error", "result_too_large", "unknown"}
-CODES = {"starting", "ready", "stopped", "source_changed", "source_check_unavailable",
-         "runtime_fault", "gui_unavailable", "tray_unavailable", "instance_start_timeout",
-         "browser_open_failed", "configuration_unavailable", "instance_conflict",
-         "gui_or_server_start_failed", "app_preparation_failed", "process_identity_access_denied",
-         "process_identity_unavailable", "process_identity_changed", "instance_lifetime_busy",
-         "instance_lifetime_unavailable", "instance_transition_busy", "instance_transition_unavailable",
-         "corrupt_instance_state", "unsafe_instance_path", "foreign_instance_path",
-         "private_state_unavailable", "instance_state_changed", "stale_instance_recovered",
-         "instance_control_conflict", "instance_control_unavailable", "instance_not_ready",
-         "instance_start_conflict", "instance_stop_timeout", "process_stop_unavailable",
-         "safe_force_stop_unavailable"}
+from src.web.instance_state import LIFECYCLE_CODES, private_web_directory
+from src.web.observations import API_REASONS, SOURCE_ERROR_CODES, SOURCE_STATES
+from src.web.process_identity import InstanceConflict
+from development.tools.diagnostic_section import error_codes
+from development.tools.diagnostic_web_errors import read_bounded, runtime_evidence
+
+STATES = {"starting", "ready", "menu", "launcher", "source_changed", "configuration_changed",
+          "runtime_fault", "gui_unavailable"}
+CONFIG_STATES = {"unchecked", "verified", "configuration_changed", "configuration_unavailable"}
 
 
-def _read(path, limit):
-    for item in (path, *path.parents):
-        info = item.lstat()
-        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-            raise ValueError("unsafe_path")
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
-        raise ValueError("invalid_file")
-    with path.open("rb") as stream:
-        data = stream.read(limit + 1)
-    if len(data) > limit:
-        raise ValueError("oversize")
-    return data
+def _integer(value, limit):
+    return type(value) is int and 0 <= value <= limit
+
+
+def _counters(value, keys):
+    if not isinstance(value, dict) or any(not _integer(value.get(k), 1_000_000) for k in keys):
+        raise ValueError("invalid_counters")
+    return {k: value[k] for k in keys}
 
 
 def _snapshot(value):
     numeric = ("observed_at", "source_transitions", "uptime_ms")
-    if (not isinstance(value, dict) or value.get("schema_version") != 1
-            or value.get("instance_schema") != 1
+    if (not isinstance(value, dict) or type(value.get("schema_version")) is not int
+            or value["schema_version"] not in (1, 2) or value.get("instance_schema") != 1
             or not isinstance(value.get("product_version"), str)
             or not re.fullmatch(r"[0-9]{1,4}\.[0-9]{1,4}", value["product_version"])
             or value.get("state") not in STATES or value.get("source_status") not in SOURCE_STATES
-            or any(type(value.get(k)) is not int or not 0 <= value[k] < 2**53 for k in numeric)):
+            or any(not _integer(value.get(k), 2**53 - 1) for k in numeric)):
         raise ValueError("invalid_snapshot")
-    failures = value.get("api_failures")
-    keys = ("denied", "invalid", "busy", "unavailable")
-    if (not isinstance(failures, dict) or any(type(failures.get(k)) is not int or
-            not 0 <= failures[k] <= 1_000_000 for k in keys)):
-        raise ValueError("invalid_counters")
-    return {k: value[k] for k in ("schema_version", "instance_schema", "product_version", "state",
-                                 "source_status", *numeric)} | {"api_failures": {k: failures[k] for k in keys}}
+    result = {k: value[k] for k in ("schema_version", "instance_schema", "product_version", "state",
+                                   "source_status", *numeric)}
+    result["api_failures"] = _counters(value.get("api_failures"), ("denied", "invalid", "busy", "unavailable"))
+    if value["schema_version"] == 2:
+        result["api_reasons"] = _counters(value.get("api_reasons"), API_REASONS)
+        observed = value.get("source_observed_at_ms")
+        config = value.get("config_status")
+        error = value.get("source_error")
+        progress = value.get("live_progress")
+        result.update(source_observed_at_ms=observed if _integer(observed, 2**53 - 1) else None,
+                      source_error=error if isinstance(error, str) and error in SOURCE_ERROR_CODES else None,
+                      config_status=config if config in CONFIG_STATES else "unchecked",
+                      lifecycle_write_failed=value.get("lifecycle_write_failed") is True)
+        if isinstance(progress, dict):
+            result["live_progress"] = {key: progress[key] for key in
+                ("tick_ms", "completed_at_ms", "sessions", "roots", "active_candidates")
+                if _integer(progress.get(key), 2**53 - 1)}
+    return result
+
+
+def _listener_probe(raw, age):
+    port = raw.get("listener_port")
+    if raw.get("state") != "ready" or age > 30 or not _integer(port, 65535) or port == 0:
+        return {"status": "unknown", "reason": "no_recent_listener_record"}
+    # No session, control token, proxy or redirects. Reachability at the recorded
+    # listener is not authenticated identity, browser handoff, or source readiness.
+    connection = HTTPConnection("127.0.0.1", port, timeout=0.75)
+    try:
+        connection.request("GET", "/health")
+        with connection.getresponse() as response:
+            status = response.status
+            if status == 200 and response.length is not None and 0 < response.length <= 64:
+                body = response.read(response.length)
+                for state in ("ready", "stopping"):
+                    if body == json.dumps({"http": state}).encode("ascii"):
+                        return {"status": state, "evidence": "current_loopback_http", "identity_verified": False}
+            return {"status": "unexpected_response", "http_status": status}
+    except (OSError, HTTPException) as exc:
+        return {"status": "unavailable", "exception_type": type(exc).__name__, **error_codes(exc)}
+    finally:
+        connection.close()
+
+
+def _lifecycle(directory):
+    counts = Counter()
+    recent = deque(maxlen=24)
+    for line in read_bounded(directory / "lifecycle.log", 65536).decode("ascii").splitlines():
+        fields = line.split()
+        if len(fields) == 2 and 0 < len(fields[0]) <= 10 and fields[0].isdigit() and fields[1] in LIFECYCLE_CODES:
+            counts[fields[1]] += 1
+            recent.append({"observed_at": int(fields[0]), "code": fields[1]})
+    return dict(counts), list(recent)
 
 
 def web_evidence(root, *, data_home=None):
-    """Missing/stale facts are evidence limitations, never a running-host assertion."""
-    if data_home is None:
-        data_home = (os.environ.get("LOCALAPPDATA") if os.name == "nt" else
-                     Path.home() / "Library/Application Support" if sys.platform == "darwin" else
-                     os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
-    if not data_home or not Path(data_home).is_absolute():
-        return {"status": "unavailable"}
-    key = hashlib.sha256(os.fsencode(os.path.normcase(str(Path(root).resolve(strict=True))))).hexdigest()
-    directory = Path(data_home) / "CostGuard/Web" / key
-    result = {"status": "not_observed", "lifecycle_codes": {}, "snapshot": None}
+    """Missing/stale facts are evidence limitations, never a live-health claim."""
     try:
-        value = _snapshot(json.loads(_read(directory / "diagnostics.json", 4096)))
-        result.update(status="recorded", snapshot=value,
-                      age_seconds=max(0, int(time.time()) - value["observed_at"]))
+        directory = private_web_directory(root, data_home=data_home)
+    except (InstanceConflict, OSError, RuntimeError) as exc:
+        return {"status": "unavailable", "exception_type": type(exc).__name__, **error_codes(exc)}
+    result = {"status": "not_observed", "snapshot": None, "lifecycle_codes": {},
+              "lifecycle_status": "not_observed", "host_probe": {"status": "unknown"}}
+    try:
+        raw = json.loads(read_bounded(directory / "diagnostics.json", 4096))
+        snapshot = _snapshot(raw)
+        age = int(time.time()) - snapshot["observed_at"]
+        result.update(status="recorded", snapshot=snapshot, age_seconds=age,
+                      stale=not 0 <= age <= 30, host_probe=_listener_probe(raw, age) if age >= 0 else {"status": "unknown"})
     except FileNotFoundError:
         pass
-    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
-        result["status"] = "unavailable"
+    except (OSError, ValueError, TypeError, RecursionError) as exc:
+        result.update(status="unavailable", exception_type=type(exc).__name__, **error_codes(exc))
     try:
-        counts = Counter()
-        for line in _read(directory / "lifecycle.log", 65536).decode("ascii").splitlines():
-            fields = line.split()
-            if len(fields) == 2 and fields[0].isdigit() and fields[1] in CODES:
-                counts[fields[1]] = min(1_000_000, counts[fields[1]] + 1)
-                if len(fields[0]) <= 10:
-                    result["latest_lifecycle"] = {"observed_at": int(fields[0]), "code": fields[1]}
-        result["lifecycle_codes"] = dict(counts)
+        counts, recent = _lifecycle(directory)
+        if recent:
+            result.update(lifecycle_status="recorded", lifecycle_codes=counts,
+                          lifecycle_history=recent, latest_lifecycle=recent[-1])
     except FileNotFoundError:
         pass
-    except (OSError, ValueError, UnicodeError):
-        result["lifecycle_status"] = "unavailable"
-    result["action"] = "Use windows/Cost-Guard-Web.cmd or macos/Cost-Guard-Web.command to restart; Legacy CLI remains independent. Recorded facts do not prove current readiness."
+    except (OSError, ValueError) as exc:
+        result.update(lifecycle_status="unavailable", lifecycle_error=type(exc).__name__)
+    result["runtime_errors"] = runtime_evidence(directory)
     return result

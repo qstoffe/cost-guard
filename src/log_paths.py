@@ -130,8 +130,15 @@ def legacy_events_file(path: Path) -> Path:
     return path
 
 
-def read_events(path: Path) -> str:
+def read_events(path: Path, *, max_bytes: int = 131072) -> str:
+    def read(file):
+        with file.open("rb") as stream:
+            raw = stream.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            raise ValueError("oversize recorded events")
+        return raw.decode("utf-8")
+
     try:
-        return path.read_text(encoding="utf-8")
+        return read(path)
     except FileNotFoundError:
-        return legacy_events_file(path).read_text(encoding="utf-8")
+        return read(legacy_events_file(path))

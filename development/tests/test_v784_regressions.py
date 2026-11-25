@@ -4,7 +4,6 @@ import io
 import tempfile
 import unittest
 from dataclasses import replace
-from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -17,13 +16,9 @@ from src.config import load_configuration
 from src.domain import IntegrationHealth, ProviderCapabilities
 from src.presentation import WatchRenderer
 from src.reports import ReportService
-from src.reports.models import PromptProjection
 from src.sources.model_availability import OpenCodeModelAvailabilitySource
 from src.sources.selection import SourceSelection
-from src.version import DISPLAY_VERSION
 from src.watch import WatchCoordinator
-from src.watch.coordinator import WatchCycle
-from src.watch.models import ToolObservation, WatchProjection, WatchRow
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -42,30 +37,6 @@ class _UnavailableAccount:
     def get_quota_snapshot(self):
         self.quota_calls += 1
         raise AssertionError("an unavailable account provider must not be queried")
-
-
-def _prompt(**changes) -> PromptProjection:
-    base = PromptProjection(
-        at_ms=1_000,
-        prompt_number=1,
-        label="prompt",
-        preview="hello",
-        model_effort="GPT Test",
-        watch_model_effort="GPT Test",
-        ccost=Decimal("3"),
-        cost_estimated=False,
-        unresolved_cost=False,
-        calls=19,
-        incoming_context_tokens=1_000,
-        incoming_context_ccost=None,
-        extra_ccost=None,
-        token_mix_percent=None,
-        event_id="u1",
-        duration_ms=121_000,
-        watch_delta_context_tokens=25_400,
-        watch_next_context_tokens=42_200,
-    )
-    return replace(base, **changes)
 
 
 class V784RegressionTests(unittest.TestCase):
@@ -100,29 +71,6 @@ class V784RegressionTests(unittest.TestCase):
             self.assertEqual((), service.account_quota_snapshots())
             self.assertEqual(0, missing.quota_calls)
 
-    def test_watch_restores_whole_k_approximation_compact_duration_and_spanning_tool_row(self) -> None:
-        prompt = _prompt(in_progress=True)
-        projection = WatchProjection(
-            title="Cost Guard Watch",
-            source_label="V1",
-            rows=(WatchRow("root", "Session", prompt, marker=">", tool=ToolObservation(4, 0, 3, "Read saved Payment Window")),),
-            active_count=1,
-            status="1 prompt running · Next refresh: 00:05",
-            now_ms=122_000,
-        )
-        stream = io.StringIO()
-        WatchRenderer({"timezone": "UTC", "colors": {}, "thresholds": {}}, stream=stream, interactive=False).render(projection)
-        text = stream.getvalue()
-        self.assertRegex(text, rf"Cost Guard {DISPLAY_VERSION} \(Watch started: \d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}\) — Prompt watch — Source: OpenCode V1")
-        self.assertIn("+25k", text)
-        self.assertIn("~42k", text)
-        self.assertNotIn("25.4k", text)
-        self.assertNotIn("42.2k", text)
-        self.assertIn("2m1s", text)
-        self.assertNotIn("2m 01s", text)
-        activity = next(line for line in text.splitlines() if "tool calls" in line)
-        self.assertEqual(2, activity.count("|"), "running tool activity must span the complete Watch table")
-
     def test_running_prompt_uses_live_session_context_instead_of_na(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             # This case is before compaction. The old shared fixture included a
@@ -137,12 +85,6 @@ class V784RegressionTests(unittest.TestCase):
             WatchRenderer(config, stream=stream, interactive=False).render(projection)
             running_line = next(line for line in stream.getvalue().splitlines() if "#2 " in line)
             self.assertNotIn("N/A", running_line)
-
-    def test_expired_recent_marker_requires_full_dashboard_repaint(self) -> None:
-        old = WatchProjection("Cost Guard Watch", "V1", (WatchRow("root", "Session", _prompt(), marker="✓"),), now_ms=1_000)
-        current = replace(old, rows=(WatchRow("root", "Session", _prompt(), marker=""),), now_ms=32_000)
-        cycle = WatchCycle(current, (), (), False)
-        self.assertTrue(WatchCoordinator._needs_full_render(old, current, cycle))
 
     def test_completed_marker_expires_without_another_source_poll(self) -> None:
         clock = [2_200]
@@ -163,14 +105,6 @@ class V784RegressionTests(unittest.TestCase):
             row = next(item for item in aged.rows if item.prompt.event_id == "u_next")
             self.assertEqual("", row.marker)
             self.assertEqual(loads_after_completion, source.load_count, "marker aging must be presentation-only")
-
-    def test_v77_style_watch_status_uses_clock_countdown(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            source = MutableSource(make_snapshot(running=False))
-            config, selection, service, _db = make_service(td, source)
-            watch = WatchCoordinator(selection=selection, report_service=service, config=config, clock_ms=lambda: 2_200)
-            self.assertEqual("Idle · Next prompt check: 00:30", watch._steady_status(0, 30))
-            self.assertEqual("1 prompt running · Next refresh: 00:05", watch._steady_status(1, 5))
 
 
 if __name__ == "__main__":

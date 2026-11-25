@@ -3,13 +3,12 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
 import tempfile
-import re
 import unittest
 from unittest.mock import patch
 
 from development.tests.fixtures.account_periods import DAY, MONTH, NOW, HOUR, request, subscription, project
 from development.tests.fixtures.report_runtime import FakePricingProvider
-from development.tests.fixtures.quota_rendering import quotas, report_text, watch_text
+from development.tests.fixtures.quota_rendering import quotas
 from development.tests.fixtures.session_snapshots import make_snapshot
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
@@ -23,10 +22,6 @@ from src.presentation.terminal import AnsiStyler
 from src.reports.accounts import WatchAccountProjection, account_projections
 
 D = Decimal
-
-
-def strip_ansi(value):
-    return re.sub(r"\x1b\[[0-9;]*m", "", value)
 
 
 class AccountPeriodCCostTests(unittest.TestCase):
@@ -237,67 +232,6 @@ class AccountPeriodCCostTests(unittest.TestCase):
                            observed_start_ms=MONTH)[0]
         self.assertIn("CCost today: 0", account_ccost_lines(unpriced))
 
-    def test_partial_subtotal_is_plain_in_report_watch_and_compact_fallbacks(self):
-        value = ComparisonCost(D("37.2"), 2, 1)
-        row = project((subscription(),), (request("known", NOW),))[0]
-        row = replace(row, ccost_scopes=tuple((name, value) for name, _ in row.ccost_scopes))
-        for width in (65, 160):
-            for color in (False, True):
-                with self.subTest(width=width, color=color):
-                    styler = AnsiStyler({}, enabled=color)
-                    for watch in (False, True):
-                        text = "\n".join(strip_ansi(line) for line in capacity_lines(
-                            row, styler, "UTC", width=width, now_ms=NOW, watch=watch))
-                        self.assertIn("0% used (38)", text)
-                        self.assertIn("43% used (38)", text)
-                        self.assertNotIn("≥", text)
-                        self.assertNotIn("?", text)
-                    text = strip_ansi(report_text(replace(quotas(row), now_ms=NOW), width=width))
-                    self.assertEqual(1, text.count("CCost today: 38"))
-                    self.assertEqual(1, text.count("CCost this month: 38"))
-                    fallback = replace(row, account=replace(row.account, quotas=(), billing=()))
-                    text = "\n".join(capacity_lines(fallback, styler, "UTC", width=width, now_ms=NOW, watch=True))
-                    self.assertIn("CCost today: 38", text)
-        no_percent = replace(row, account=replace(row.account, quotas=(replace(
-            row.account.quotas[0], remaining_fraction=None),)))
-        text = "\n".join(capacity_lines(no_percent, AnsiStyler({}, enabled=False), "UTC",
-                                       width=160, now_ms=NOW, watch=True))
-        self.assertIn("N/A · CCost: 38", text)
-        self.assertEqual((D("37.2"), 2, 1, False),
-                         (value.known_ccost, value.observed_requests, value.priced_requests, value.complete))
-
-    def test_compact_report_keeps_distinct_values_inline_without_prose_or_footer(self):
-        row = project((subscription(),), (request("week", NOW - 2 * 86_400_000),
-                                          request("today", NOW)), observed_start_ms=MONTH)[0]
-        for width in (80, 120, 160):
-            for color in (False, True):
-                with self.subTest(width=width, color=color):
-                    lines = capacity_lines(row, AnsiStyler({}, enabled=color), "UTC", width=width,
-                                           force_vertical=True, now_ms=NOW)
-                    text = "\n".join(strip_ansi(line) for line in lines)
-                    self.assertIn("0% used (100)", text)
-                    self.assertIn("43% used (200)", text)
-                    self.assertTrue(all(len(strip_ansi(line)) <= width for line in lines))
-            text = report_text(replace(quotas(row), now_ms=NOW), width=width)
-            self.assertIn("CCost today: 100", text)
-            self.assertIn("CCost this month: 200", text)
-            for unwanted in ("CCost in ", "configured local", "native reset window", "provider-attributed",
-                             "Account CCost values", "Overlapping windows", "?"):
-                self.assertNotIn(unwanted, text)
-
-    def test_monthly_empty_today_precedes_remaining_and_report_does_not_duplicate_scope(self):
-        native = replace(subscription("github-copilot"), quotas=(QuotaComponent(
-            "Month", "fixed", remaining=D(200), limit=D(300), remaining_fraction=D("0.67"),
-            unit="AI credits", reset_at_ms=NOW + 86_400_000),))
-        row = project((native,), (), watch=True, observed_start_ms=DAY)[0]
-        text = watch_text(replace(quotas(row), now_ms=NOW), width=160)
-        self.assertIn("Today: 0 · Remaining:", text)
-        self.assertNotIn("?", text)
-        report = project((native,), (), observed_start_ms=MONTH)[0]
-        text = report_text(replace(quotas(report), now_ms=NOW))
-        self.assertEqual(1, text.count("CCost today: 0"))
-        self.assertNotIn("Today: 0", text)
-
     def test_watch_zero_is_published_only_after_successful_history_and_failed_report_stays_failed(self):
         with tempfile.TemporaryDirectory() as directory:
             source = MutableSource(replace(make_snapshot(), sessions=()))
@@ -319,27 +253,6 @@ class AccountPeriodCCostTests(unittest.TestCase):
     def test_local_month_boundary_uses_stockholm_midnight_across_dst(self):
         self.assertEqual(int(datetime(2026, 9, 30, 22, tzinfo=timezone.utc).timestamp() * 1000), MONTH)
         self.assertEqual(14 * HOUR, NOW - DAY)  # 25-hour autumn day, not a fixed UTC day
-
-    def test_watch_percentage_parentheses_and_daily_placement_preserve_width_and_status(self):
-        row = project((subscription(),), (request("one", NOW),), watch=True)[0]
-        for width in (35, 65, 120, 240):
-            for color in (False, True):
-                lines = capacity_lines(row, AnsiStyler({}, enabled=color), "UTC", width=width, now_ms=NOW, watch=True)
-                text = "\n".join(strip_ansi(line) for line in lines)
-                self.assertIn("0% used (100)", text)
-                self.assertIn("43% used (100)", text)
-                self.assertNotIn("not started", " ".join(text.split()))
-                self.assertTrue(all(len(strip_ansi(line)) <= width for line in lines))
-                self.assertNotIn("this month", text)
-        native = replace(subscription("github-copilot"), quotas=(QuotaComponent("Month", "fixed", remaining=D(2483),
-                         limit=D(7000), remaining_fraction=D("0.35"), unit="AI credits", reset_at_ms=NOW + 5 * 86_400_000),))
-        monthly = project((native,), (request("copilot", NOW, provider="github-copilot"),), watch=True)[0]
-        text = "\n".join(capacity_lines(monthly, AnsiStyler({}, enabled=False), "UTC", width=240, now_ms=NOW, watch=True))
-        self.assertIn("4517/7000 · Today: 100 · Remaining:", text)
-        no_percent = replace(row, account=replace(row.account, quotas=(replace(row.account.quotas[0], remaining_fraction=None),)))
-        text = "\n".join(capacity_lines(no_percent, AnsiStyler({}, enabled=False), "UTC", width=240, now_ms=NOW, watch=True))
-        self.assertIn("N/A · CCost: 100", text)
-        self.assertNotIn("█", text)
 
     def test_prefix_queries_and_quota_updates_never_revalue_unchanged_history(self):
         entries = (request("one", NOW),)

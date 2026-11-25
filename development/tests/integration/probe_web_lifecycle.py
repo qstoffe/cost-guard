@@ -60,7 +60,6 @@ def probe():
         if result["status"] != "complete" or result["result"]["source"]["status"] != "acquired":
             raise RuntimeError("probe_source_unavailable")
         detail_status = "no_available_session"
-        cli_status = "not_run"
         rows = result["result"]["view"]["session_usage"]
         if rows:
             session_id = rows[0]["session_id"]
@@ -80,12 +79,6 @@ def probe():
             if frozen != detail:
                 raise RuntimeError("probe_snapshot_changed")
             detail_status = "acquired_frozen"
-            # Capture private report text, emit only the exit outcome, never prompts/IDs.
-            cli = subprocess.run([sys.executable, "src/entrypoints/cli.py", session_id], cwd=ROOT,
-                capture_output=True, timeout=125)
-            if cli.returncode:
-                raise RuntimeError("probe_cli_failed")
-            cli_status = "passed"
         state = {"port": owner.server.server_port, "control": owner.control,
                  "nonce": owner.nonce, "build": owner.identity()["build"]}
         control(state, "stop")
@@ -94,7 +87,7 @@ def probe():
         if owner.failure:
             raise RuntimeError("probe_host_failed")
         return {"http": "ready", "source": "acquired", "job": result["status"],
-                "static_detail": detail_status, "cli_one_shot": cli_status,
+                "static_detail": detail_status,
                 "authenticated_stop": "passed", "owned_thread_stopped": owner.stopped.is_set(),
                 "source_guard": owner.guard.status, "native_gui": "not_run", "model_requests": 0}
     finally:

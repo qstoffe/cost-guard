@@ -9,6 +9,7 @@ import json
 import time
 from pathlib import Path
 import os
+import re
 from src.version import DISPLAY_VERSION
 from src.log_paths import log_root, read_events
 from .errors import FailureCode
@@ -58,10 +59,11 @@ def recent_events(now_ms: int | None = None) -> list[dict[str, object]]:
             and event.get("source") in _ALLOWED_SOURCES
             and event.get("event") in _ALLOWED_EVENTS
             and event.get("kind") in _ALLOWED_KINDS):
+            version = event.get("version")
             events.append({
                 "at_ms": at, "source": event["source"],
                 "event": event["event"], "kind": event["kind"],
-                "version": str(event.get("version") or "legacy")[:16],
+                "version": version if isinstance(version, str) and re.fullmatch(r"v?\d{1,4}\.\d{1,4}", version) else "legacy",
                 **_evidence(event),
             })
     return events[-24:]

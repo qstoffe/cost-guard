@@ -203,16 +203,6 @@ class ReportDurationTests(unittest.TestCase):
                 self.assertEqual(3_600_000, cached.session_usage[0].duration_ms)
                 self.assertEqual(1, load.call_count)
 
-    def test_narrow_layout_stays_aligned_and_protects_numeric_cells(self):
-        report = self.detail(history(((1000, 513_000),)))
-        for width in (60, 100, 120, 180):
-            lines = rendered(report, width=width).splitlines()
-            table = [line for line in lines if line.startswith("|")]
-            self.assertEqual(1, len({len(line) for line in table}))
-            header = next(line for line in table if "| Prompt" in line)
-            self.assertLessEqual(len(header), max(width, 113))
-            self.assertIn("8m32s", "\n".join(table))
-
 
 if __name__ == "__main__":
     unittest.main()

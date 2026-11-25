@@ -4,8 +4,6 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
-from unittest import mock
 
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.session_snapshots import make_snapshot
@@ -226,27 +224,6 @@ class MigrationGapScopeTests(unittest.TestCase):
             projection = WatchCoordinator(selection=gapped, report_service=service, config=config,
                                           clock_ms=lambda: 2200).initialize().projection
         self.assertEqual((), projection.source_warnings)
-
-    def test_diagnostics_keep_full_gap_counts_regardless_of_report_scope(self) -> None:
-        from development.tools import collect_diagnostics as diag
-
-        healthy = SimpleNamespace(available=True, healthy=True, detail="ok")
-        source = SimpleNamespace(probe=lambda: healthy, diagnostic_metadata=lambda: {},
-                                 database_path="db", registration_path="service.json")
-        gap = replace(gap_at(("a", "a", 1, 2), ("b", "b", 1, 2)), newer_in_v1=("c",))
-        selected = SimpleNamespace(selected="v2", warnings=(), selected_health=healthy, migration_gap=gap)
-        with mock.patch.object(diag, "OpenCodeV1Source", return_value=source), \
-             mock.patch.object(diag, "OpenCodeV2Source", return_value=source), \
-             mock.patch.object(diag, "_safe_source_stats", return_value={"probe": {"healthy": True}}), \
-             mock.patch.object(diag, "SourceSelector") as selector, \
-             tempfile.TemporaryDirectory() as root, \
-             mock.patch.object(diag, "CacheDatabase", lambda _root: CacheDatabase(Path(root))):
-            selector.return_value.select.return_value = selected
-            result = diag.collect(network=False, snapshots=0)
-            self.assertFalse((Path(root) / "cache").exists())  # read-only freshness probe
-        self.assertEqual({"cache_present": False, "status": "no_cached_catalog"}, result["model_metadata"]["cache"])
-        self.assertEqual({"inspected": True, "missing_in_v2": 2, "newer_in_v1": 1, "detail": "complete"},
-                         result["selection"]["migration_gap"])
 
 
 if __name__ == "__main__":

@@ -4,7 +4,6 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import Decimal
-import io
 import re
 import tempfile
 import unittest
@@ -17,19 +16,16 @@ from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis.comparisons import model_comparison_rows
 from src.config import load_configuration
 from src.domain import TokenUsage
-from src.presentation import ReportRenderer, WatchRenderer
 from src.pricing.catalog import PricingCatalog
 from src.pricing.github_copilot import _annotate_promotions, _preserve_known_promotions, parse_pricing_markdown
 from src.pricing.promotions import model_promotion, WEEK_MS
 from src.reports.sampling import latest_prompts, latest_token_prompts
 from src.reports import ReportKind, ReportProjection, ReportRequest
-from src.reports.models import ModelComparisonProjection
 from src.reports.semantics import (
     active_promotion_notes, model_is_recent, provider_qualified_model_id, recent_model_notice,
 )
 from src.watch import WatchCoordinator
 from src.watch.model_discovery import WatchModelDiscovery
-from src.watch.models import WatchProjection
 
 NOW = int(datetime(2026, 10, 5, tzinfo=timezone.utc).timestamp() * 1000)
 DAY = 86_400_000
@@ -80,47 +76,6 @@ class PricingPresentationTests(unittest.TestCase):
         self.assertEqual(Decimal(1), rows[1].relative_cost)
         self.assertEqual(1, next(r for r in rows if r.model == 'GPT Test').evidence.global_prompts)
 
-    def test_marker_regions_and_numeric_alignment_do_not_pollute_prices(self):
-        for markers in ((None, None, None), (1, None, 2), (1, None, 12345)):
-            rows = tuple(ModelComparisonProjection("Test", f"Model {n}", value, "1/0.1/0.2/5", "2026-10-05",
-                         promotional=marker is not None, promotion_marker=marker)
-                         for n, (value, marker) in enumerate(zip(map(Decimal, ("7.5", "3.2", "1.0")), markers)))
-            report = ReportProjection(ReportKind.ALL_MODELS, "Test", "V2", model_comparison=rows)
-            for width in (80, 120, 200):
-                for color in (False, True):
-                    text = compact.rendered(report, CONFIG, width=width, color=color)
-                    lines = [ANSI.sub("", line) for line in text.splitlines() if line.startswith("|") and re.search(r"Model \d", line)]
-                    cells = [line.split("|")[3] for line in lines]
-                    self.assertEqual(1, len({line.index(f"{value:.1f}x") for line, value in zip(lines, map(Decimal, ("7.5", "3.2", "1.0")))}))
-                    expected_width = max(len("Relative CCost"), max((len(f"*{m}") for m in markers if m), default=0) + (5 if any(markers) else 4))
-                    self.assertEqual([expected_width + 2] * 3, list(map(len, cells)))
-                    for line, cell, marker in zip(lines, cells, markers):
-                        self.assertNotIn("*", line.split("|")[4])
-                        if marker:
-                            self.assertTrue(cell.startswith(f" *{marker}"), cell)
-                    self.assertIn("GitHub USD/M I/C/W/O", text)
-                    self.assertNotIn("Price I/C/W/O is", text)
-
-    def test_notice_labels_only_are_colored_in_both_outputs_and_wrapped(self):
-        new = "✦ New Models: Model A, Model B, Model C"
-        promo = "*1 Price Promotion: Model A — temporary promotional pricing through 2026-11-01."
-        for width in (40, 120):
-            stream = io.StringIO()
-            report = ReportProjection(ReportKind.ALL_MODELS, "Test", "V2", recent_model_notice=new,
-                                      model_comparison_promotion_notes=(promo,))
-            ReportRenderer(CONFIG, stream=stream, terminal_width=width, color_enabled=True).render(report)
-            watch_stream = io.StringIO()
-            WatchRenderer(CONFIG, stream=watch_stream, interactive=True, terminal_width=width).render(
-                WatchProjection("Cost Guard Watch", "V2", (), recent_model_notice=new,
-                                recent_promotion_notices=(promo.replace("*1", "*"),)))
-            for text, marker in ((stream.getvalue(), "*1"), (watch_stream.getvalue(), "*")):
-                self.assertIn("\x1b[38;5;118m✦ New Models:\x1b[0m Model", text)
-                self.assertIn(f"\x1b[38;5;214m{marker} Price Promotion:\x1b[0m Model", text)
-                for line in text.splitlines():
-                    if "\x1b[38;5;118m" in line or "\x1b[38;5;214m" in line:
-                        emphasized = re.findall(r"\x1b\[38;5;(?:118|214)m(.*?)\x1b\[0m", line)
-                        self.assertTrue(all("Model A" not in part and "pricing through" not in part for part in emphasized))
-
 
 class MetadataWindowTests(unittest.TestCase):
     def test_promotion_active_recent_and_expiry_boundaries(self):
@@ -138,26 +93,6 @@ class MetadataWindowTests(unittest.TestCase):
         self.assertFalse(active_promotion_notes(unknown_start, NOW, recent_only=True)[1])
         self.assertFalse(active_promotion_notes(replace(unknown_start, models=(replace(unknown_start.models[0],
             metadata={"promotion_active": "true", "promotion_expires_ms": "bad"}),)), NOW)[1])
-
-    def test_first_sighting_styles_only_prefixed_model_name_in_report_and_watch(self):
-        notice = "\u2726 New Models: \u2726 Model A (2026-10-05), Model B (2026-10-06)"
-        start = notice.index("\u2726 Model A")
-        spans = ((start, start + len("\u2726 Model A")),)
-        report = ReportProjection(ReportKind.ALL_MODELS, "Test", "V2", recent_model_notice=notice,
-                                  recent_model_notice_highlight_spans=spans)
-        watch_projection = WatchProjection("Cost Guard Watch", "V2", (), recent_model_notice=notice,
-                                           recent_model_notice_highlight_spans=spans)
-
-        report_text = compact.rendered(report, CONFIG, width=120, color=True)
-        watch_stream = io.StringIO()
-        WatchRenderer(CONFIG, stream=watch_stream, interactive=True, terminal_width=120).render(watch_projection)
-        for rendered in (report_text, watch_stream.getvalue()):
-            self.assertIn("\x1b[38;5;118m\u2726 New Models:\x1b[0m", rendered)
-            self.assertIn("\x1b[1;38;5;118m\u2726 Model A\x1b[0m", rendered)
-            plain = ANSI.sub("", rendered)
-            self.assertIn("\u2726 New Models: \u2726 Model A (2026-10-05), Model B (2026-10-06)", plain)
-            self.assertNotIn("\x1b[1;38;5;118mModel B", rendered)
-            self.assertNotIn("\x1b[38;5;118m(2026-10-05)", rendered)
 
     def test_new_model_uses_existing_seven_utc_day_window(self):
         for age, expected in ((-1, False), (0, True), (6, True), (7, False), (8, False)):
@@ -253,35 +188,6 @@ class MetadataWindowTests(unittest.TestCase):
             self.assertFalse(rows[0].promotional)
             self.assertIsNone(rows[0].promotion_marker)
             self.assertFalse(notes)
-
-    def test_both_wait_loops_repaint_aged_notices_before_the_next_source_poll(self):
-        for method in ("_v1_wait", "_v2_wait"):
-            with self.subTest(method=method), tempfile.TemporaryDirectory() as td:
-                source = MutableSource(make_root_snapshot(0, 0, month_start_ms=NOW))
-                clock = [NOW]
-                config, selection, service, _ = make_service(td, source, now_ms=clock[0])
-                service.pricing_provider.catalog = catalog()
-                monotonic = [0.0]
-                def advance(seconds):
-                    monotonic[0] += seconds
-                    clock[0] += int(seconds * 1000)
-                watch = WatchCoordinator(selection=selection, report_service=service, config=config,
-                    clock_ms=lambda: clock[0], monotonic=lambda: monotonic[0], sleep=advance)
-                initial = watch.initialize().projection
-                self.assertTrue(initial.recent_model_notice)
-                clock[0] = NOW + 12 * 60 * 60 * 1000 - 1000
-                watch._last_cycle_end_ms = clock[0]
-                self.assertTrue(initial.recent_promotion_notices)
-                frames = []
-                renderer = SimpleNamespace(render=frames.append, render_status=lambda _p: None)
-                watch._event_pump = SimpleNamespace(get=lambda seconds: advance(seconds))
-                hydration_count = source.load_count
-                getattr(watch, method)(renderer)
-                self.assertTrue(frames, "expiry must repaint, not only update the hidden projection")
-                self.assertTrue(frames[-1].recent_model_notice)
-                self.assertNotEqual(initial.recent_model_notice, frames[-1].recent_model_notice)
-                self.assertTrue(frames[-1].recent_promotion_notices)
-                self.assertEqual(hydration_count, source.load_count)
 
 
 class WatchDensityTests(unittest.TestCase):

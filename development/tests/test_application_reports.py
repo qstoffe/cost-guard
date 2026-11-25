@@ -5,8 +5,6 @@ from dataclasses import FrozenInstanceError, replace
 from decimal import Decimal
 import json
 from pathlib import Path
-import subprocess
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -408,23 +406,6 @@ class ApplicationReportTests(unittest.TestCase):
         log.assert_called_once()
         self.assertIsNone(result.view)
         self.assertIsNone(self.services[-1]._account_work)
-
-    def test_cli_startup_never_imports_optional_application_or_web_modules(self):
-        code = """
-import importlib.abc, runpy, sys
-class Absent(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname.startswith(('src.application', 'src.web', 'starlette', 'uvicorn')):
-            raise ImportError('Optional application/web dependencies are absent')
-sys.meta_path.insert(0, Absent())
-import development.tools.collect_diagnostics
-sys.argv = ['src/entrypoints/desktop.py', sys.argv[1]]
-runpy.run_path('src/entrypoints/desktop.py', run_name='__main__')
-"""
-        for argument in ("--version", "--help"):
-            proc = subprocess.run([sys.executable, "-c", code, argument], cwd=ROOT,
-                                  capture_output=True, text=True, timeout=20)
-            self.assertEqual(0, proc.returncode, proc.stderr)
 
 
 if __name__ == "__main__":

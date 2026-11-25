@@ -284,7 +284,7 @@ def compile_python(root: Path, results: Results) -> None:
     results.ok("Python compile checks executed")
 
 def check_import_smoke(root: Path, results: Results) -> None:
-    code = "import src.version, src.cli, src.bootstrap; print(src.version.DISPLAY_VERSION)"
+    code = "import src.version, src.product_entry, src.web.host; print(src.version.DISPLAY_VERSION)"
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     proc = subprocess.run(

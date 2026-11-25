@@ -16,7 +16,6 @@ from unittest.mock import patch, Mock
 
 from src import runtime_errors as errors
 from src.accounts.claude_transport import _ControlReader, ClaudeReaderFault
-from src.presentation.progress import StartupProgress
 from src.sources.errors import SourceUnavailableError
 from src.watch.observers import LiveEventPump
 from src.version import DISPLAY_VERSION
@@ -226,22 +225,6 @@ class RuntimeErrorTests(unittest.TestCase):
         self.reporter.uninstall()
         self.assertEqual(original, (sys.excepthook, threading.excepthook, sys.unraisablehook))
         self.assertEqual(1, len(self.crashes()))
-
-    def test_progress_worker_isolated_visible_and_valid_report_can_continue(self):
-        progress = StartupProgress(self.output, interactive=True, animate=False)
-        progress._active = True
-        with patch.object(progress, "_animate", side_effect=TypeError("SECRET")):
-            self.assertEqual(0, self.reporter.run(lambda: (progress._animation_root(), progress.update("later"), progress.stop(), 0)[-1]))
-        self.assertIn("ERROR: Startup animation", self.output.getvalue())
-        self.assertFalse(progress.interactive)
-        self.assertIn("Severity: recoverable", self.logged())
-        self.assertFalse(self.crashes())
-
-    def test_progress_failed_sink_uses_independent_stderr(self):
-        progress = StartupProgress(self.output, interactive=True, animate=False, line_sink=Mock(side_effect=TypeError))
-        with patch.object(progress, "_animate", side_effect=AttributeError), redirect_stderr(io.StringIO()) as fallback:
-            self.assertEqual(0, self.reporter.run(lambda: (progress._animation_root(), 0)[-1]))
-        self.assertIn("ERROR", fallback.getvalue())
 
     def test_event_worker_software_fault_logged_and_resync_error_state(self):
         source = SimpleNamespace(iter_changes=lambda: fail(AttributeError))

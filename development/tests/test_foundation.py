@@ -168,7 +168,7 @@ class ValidationTests(unittest.TestCase):
             self.assertEqual([], list(copy.glob("*.py")))
             self.assertFalse((copy / "docs").exists())
             self.assertFalse((copy / "VERSION_HISTORY.md").exists())
-            for entry in ("desktop", "cli", "web"):
+            for entry in ("desktop", "web"):
                 with self.subTest(entry=entry):
                     result = run_python(str(copy / f"src/entrypoints/{entry}.py"), "--help", cwd=outside)
                     self.assertEqual(0, result.returncode, result.stderr)
@@ -179,10 +179,9 @@ class ValidationTests(unittest.TestCase):
                                             cwd=outside, env=environment, capture_output=True, text=True, timeout=20)
                     self.assertEqual(result.stdout, module.stdout, module.stderr)
                     self.assertEqual(0, module.returncode)
-            for entry in ("desktop", "cli"):
-                result = run_python(str(copy / f"src/entrypoints/{entry}.py"), "--version", cwd=outside)
-                self.assertEqual(0, result.returncode, result.stderr)
-                self.assertEqual(f"Cost Guard {DISPLAY_VERSION}", result.stdout.strip())
+            result = run_python(str(copy / "src/entrypoints/desktop.py"), "--version", cwd=outside)
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual(f"Cost Guard {DISPLAY_VERSION}", result.stdout.strip())
 
 
 class BrokenPackageTests(unittest.TestCase):

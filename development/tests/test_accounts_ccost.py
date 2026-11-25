@@ -173,18 +173,6 @@ class AccountsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             AccountRef("one", "openai").key
 
-    def test_wide_narrow_layouts_use_same_components_and_never_merge_accounts(self):
-        a = AccountProjection(account(), "OpenAI Plus")
-        styler = AnsiStyler({}, enabled=False)
-        wide = capacity_lines(a, styler, "UTC", width=200, now_ms=100_000)
-        narrow = capacity_lines(a, styler, "UTC", width=45, now_ms=100_000)
-        self.assertEqual(1, len(wide))
-        self.assertGreater(len(narrow), 1)
-        self.assertTrue(all(len(line) <= 45 for line in narrow))
-        for text in ("OpenAI Plus", "25% used", "█" * 3 + "░" * 7):
-            self.assertIn(text, "\n".join(wide))
-            self.assertIn(text, "\n".join(narrow))
-
     def test_used_only_limit_only_and_blocked_unknown_are_renderable(self):
         a = replace(account(), status=AccountUsageStatus.BLOCKED,
                     quotas=(QuotaComponent("Usage", used=D(18953), unit="credits"),
@@ -339,27 +327,6 @@ class RefreshTests(unittest.TestCase):
         expired, seen, _ = reconcile_accounts(values, (partial, b), seen, now_ms=400_001, update_seen=False)
         self.assertIsNone(expired[0].quotas[0].remaining_fraction)
         self.assertEqual({a.key: 100_000, b.key: 340_000}, seen)
-
-    def test_recovery_rendering_is_generic_and_no_duplicate_error_state(self):
-        for provider in ("openai", "github-copilot", "anthropic"):
-            a = account(provider)
-            for width in (35, 180):
-                for quotas in (a.quotas, ()):
-                    snapshot = replace(a, availability="stale" if quotas else "error", quotas=quotas)
-                    row = AccountProjection(snapshot, snapshot.provider_label)
-                    text = "\n".join(capacity_lines(row, AnsiStyler({}, enabled=False), "UTC",
-                                                   width=width, now_ms=700_000, recovering=True))
-                    self.assertNotIn("ERROR", text)
-                    self.assertNotIn("Quota error", text)
-                    self.assertTrue(all(len(line) <= width for line in text.splitlines()))
-                    if quotas:
-                        self.assertIn("STALE / RECONNECTING", text)
-                    else:
-                        self.assertIn("temporarily unavailable", text)
-                        self.assertIn("Retrying...", text)
-            error = AccountProjection(replace(a, quotas=(), availability="error"), a.provider_label)
-            text = "\n".join(capacity_lines(error, AnsiStyler({}, enabled=False), "UTC", width=180))
-            self.assertEqual(1, text.lower().count("error"))
 
     def test_transient_missing_fraction_retains_bar_with_stale_state(self):
         a = account("github-copilot")

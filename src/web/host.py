@@ -129,7 +129,7 @@ class WebHost:
         return database_sizes(selection, self.cache_housekeeping.lifecycle.database.paths.database, archive=archive)
 
     def stop(self, reason="menu"):
-        if reason not in {"menu", "launcher", "source_changed", "runtime_fault", "gui_unavailable"}:
+        if reason not in {"menu", "launcher", "source_changed", "configuration_changed", "runtime_fault", "gui_unavailable"}:
             reason = "runtime_fault"
         with self._lock:
             if not self.stopping.is_set():
@@ -180,7 +180,7 @@ class WebHost:
                                   "process": identity, "address": "127.0.0.1",
                                   "port": self.server.server_port, "build": VERSION,
                                   "ready_ns": time.time_ns()})
-                self.store.log("ready")
+                self.observations.lifecycle(self.store, "ready")
             self.ready = True
             self.log_housekeeping.start()
 
@@ -203,13 +203,19 @@ class WebHost:
                 if status == "source_changed":
                     self.stop("source_changed")
                 elif status == "source_check_unavailable" and previous != status and self.store:
-                    self.store.log(status)
+                    self.observations.lifecycle(self.store, status)
                 self.observations.persist(self)
                 self.benchmark.tick()
                 if self.dependencies and self.live and self.live.observed.is_set():
                     baseline = self.live.driver.coordinator.report_service.config
+                    previous = self.dependencies.config_status
                     if not self.dependencies.check(self.dispatcher, baseline=baseline):
-                        self.stop('source_changed')
+                        self.stop('configuration_changed')
+                    elif self.store and previous != self.dependencies.config_status:
+                        if self.dependencies.config_status == 'configuration_unavailable':
+                            self.observations.lifecycle(self.store, 'configuration_unavailable')
+                        elif previous == 'configuration_unavailable':
+                            self.observations.lifecycle(self.store, 'configuration_recovered')
                 if not self.stopping.is_set():
                     if self.history_reports:
                         self.session_cache_events.roll_calendar()
@@ -325,7 +331,8 @@ class WebHost:
                 if self.store:
                     self.observations.persist(self, final=True)
                     self.store.remove(self.nonce)
-                    self.store.log(self.reason if self.reason in {"source_changed", "runtime_fault"} else "stopped")
+                    code = self.reason if self.reason in {"source_changed", "configuration_changed", "runtime_fault"} else "stopped"
+                    self.observations.lifecycle(self.store, code)
 
     def _close_history(self):
         try:
