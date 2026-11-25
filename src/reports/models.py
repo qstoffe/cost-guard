@@ -205,6 +205,8 @@ class SessionUsageRow:
     cost_groups: tuple[SessionCostGroup, ...] = ()
     unverified_agent_count: int = 0
     empty_history: bool = False
+    ccost_complete: bool | None = None
+    ccost_retained: bool = False
 
 
 @dataclass(frozen=True, slots=True)

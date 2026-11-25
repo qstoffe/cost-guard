@@ -9,12 +9,15 @@ MODELS_DAY_START = 1_794_528_000_000  # 2026-11-13 00:00 UTC
 def models_source(source, *, updated=False):
     values = {}
     for index in range(30):
-        snapshot = make_root_snapshot(index, 2, month_start_ms=MODELS_DAY_START)
+        snapshot = make_root_snapshot(index, 5 if index == 0 else 2, month_start_ms=MODELS_DAY_START)
         main = f"Model-{index:02}"
         if index == 4:
             main += "-" + "long-model-name-" * 12
         requests = tuple(replace(request, model=ModelRef("main-provider", main if number else "Earlier"),
             variant="high") for number, request in enumerate(snapshot.invocations))
+        if index == 0:
+            requests = tuple(replace(request, variant=effort) for request, effort in
+                             zip(requests, ("high", "high", None, "low", "high"), strict=True))
         sessions = (snapshot.root,)
         if index in (0, 2, 3):
             child = replace(snapshot.root, session_id=f"child-{index}", parent_session_id=snapshot.root.session_id)

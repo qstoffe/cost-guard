@@ -92,7 +92,7 @@ def _range_total(amounts):
     uncertain = any(point is None or point[1] for point in amounts)
     if not amounts or (uncertain and not subtotal):
         return None
-    return _point(subtotal, '~' if uncertain else '')
+    return subtotal, '~' if uncertain else ''
 
 
 def _calendar_details(period, window, end_ms, zone):
@@ -199,16 +199,17 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
         # Ignore reserved dates and zero-duration boundary slots; neither adds
         # time in the published window nor makes it incomplete.
         total = _range_total(tuple(point for (left, right), point in zip(clips, amounts) if left < right))
+        if total is not None:
+            amount, mark = total
+            if not native and month and month.start is not None and month.used != amount:
+                # Retained history remains visible but is not a final same-window
+                # total while the current card and chart differ.
+                mark = '~'
+            total = _point(amount, mark)
         # The browser chooses the largest visible series' scale, without
         # reimplementing the product's Decimal/unit formatting.
         authority = dict(provider_monthly_total=True, observed_total=total,
                          month_total=_point(month.used) if month.used is not None else None) if native else {}
-        if not native and month and month.start is not None and total is not None:
-            amount = dict(total.fields)['amount']
-            if month.used != amount:
-                # Retained history is still visible, but it is not a final
-                # same-window total while the current card and chart disagree.
-                total = _point(amount, '~')
         series.append(record(id=item.key, account=item.label, peak=peak, ticks=_ticks(peak), points=points,
                              total=total, **authority))
     return record(period=period, timezone_id=zone, start_ms=window.start, end_ms=now_ms, buckets=window.buckets,

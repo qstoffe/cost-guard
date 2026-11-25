@@ -48,10 +48,10 @@ def _sample_keys(entry):
 
 
 class TimelineValuation:
-    def __init__(self, catalog, previous=None):
+    def __init__(self, catalog, previous=None, *, reference=None):
         self.catalog = catalog
         self.previous = previous
-        self.reference = lru_cache(maxsize=8192)(catalog.reference_valuation)
+        self.reference = reference if reference is not None else lru_cache(maxsize=8192)(catalog.reference_valuation)
         by_provider = defaultdict(list)
         for model in catalog.ccost_models:
             by_provider[usage_provider(model.model.provider)].append(model.selected_tier(0))

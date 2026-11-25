@@ -1,7 +1,8 @@
 """Request identity copy from recorded selectors, never labels or pricing guesses."""
-from src.domain.model_identity import CATALOG_ESTIMATE_HELP
+from src.domain.model_identity import CATALOG_ESTIMATE_HELP, catalog_display_name
+from src.reports.model_details import selected_effort
+
 from .effort_help import effort_help
-from src.domain.model_identity import catalog_display_name
 
 
 def linked_selection_help(item):
@@ -48,27 +49,52 @@ def prompt_display_help(row):
 
 
 def session_display_help(item):
-    if item.model == "N/A" and item.selected_display_model:
-        effort = f" · {item.selected_effort.capitalize()}" if item.selected_effort else ""
-        label = item.selected_display_model + effort + "\nSelected model · no request usage recorded"
-    else:
-        label = item.model
-    sections = [label]
-    for heading, models in (("Main models", item.main_models), ("Subagents", item.subagent_models)):
-        lines = []
+    main, agents = [], []
+    remaining = 32_000
+    for models, lines in ((item.main_models, main), (item.subagent_models, agents)):
+        omitted = False
         for part in models:
-            identity = f"{part.provider}/{part.display_model or part.model}"
-            efforts = " / ".join(dict.fromkeys(effort_help(e) for e in part.efforts if e.selected is not None))
-            lines.append("• " + identity + (f" · {efforts}" if efforts else ""))
-            if fixture_help(part.provider, part.model):
-                lines.append(fixture_help(part.provider, part.model))
-        if lines:
-            sections.append(heading + "\n" + "\n".join(lines))
-    if item.linked_model_selections:
-        sections.append(linked_selection_help(item))
-    elif item.linked_agent_count and not item.subagent_models:
-        sections.append("Subagents — model unknown")
-    return "\n\n".join(sections)
+            label = f"{part.provider}/{part.display_model or part.model}"
+            if part.display_model and part.display_model != part.model:
+                label += f" [recorded: {part.model}]"
+            efforts = {}
+            for evidence in part.efforts:
+                key = selected_effort(evidence.selected)
+                if key == "default":
+                    text = evidence.effective or "unknown"
+                else:
+                    text = evidence.selected or "Effort unknown"
+                efforts.setdefault(key, {})[text] = None
+            for key, details in efforts.items() or [(None, ("Effort unknown",))]:
+                if key == "default":
+                    effort = "Default (" + ", ".join(details) + ")"
+                else:
+                    effort = next(iter(details))
+                bullet = f"• {label} — {effort}"
+                if note := fixture_help(part.provider, part.model):
+                    bullet += " (" + note + ")"
+                if len(bullet) + 1 > remaining:
+                    omitted = True
+                    continue
+                lines.append(bullet)
+                remaining -= len(bullet) + 1
+        if omitted:
+            lines.append("Additional observed combinations are not shown.")
+    if not item.main_models:
+        if item.selected_display_model:
+            main.append(f"Selected: {item.selected_model_id} {item.selected_effort}".rstrip()
+                        + " — no request usage recorded.")
+        else:
+            main.append("No executed session model is verified.")
+    if not item.subagent_models:
+        agents.append("No subagent model was used." if item.contributor_models_complete and not item.linked_agent_count
+                      else "No executed subagent model is verified.")
+    agents.extend(f"Selected/attempted: {selection} — execution not verified."
+                  for selection in item.linked_model_selections)
+    if not item.contributor_models_complete:
+        for lines in (main, agents):
+            lines.append("Observed model coverage may be incomplete.")
+    return "Session Models:\n" + "\n".join(main) + "\n\nSub Agents:\n" + "\n".join(agents)
 
 
 def request_model_help(provider, recorded, *, catalog_model=None):

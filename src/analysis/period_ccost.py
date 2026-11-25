@@ -138,33 +138,59 @@ class PeriodCCostIndex:
 
     def __init__(self, entries: Iterable[TraceEntry], valuation: ReferenceValuation, *,
                  account_only: bool = False, timeline_valuation=None, timeline_accounts=(), shared_history=False) -> None:
-        self._series: dict[tuple, _Series] = {}
-        self.earliest_ms = None
         canonical = tuple(entry for entry in unique_usage(entries, shared_history=shared_history)
                           if _eligible(entry, account_only))
         clues = _account_clues(canonical, timeline_accounts)
         values = (timeline_valuation(canonical) if timeline_valuation is not None
                   else (comparison_cost((entry,), valuation) for entry in canonical))
-        for entry, value in zip(canonical, values):
-            provider = usage_provider(entry.model.provider)
-            if timeline_valuation is not None and not provider and entry.account_ref is not None:
-                provider = usage_provider(entry.account_ref.provider_id)
-            account = entry.account_ref.key if entry.account_ref else None
-            if account is None:
-                account = clues.get((entry.source_instance, entry.session_id, provider))
-                if account is not None:
-                    value = replace(value, source_complete=False)
-            if self.earliest_ms is None and entry.completed_at_ms > 0:
-                self.earliest_ms = entry.completed_at_ms
-            scopes = (None,) if account_only else (None, canonical_model_name(entry.model.model))
-            for identity in ("provider", account):
-                for scope in scopes:
-                    key = provider, identity, scope
-                    series = self._series.setdefault(key, _Series([], [Decimal(0)], [0], [0]))
-                    series.times.append(entry.completed_at_ms)
-                    series.totals.append(series.totals[-1] + value.known_ccost)
-                    series.priced.append(series.priced[-1] + value.priced_requests)
-                    series.incomplete.append(series.incomplete[-1] + (not value.source_complete))
+        self._initialize()
+        self._populate(canonical, values, clues, account_only=account_only, timeline=timeline_valuation is not None)
+
+    @classmethod
+    def archived_timeline(cls, entries, valuation, *, timeline_accounts):
+        """Build estimated timeline and exact native-month series from the same requests."""
+        canonical = tuple(entry for entry in unique_usage(entries, shared_history=True) if _eligible(entry, True))
+        clues = _account_clues(canonical, timeline_accounts)
+        timeline, month = cls.__new__(cls), cls.__new__(cls)
+        timeline._initialize()
+        month._initialize()
+        for entry, value in zip(canonical, valuation(canonical)):
+            timeline._add(entry, value, clues, account_only=True, timeline=True)
+            # Month has no estimated attribution or missing-category fallback.
+            month._add(entry, _reference_request_cost(entry, valuation.reference), {},
+                       account_only=True, timeline=False)
+        return timeline, month
+
+    def _initialize(self):
+        self._series: dict[tuple, _Series] = {}
+        self.earliest_ms = None
+
+    def _populate(self, entries, values, clues, *, account_only, timeline):
+        for entry, value in zip(entries, values):
+            self._add(entry, value, clues, account_only=account_only, timeline=timeline)
+
+    def _add(self, entry, value, clues, *, account_only, timeline):
+        provider = usage_provider(entry.model.provider)
+        if timeline and not provider and entry.account_ref is not None:
+            provider = usage_provider(entry.account_ref.provider_id)
+        account = entry.account_ref.key if entry.account_ref else None
+        if account is None:
+            account = clues.get((entry.source_instance, entry.session_id, provider))
+            if account is not None:
+                value = replace(value, source_complete=False)
+        if self.earliest_ms is None and entry.completed_at_ms > 0:
+            self.earliest_ms = entry.completed_at_ms
+        scopes = (None,) if account_only else (None, canonical_model_name(entry.model.model))
+        for identity in ("provider", account):
+            for scope in scopes:
+                key = provider, identity, scope
+                series = self._series.get(key)
+                if series is None:
+                    series = self._series[key] = _Series([], [Decimal(0)], [0], [0])
+                series.times.append(entry.completed_at_ms)
+                series.totals.append(series.totals[-1] + value.known_ccost)
+                series.priced.append(series.priced[-1] + value.priced_requests)
+                series.incomplete.append(series.incomplete[-1] + (not value.source_complete))
 
     def cost(self, provider: str, identity: object, start: int, end: int,
              model_id: str | None = None) -> ComparisonCost:
@@ -201,7 +227,20 @@ def _eligible(entry, account_only):
     # Explicit API/foreign-account proof must not become a Pro estimate.
     return not (usage_provider(entry.model.provider) == 'claude-agent' and (
         entry.cost_disposition is CostDisposition.BILLED
-        or entry.account_ref is not None and entry.account_ref.provider_id != 'claude-code'))
+         or entry.account_ref is not None and entry.account_ref.provider_id != 'claude-code'))
+
+
+def _reference_request_cost(entry, reference):
+    """Only the reference subtotal and coverage consumed by prefix sums."""
+    tokens = entry.tokens
+    complete = all(name in tokens.known_fields for name in MIX_FIELDS)
+    amount = reference(entry.model, tokens) if tokens.total or not complete else Decimal(0)
+    if amount is None:
+        return ComparisonCost(observed_requests=1, source_complete=complete)
+    amount = Decimal(amount)
+    if not amount.is_finite() or amount < 0:
+        raise ValueError('Reference valuation must be finite and nonnegative')
+    return ComparisonCost(Decimal(0) + amount, 1, 1, source_complete=complete)
 
 
 def _account_clues(entries, candidates):

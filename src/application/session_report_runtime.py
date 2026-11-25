@@ -1,4 +1,5 @@
 """Build writer-side Sessions coverage and Live deltas from the catalog."""
+from dataclasses import replace
 
 
 def _pending_value(catalog, key, active):
@@ -15,15 +16,34 @@ def _pending_value(catalog, key, active):
 
 def _live_value(catalog, key):
     if key not in catalog.roots:
+        catalog.report_live_costs.pop(key, None)
         return None
     if catalog._running(key):
         row, = catalog._rows((key,))
+        row = _with_live_cost(row, catalog.report_live_costs.get(key), catalog.revisions.get(key))
         return (row, row.prompt_started_ms, None) if row.prompt_started_ms is not None else None
+    catalog.report_live_costs.pop(key, None)
     finish = catalog.recent_finishes.get(key)
     if finish is not None and key in catalog.archive.rows:
         row, = catalog._rows((key,))
         return row, None, finish
     return None
+
+
+def _with_live_cost(row, offer, revision):
+    if offer is None:
+        return row
+    cost, current = offer
+    complete = cost.total.complete and cost.source_complete
+    amount = cost.total.known_ccost if cost.total.priced_requests or complete else None
+    # The scalar lane trails the Watch valuation independently. Do not bounce
+    # back to that older subtotal while the next same-tree capture is pending.
+    if amount is None and row.ccost is not None:
+        return row
+    return replace(row, ccost=amount, ccost_complete=complete,
+        ccost_retained=amount is not None and (not current or cost.source_revision != revision),
+        ccost_unavailable=cost.total.unavailable, main_ccost=cost.main_ccost,
+        subagent_ccost=cost.subagent_ccost, cost_groups=cost.groups)
 
 
 def publish_report_runtime(catalog, keys=None):

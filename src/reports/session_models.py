@@ -1,5 +1,5 @@
 """Bounded Web Sessions model facts from canonical executed request evidence."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from src.analysis.effort_defaults import request_effort
 from src.analysis.effort import prompt_replies
@@ -12,6 +12,8 @@ from .prompt_selection import selected_model, selection_name, selection_variant
 from .linked_selections import linked_selections
 
 LIMIT = 64
+EFFORT_LIMIT = 64
+LEGACY_EFFORT_LIMIT = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +23,73 @@ class SessionModel:
     catalog_model: str = ""
     efforts: tuple[EffortEvidence, ...] = ()
     display_model: str = ""
+
+
+def effort_choice(evidence):
+    selected = selected_effort(evidence.selected)
+    return selected, (evidence.effective.casefold() if selected == "default" else "")
+
+
+def _record_effort(evidence, efforts):
+    if (evidence.selected is not None and (len(evidence.selected) > 64
+            or evidence.selected and not evidence.selected.isprintable())
+            or any(len(text) > 256 or text and not text.isprintable()
+                   for text in (evidence.effective, evidence.source, evidence.revision))):
+        return False
+    key = effort_choice(evidence)
+    if key not in efforts and len(efforts) >= EFFORT_LIMIT:
+        return False
+    efforts.setdefault(key, evidence)
+    return True
+
+
+def needs_effort_backfill(row):
+    return not row.contributor_models_complete and any(len(part.efforts) == LEGACY_EFFORT_LIMIT
+        for part in (*row.main_models, *row.subagent_models))
+
+
+def backfill_efforts(row, entries):
+    """Extend known roles from a same-revision whole-tree trace, not display strings."""
+    groups = {}
+    for role, models in ((False, row.main_models), (True, row.subagent_models)):
+        for part in models:
+            groups[role, (part.provider, part.model)] = efforts = {}
+            for evidence in part.efforts:
+                if not _record_effort(evidence, efforts):
+                    return None
+    parents = {entry.session_id: entry.parent_session_id for entry in entries}
+    parent_is_known = {row.session_id: True}
+
+    def belongs(session_id):
+        chain = set()
+        while session_id not in parent_is_known and session_id not in chain:
+            chain.add(session_id)
+            session_id = parents.get(session_id)
+        result = parent_is_known.get(session_id, False)
+        parent_is_known.update(dict.fromkeys(chain, result))
+        return result
+
+    covered = set()
+    for entry in unique_usage(entries):
+        if (entry.root_session_id != row.session_id or not _executed(entry)
+                or not belongs(entry.session_id)):
+            continue
+        group = entry.session_id != row.session_id, _identity(entry)
+        if group not in groups:
+            continue
+        evidence = request_effort(entry)
+        if not _record_effort(evidence, groups[group]):
+            return None
+        covered.add(group)
+    suspected = {(role, (part.provider, part.model))
+                 for role, models in ((False, row.main_models), (True, row.subagent_models))
+                 for part in models if len(part.efforts) == LEGACY_EFFORT_LIMIT}
+    if not suspected <= covered:
+        return None
+    def parts(role, models):
+        return tuple(replace(part, efforts=tuple(groups[role, (part.provider, part.model)].values()))
+                     for part in models)
+    return replace(row, main_models=parts(False, row.main_models), subagent_models=parts(True, row.subagent_models))
 
 
 def model_fields(item, catalog):
@@ -68,20 +137,10 @@ def model_fields(item, catalog):
         role = "main" if entry.session_id == root else "subagent"
         group = groups[role]
         if identity not in group:
-            group[identity] = (entry.model, [])
+            group[identity] = (entry.model, {})
         efforts = group[identity][1]
-        evidence = request_effort(entry)
-        if (evidence.selected is not None and (len(evidence.selected) > 64
-                or evidence.selected and not evidence.selected.isprintable())
-                or any(len(text) > 256 or text and not text.isprintable()
-                       for text in (evidence.effective, evidence.source, evidence.revision))):
+        if not _record_effort(request_effort(entry), efforts):
             complete = False
-            continue
-        if evidence not in efforts:
-            if len(efforts) < 4:
-                efforts.append(evidence)
-            else:
-                complete = False
 
     latest = None
     prompts = sorted((p for p in item.bundle.prompts if p.session_id == root and p.prompt_kind != "subtask"),
@@ -104,7 +163,7 @@ def model_fields(item, catalog):
     def parts(role):
         return tuple(SessionModel(provider, model,
             ref.model if ref.resolution and ref.model != model and len(ref.model) <= 256
-                and ref.model.isprintable() else "", tuple(efforts), selection_name(ref, catalog))
+                and ref.model.isprintable() else "", tuple(efforts.values()), selection_name(ref, catalog))
             for (provider, model), (ref, efforts) in groups[role].items())
 
     selection = None
@@ -168,7 +227,7 @@ def valid_models(values):
                     or part.catalog_model and not part.catalog_model.isprintable()
                     or not isinstance(part.display_model, str) or len(part.display_model) > 256
                     or part.display_model and not part.display_model.isprintable()
-                    or len(part.efforts) > 4 or any(
+                    or len(part.efforts) > EFFORT_LIMIT or any(
                         e.selected is not None and (not isinstance(e.selected, str) or len(e.selected) > 64
                             or e.selected and not e.selected.isprintable())
                         or any(not isinstance(t, str) or len(t) > 256 or t and not t.isprintable()

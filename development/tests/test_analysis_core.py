@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 from zoneinfo import ZoneInfoNotFoundError
 
-from src.analysis import causal
+from src.analysis import causal, timezones
 from src.analysis.billing import actual_entry_cost, billing_request_fingerprint
 from src.analysis.cache import AnalysisDependencies, DerivedAnalysisCache, analyze_with_cache
 from src.analysis.causal import build_prompt_records
@@ -397,11 +397,14 @@ class TimezoneTests(unittest.TestCase):
         self.assertEqual(47 * 3600 * 1000, range_value.end_ms - range_value.start_ms)
 
     def test_stockholm_fallback_works_when_host_has_no_iana_database(self) -> None:
-        with mock.patch("src.analysis.timezones.ZoneInfo", side_effect=ZoneInfoNotFoundError("missing")):
+        timezones._stockholm_timezone.cache_clear()
+        self.addCleanup(timezones._stockholm_timezone.cache_clear)
+        with mock.patch("src.analysis.timezones.ZoneInfo", side_effect=ZoneInfoNotFoundError("missing")) as lookup:
             tz = resolve_timezone("Europe/Stockholm")
             self.assertIsNotNone(tz)
             value = local_date_range("2026-03-29", "Europe/Stockholm")
             self.assertEqual(23 * 3600 * 1000, value.end_ms - value.start_ms)
+            lookup.assert_called_once_with("Europe/Stockholm")
 
 
     def test_non_default_zone_fails_actionably_when_host_has_no_iana_database(self) -> None:

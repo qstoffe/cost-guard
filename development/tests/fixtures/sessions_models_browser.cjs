@@ -40,19 +40,26 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   await evaluate('window.modelTarget=current.catalog.body.rows[0].cells[2].firstChild;modelTarget.focus()');
   await until('document.getElementById("context-help")?.matches(":popover-open")');
   const help = await evaluate('document.getElementById("context-help").textContent');
-   assert.equal(help,'Model-00\n\nMain models\n• main-provider/Earlier · high\n• main-provider/Model-00 · high\n\nSubagents\n• child-provider/Child · high');
+  const sections = help.split('\n\n').map(section => section.split('\n'));
+  assert.equal(sections.length, 2);
+  assert.equal(sections[0].shift(), 'Session Models:');
+  assert.deepEqual(sections[0].sort(), ['• main-provider/Earlier — high', '• main-provider/Model-00 — high',
+    '• main-provider/Model-00 — low', '• main-provider/Model-00 — Default (unknown)'].sort());
+  assert.deepEqual(sections[1], ['Sub Agents:', '• child-provider/Child — high']);
   await fixture('models-update');
   await until('document.getElementById("context-help").textContent.includes("child-provider/Child-new")');
   assert.equal(await evaluate('document.activeElement===modelTarget && modelTarget.isConnected'),true);
   await evaluate('current.catalog.body.rows[1].cells[2].firstChild.focus()');
-   assert.doesNotMatch(await evaluate('document.getElementById("context-help").textContent'),/\nSubagents\n/);
+  assert.match(await evaluate('document.getElementById("context-help").textContent'),/\n\nSub Agents:\nNo subagent model was used\.$/);
   await evaluate('current.catalog.body.rows[2].cells[2].firstChild.focus()');
-   assert.match(await evaluate('document.getElementById("context-help").textContent'),/\nSubagents\n• main-provider\/Model-02/);
+  assert.equal(await evaluate('document.getElementById("context-help").textContent'),
+    'Session Models:\n• main-provider/Model-02 — high\n\nSub Agents:\n• main-provider/Model-02 — high');
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
   await evaluate('document.activeElement.blur()');
   const point = await evaluate('(()=>{const r=modelTarget.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()');
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
   await until('document.getElementById("context-help").matches(":popover-open")');
+  assert.equal(await evaluate('document.getElementById("context-help").textContent'), help.replace('child-provider/Child', 'child-provider/Child-new'));
   await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:0,y:0});
   await until('document.getElementById("context-help").hidden');
   await command('Emulation.setTouchEmulationEnabled',{enabled:true});
@@ -90,7 +97,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
         const empty={...pending,indexed:true,has_summary:true,model:'N/A',ccost:'0',complete:true,
           prompt_count:0,display:{ccost:'0',duration_ms:'0s'},
           metric_absences:{model:'complete_empty_history',ctx:'complete_empty_history',activity:'complete_empty_history'}};
-        const original=measure(), states=[];
+         const original=measure(), previousCost=row.cells[3].textContent, states=[];
         for (const first of [pending,empty,pending,values[0]]) {
           view.rows([first,...values.slice(1)]);
           const spinner=row.metrics[0].querySelector('.metric-spinner');
@@ -99,7 +106,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
             pending:spinner?.getAttribute('aria-label')??null,
             help:row.metrics[0].classList.contains('help-value')});
         }
-        return {original,states};
+         return {original,previousCost,states};
       })()`);
       for (const state of measurement.states) {
         assert.deepEqual(state.geometry,measurement.original);
@@ -107,7 +114,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
       }
       for (const index of [0,2]) {
         const state=measurement.states[index];
-        assert.deepEqual(state.cells.slice(2),['','','','','']);
+         assert.deepEqual(state.cells.slice(2),['',index === 0 ? measurement.previousCost : '0','','',''],
+           'an ordinary partial refresh retains the compatible whole-session amount, including zero');
         assert.equal(state.pending,'Loading model');assert.equal(state.animation,'none');assert.equal(state.help,false);
       }
       const absent=measurement.states[1];
@@ -116,7 +124,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
       layouts.push({width,theme,scheme,...measurement.original});
     }
   }
-  checks.push('source-backed latest main identity/star, two bullet groups, main-only omission, same-model roles, child-only not substituted for main model');
+   checks.push('source-backed main identity/star; two role sections, unique efforts including Default, absent and shared identity roles; child-only not substituted for main');
   checks.push('shared keyboard/Escape, hover/leave, touch, focused open-help source-revision refresh');
   checks.push('period-qualified Model asc/desc, unknown last, 25+5 paging, long name and 360/1366 seven-column layouts');
   checks.push('pending/final/known metric transitions, real zero and no layout changes at 360/1366 in Classic and Web Light/Dark, reduced motion');

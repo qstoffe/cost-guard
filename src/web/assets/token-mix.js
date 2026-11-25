@@ -148,6 +148,9 @@ const TokenMixView = (() => {
       this.content.append(this.status, this.title, this.summary, this.models.root, this.publishers.root);
       this.root.append(this.selector, this.content);
     }
+    beginHistorySelection(period) {
+      ReportLoading.beginHistorySelection(this, this.buttons.find(item => item.id === period)?.button);
+    }
     selection(period, ready, progress) {
       this.buttons.forEach(({id, button}) => button.setAttribute('aria-pressed', String(id === period)));
       if (typeof ReportLoading !== 'undefined')

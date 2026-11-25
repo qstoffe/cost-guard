@@ -302,6 +302,41 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertFalse(row['running'])
         self.assertIsNone(row['duration_ms'])
 
+    def test_legacy_capped_model_choices_restore_only_from_matching_trace(self):
+        import json
+        from src.reports.web_history_evidence import DOMAIN as usage_domain
+
+        choices = ('low', 'medium', 'high', 'extra-high', 'max')
+        source = self.source(2, len(choices))
+        for key, snapshot in source.snapshots.items():
+            source.snapshots[key] = replace(snapshot, events=tuple(
+                replace(event, metadata={**event.metadata, 'variant': choice})
+                for event, choice in zip(snapshot.events, choices, strict=True)))
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        for _ in range(2):
+            self.tick(catalog, source)
+        with closing(sqlite3.connect(archive.path)) as db, db:
+            for key, raw in db.execute('SELECT item, value FROM facts WHERE domain=?', (SESSIONS,)).fetchall():
+                fact = json.loads(raw)
+                efforts = fact['row']['main_models'][0]['efforts']
+                self.assertEqual(set(choices), {entry['selected'] for entry in efforts})
+                efforts[:] = [entry for entry in efforts if entry['selected'] != 'max']
+                fact.pop('model_effort_evidence')
+                fact['row']['contributor_models_complete'] = False
+                db.execute('UPDATE facts SET value=? WHERE domain=? AND item=?',
+                           (json.dumps(fact, separators=(',', ':')), SESSIONS, key))
+            db.execute('UPDATE facts SET revision=? WHERE domain=? AND item=?', ('different', usage_domain, 'root-0001'))
+
+        _, reopened = self.restore('one')
+        reopened.archive_maintenance()
+        reopened.archive_pool.submit(lambda: None).result(timeout=10)
+        rows = reopened.page(period='all')['view']['session_usage']
+        help_by_id = {row['session_id']: row['model_display_help'] for row in rows}
+        self.assertEqual(1, help_by_id['root-0000'].count(' — max'))
+        self.assertNotIn(' — max', help_by_id['root-0001'])
+        self.assertIn('may be incomplete', help_by_id['root-0001'])
+
     def test_cutover_retires_only_owned_legacy_files_without_import_and_preserves_next_start(self):
         cache_dir = self.directory / 'cache'
         instance = self.directory / 'instance'
@@ -383,6 +418,64 @@ class DisplayHistoryTests(unittest.TestCase):
         row, = current['view']['session_usage']
         self.assertTrue(current['history_progress']['complete'])
         self.assertEqual((1, 'busy', True, 2), (current['total'], row['session_id'], row['running'], row['prompt_count']))
+
+    def test_committed_accounts_frame_is_detached_and_restores_only_for_its_zone_and_day(self):
+        from src.analysis.account_timeline import period_start
+        from src.watch.account_timeline_snapshots import AccountTimelineSnapshots
+
+        archive = WebArchive(self.directory)
+        archive.initialize()
+        frames = AccountTimelineSnapshots(archive, None)
+        view = {'period': 'today', 'series': [{'id': 'A', 'amount': '27'}]}
+        frames.publish(zone='UTC', day=period_start('today', self.now, 'UTC'), marker='A-scope',
+                       now=self.now, periods=('today',), results={'today': view}, roster=(),
+                       ready=True, active=(), active_until=0)
+        view['series'][0]['amount'] = '99'  # Not committed.
+
+        with patch.object(archive, 'history_item', side_effect=AssertionError('warm view read SQLite')):
+            first = frames.lookup('today', None, zone='UTC', now=self.now)
+            self.assertEqual(('27', 'A-scope'), (first['view']['series'][0]['amount'], first['scope']))
+            self.assertTrue(frames.lookup('today', first['revision'], zone='UTC', now=self.now)['unchanged'])
+
+        reopened = AccountTimelineSnapshots(WebArchive(self.directory), None)
+        self.assertEqual(first, reopened.lookup('today', None, zone='UTC', now=self.now))
+        for period, zone, now in (('month', 'UTC', self.now), ('today', 'UTC', self.now + DAY_MS),
+                                  ('today', 'Europe/Stockholm', self.now)):
+            with self.subTest(period=period, zone=zone, now=now):
+                missing = reopened.lookup(period, None, zone=zone, now=now)
+                self.assertIsNone(missing['view'])
+                self.assertFalse(missing['ready'])
+
+    def test_report_pointer_reads_a_committed_pair_and_restarts_with_qualified_history(self):
+        from src.web.history_reports import HistoryReports, checkpoint_stamp, settings_signature
+
+        source = self.source(1, 2)
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(catalog, source)
+        service = report_service(source, self.cache, self.now, self.pricing)
+        reports = HistoryReports(ArchivedUsage(archive), lambda: self.pricing.catalog)
+        self.addCleanup(reports.close)
+        config = service.config
+        stamp = checkpoint_stamp(config, 'UTC', None, settings_signature(config))
+        inputs = dict(identity='test', selection=service.selection, config=config, now=self.now,
+                      revisions={}, activity={}, available=True, only='all')
+        reports._render(inputs, stamp, {})
+        mix = ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope='all')
+        stats = ReportRequest(ReportKind.AI_STATS, stats_scope='all')
+        with patch.object(archive, 'history_item', side_effect=AssertionError('warm report read SQLite')):
+            view = reports.lookup(mix, config)['result']['view']
+            self.assertEqual(2, view['token_mix']['request_count'])
+            self.assertTrue(view['history_progress']['complete'])
+            self.assertTrue(reports.lookup(stats, config)['result']['view']['history_progress']['all']['complete'])
+
+        reopened = HistoryReports(ArchivedUsage(WebArchive(self.directory)), lambda: self.pricing.catalog)
+        self.addCleanup(reopened.close)
+        restored = reopened.lookup(mix, config)['result']['view']
+        self.assertEqual(2, restored['token_mix']['request_count'])
+        self.assertTrue(restored['history_progress']['restored'])
+        self.assertFalse(restored['history_progress']['complete'])
+        self.assertIsNone(reopened.lookup(mix, dict(config, ccostDisplayUnit='usd'))['result'])
 
     def test_running_and_today_precede_old_all_time_work_without_starvation(self):
         source = self.source(20, 1, today_roots=2, now_ms=NOV_5, running_roots=1)
@@ -526,6 +619,52 @@ class DisplayHistoryTests(unittest.TestCase):
                 self.assertEqual((True, 2), (row['running'], row['prompt_count']))
         persisted, _ = SessionArchive(archive).load()
         self.assertNotIn(key, persisted)
+
+    def test_unsaved_running_row_qualifies_each_watch_cost_against_its_source_and_valuation(self):
+        from decimal import Decimal
+        from src.analysis.session_cost import SessionCost, session_cost_source_key
+        from src.analysis.valuation import ComparisonCost
+        from src.domain.reference_cost import ReferenceCostIssue
+        from src.reports.watch_capture import capture_rows
+        from src.watch.session_costs import SessionCostState
+        from src.watch.web_coordinator import publish_catalog_prompts
+
+        source = self.source(1, 2, today_roots=1, now_ms=self.now, running_roots=1, children_per_root=1)
+        _, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        snapshot, = source.snapshots.values()
+        capture, _ = capture_rows(report_service(source, self.cache, self.now, self.pricing), snapshot.root, fresh=snapshot)
+        key = session_cost_source_key(snapshot)
+        cost = SessionCost(ComparisonCost(Decimal('18'), 2, 2), True, True, source_revision=snapshot.source_revision,
+                           valuation_revision='prices', main_ccost=Decimal('11'), subagent_ccost=Decimal('7'))
+        state = SessionCostState(value=cost, source_key=key, validated_key=key, valuation_revision='prices')
+        entry = SimpleNamespace(snapshot=snapshot, capture=capture, cost=state, generation=1, verified_generation=1,
+                                source_status=SimpleNamespace(failed_at=None))
+        cards = SimpleNamespace(sessions={snapshot.root.session_id: entry}, source_epoch='one')
+
+        def observed():
+            self.now += 1
+            entry.capture = replace(capture, source_epoch='one', observed_at_ms=self.now)
+            publish_catalog_prompts(catalog, cards)
+            row, = catalog.page(period='today')['view']['session_usage']
+            self.assertTrue(row['running'])
+            self.assertFalse(row['indexed'])
+            return row['ccost'], row['metric_states']['ccost']
+
+        self.assertEqual(('18', 'ready'), observed())
+        state.failed = True
+        self.assertEqual(('18', 'retained'), observed())
+        state.failed = False
+        state.value = replace(cost, total=ComparisonCost(Decimal(0), 2, 2))
+        self.assertEqual(('0', 'ready'), observed())
+        state.value = replace(cost, total=ComparisonCost(observed_requests=2, unavailable=(ReferenceCostIssue('rate'),)))
+        self.assertEqual((None, 'unavailable'), observed())
+        state.value = cost
+        state.validated_key = (*key[:2], 'other-source', *key[3:])
+        self.assertEqual((None, 'pending'), observed())
+        state.validated_key = key
+        state.valuation_revision = 'changed-prices'
+        self.assertEqual((None, 'pending'), observed())
 
     def test_cold_week_admits_second_today_page_before_bulk_discovered_older_history(self):
         source = self.source(74, 1, today_roots=30, now_ms=NOV_5 + 54 * 60_000)

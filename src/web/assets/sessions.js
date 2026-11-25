@@ -87,7 +87,7 @@ const SessionsCatalog = (() => {
         // Back must name the actual page being left, not ask for a cold latest.
         history.replaceState(history.state, '', this.rememberedDestination());
       }
-      this.userAction = {destination: target, button, kind};
+      this.userAction = {destination: target, button, kind, started: performance.now()};
       location.hash = target;
     }
     clearStatus() {
@@ -114,6 +114,8 @@ const SessionsCatalog = (() => {
       if (this.operation?.navigation) this.cancelledNavigation = this.operation.navigation;
       this.actionFocus = null; this.retire();
       this.clearStatus();
+      if (this.period != null && period !== this.period)
+        ReportLoading.beginHistorySelection(this, this.periodButton(period), action?.started);
       Object.assign(this, {offset, epoch, sort, direction, period});
       this.canonicalPeriod = !params?.has('period');
       this.periodSelection();
@@ -137,10 +139,13 @@ const SessionsCatalog = (() => {
       if (this.operation) this.operation.pending = false;
       this.pagerBusy(false);
     }
+    periodButton(period = this.period) {
+      return this.periodButtons.find(item => item.key === period)?.button;
+    }
     periodSelection() {
       for (const {key, button} of this.periodButtons) button.setAttribute('aria-pressed', String(key === this.period));
       if (this.archive || this.data?.cache_first)
-        ReportLoading.historyProgress(this, this.periodButtons.find(item => item.key === this.period)?.button,
+        ReportLoading.historyProgress(this, this.periodButton(),
           this.data?.period === this.period ? this.data.history_progress : {complete: false});
     }
     rememberedDestination() {
@@ -153,7 +158,7 @@ const SessionsCatalog = (() => {
     attach(parent) {
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (!this.attached) {
-        this.attached = true; this.rerun = true; this.interest(); this.poll();
+        this.attached = true; this.rerun = true; this.periodSelection(); this.interest(); this.poll();
       } else if (this.rerun) this.poll();
     }
     interest(visible = this.attached && !document.hidden, token = this.token) {
@@ -161,6 +166,7 @@ const SessionsCatalog = (() => {
     }
     detach() {
       this.attached = false; this.actionFocus = null;
+      ReportLoading.endHistorySelection(this);
       if (this.userAction?.destination !== location.hash) this.userAction = null;
       this.interest(false); this.retire();
     }
@@ -292,6 +298,7 @@ const SessionsCatalog = (() => {
           error.retryable === false && !['catalog_busy', 'request_unavailable', 'source_unavailable'].includes(error.message);
         if (terminal) {
           this.terminal = true; this.terminalReason = error.message; this.interest(false);
+          ReportLoading.endHistorySelection(this);
         }
         if (this.operation) {
           if (terminal) this.failNavigation(error.message);
@@ -334,6 +341,7 @@ const SessionsCatalog = (() => {
       this.terminal = terminal; this.terminalReason = reason;
       this.operation.failed = true;
       this.operation.pending = false;
+      ReportLoading.endHistorySelection(this);
       if (terminal) this.interest(false);
       const message = terminal ? 'Could not load. Reload Cost Guard to try again.' :
           'Could not complete this request. Returning to an available page.';
@@ -428,8 +436,7 @@ const SessionsCatalog = (() => {
         this.canonicalPeriod = false;
       }
       this.clearStatus();
-      const periodButton = this.periodButtons.find(item => item.key === data.period)?.button;
-      ReportLoading.historyProgress(this, periodButton, data.history_progress);
+      ReportLoading.historyProgress(this, this.periodButton(data.period), data.history_progress);
       for (const {key, name, th, label} of this.headers) {
         const active = key === data.sort;
         th.setAttribute('aria-sort', active ? data.direction === 1 ? 'ascending' : 'descending' : 'none');
@@ -555,7 +562,8 @@ const SessionsCatalog = (() => {
         if (removedFocus) this.pan.focus?.({preventScroll: true});
       }
       values.forEach((value, index) => {
-        value = this.costs.select(value, [this.data?.source?.identity, this.data?.source?.generation, value.session_id]);
+        value = this.costs.select(value, [this.data?.source?.identity, this.data?.source?.generation, value.session_id],
+          'ccost', value.unresolved_cost == null ? value.complete === true : !value.unresolved_cost);
         const row = old.get(value.session_id) || el('tr'); row.dataset.id = value.session_id;
         row.value = value;
         if (!row.name) {
@@ -577,8 +585,7 @@ const SessionsCatalog = (() => {
         const model = (value.model !== 'N/A' && value.model) || value.selected_display_model;
         const amounts = [
           model ? model + (value.has_model_details ? '*' : '') : null,
-          () => value.has_summary || value.indexed || value.metric_states?.ccost === 'retained' ?
-            ReportView.metricToken(value, 'ccost') : null,
+          () => ReportView.metricToken(value, 'ccost') ?? (value.metric_states?.ccost === 'unavailable' ? '—' : null),
           value.prompt_count,
           ReportView.metricToken(value, 'duration_ms'),
           ReportView.metricToken(value, 'context_tokens')
@@ -586,7 +593,10 @@ const SessionsCatalog = (() => {
         const current = value;
         const helps = [
           () => ReportView.metricToken(value, 'model_help'),
-          () => ReportView.sessionCostHelp(value, value), null, null,
+          () => value.metric_states?.ccost === 'unavailable' && ReportView.metricToken(value, 'ccost') == null ?
+            ReportView.metricToken(value, 'ccost_unavailable_help') || 'Whole-session reference CCost unavailable.' :
+             ReportView.sessionCostHelp(value, value) + (value.metric_states?.ccost === 'retained' ?
+               '\nLast qualified value; refresh pending.' : ''), null, null,
           current.context_tokens == null ? null : `~${current.context_tokens.toLocaleString()} tokens`
         ];
         row.metrics.forEach((node, index) => {

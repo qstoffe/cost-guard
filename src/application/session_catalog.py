@@ -25,6 +25,7 @@ from .detail_archive import acquired_detail
 from .history_queue import HistoryQueue
 from .session_active_snapshots import ActiveSnapshotOffers
 from .session_archive import SessionArchive, cached_page, retain_pending_metrics, retain_readable_fields
+from .session_archive_maintenance import advance_archive_maintenance
 from .session_epoch_page import ARRIVAL_SECONDS, epoch_page, recent_live_roots, sort_value
 from .session_previews import archived_previews, live_previews
 from .session_quota import source_scope
@@ -124,12 +125,14 @@ class SessionCatalog:
         self.report_status = None
         self.report_pending = {}
         self.report_live = {}
+        self.report_live_costs = {}
         self.archive_rejections = {}
         self.archive_attempts = 0
         self.archive_revision = 0
         self.archive_retry_at = 0
         self.archive_target = None
         self.archive_job = None
+        self.effort_backfill_due = 0
         self.archive_stopping = Event()
         self.archive_pool = (ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-archive-restore')
                              if self.archive is not None else None)
@@ -147,6 +150,7 @@ class SessionCatalog:
                 self.history_queue.clear()
                 self.finalize_roots.clear()
                 self.live_arrivals.clear()
+                self.report_live_costs.clear()
                 self.rows.clear()
                 self.valid.clear()
                 self.orders.clear()
@@ -164,41 +168,7 @@ class SessionCatalog:
 
     def archive_maintenance(self):
         """Advance storage recovery independently of the source binding."""
-        archive = self.archive
-        if archive is None:
-            return
-        with self.lock:
-            if self.archive_stopping.is_set() or archive.loaded:
-                return
-            now = self.clock()
-            if self.archive_job is not None or now < self.archive_retry_at:
-                return
-            self.archive_attempts += 1
-            self.archive_job = job = self.archive_pool.submit(archive.load)
-        # A completed future calls back immediately; never attach under self.lock.
-        job.add_done_callback(self._archive_complete)
-
-    @staticmethod
-    def _archive_backoff(attempt):
-        return min(60, 5 * 2 ** min(4, attempt - 1))
-
-    def _archive_complete(self, job):
-        if job.cancelled():
-            return
-        saved = job.result()
-        with self.lock:
-            self.archive_job = None
-            if self.archive_stopping.is_set():
-                return
-            if saved is None:
-                self.archive_retry_at = self.clock() + self._archive_backoff(self.archive_attempts)
-            else:
-                self.archive.loaded = True
-                self.archive.partition = self.archive_target
-                self.archive.rows, self.archive.authorities = saved
-                self.archive_revision += 1
-                self._restore_archived_rows()
-            self._archive_publication()
+        advance_archive_maintenance(self)
 
     def _archive_publication(self):
         self._record_history_pending()
@@ -335,6 +305,7 @@ class SessionCatalog:
                     self.lifecycle_cutoff_ms = self.clock_ms()
                     self.recent_finishes.clear()
                     self.live_arrivals.clear()
+                    self.report_live_costs.clear()
                 self.state = "source_unavailable"
                 if self.archive is not None:
                     self._publish_report_runtime()
@@ -348,7 +319,7 @@ class SessionCatalog:
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
                              'failure_reasons', 'prompt_activity', 'running_roots', 'recent_finishes',
                               'model_dependencies', 'orders',
-                               'archive_rejections', 'active_snapshots', 'finalize_roots'):
+                              'archive_rejections', 'active_snapshots', 'finalize_roots', 'report_live_costs'):
                     getattr(self, name).clear()
                 self._clear_epochs()
                 self.index_terminal = False
@@ -539,7 +510,7 @@ class SessionCatalog:
             self.generation += 1
             self.wake_revision += 1
 
-    def observe_prompts(self, evidence):
+    def observe_prompts(self, evidence, *, source_epoch=None, costs=None):
         """Canonical Watch captures only: root identity, revision and original time.
 
         An omitted prompt is not a lifecycle event. Resolve each supplied fact
@@ -558,7 +529,17 @@ class SessionCatalog:
                         or revision != self.revisions.get(key) and not running):
                     continue
                 self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
-                                    wake=True)
+                                     wake=True)
+                accepted = self.prompt_activity.get(key)
+                if (self.archive is not None and costs is not None and key in costs and self._running(key)
+                        and source_epoch == self.last_observation.source_epoch
+                        and (source_epoch is not None or root.provenance.source_generation == 'v1')
+                        and accepted.identity == (start, prompt_id)
+                        and accepted.observed_ms == captured_at and accepted.revision == revision):
+                    if costs[key] is None:
+                        self.report_live_costs.pop(key, None)
+                    else:
+                        self.report_live_costs[key] = costs[key]
                 changed.add(key)
             if self.archive is not None and changed:
                 self._publish_report_runtime(changed)
@@ -1014,6 +995,8 @@ class SessionCatalog:
                                 if saved:
                                     self.archive.rows[key] = retain_readable_fields(row, self.archive.rows.get(key))
                                     self.archive.authorities[key] = actual, dependencies, identity_values, partition, captured_at
+                                    self.archive.effort_backfill.discard(key)
+                                    self.archive.effort_refresh.discard(key)
                                     self.report_pending.pop(key, None)  # Removed in the same ready-row commit.
                                     self.archive_rejections.pop(key, None)
                                     self.finalize_roots.discard(key)

@@ -89,7 +89,7 @@ async function main() {
     status('Live connected.', {kind: 'connected', writable: true, terminal: false});
     return {resync() {}};
   }};
-  const context = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
+  const context = vm.createContext({LiveConnection: transport, performance, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
     getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener: (key, fn) => { handlers['document:' + key] = fn; }}, window: {scrollTo(){},addEventListener: (key, fn) => { handlers[key] = fn; },
       matchMedia: () => ({addEventListener() {}, removeEventListener() {}})},
     location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
@@ -460,7 +460,7 @@ async function main() {
   assert.match(ids.result.textContent, /25% used/);
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
-  const reloaded = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
+  const reloaded = vm.createContext({LiveConnection: transport, performance, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
      URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
   require('../fixtures/web_help_vm.cjs')(vm, reloaded);
     for (const file of ['/render.js', '/report-loading.js', '/cached-reports.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js']) vm.runInContext(await (await fetch(input.origin + file)).text(), reloaded);
@@ -476,7 +476,7 @@ async function main() {
   assert.match(ids['host-message'].textContent, /host changed.*fresh link/i);
   assert.equal(ids.refresh.disabled, true);
   location.hash = '#/live';
-  const watchReload = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
+  const watchReload = vm.createContext({LiveConnection: transport, performance, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
     URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
   require('../fixtures/web_help_vm.cjs')(vm, watchReload);
    for (const script of ['/render.js', '/report-loading.js', '/cached-reports.js', '/reports.js', '/settings.js', '/app.js']) {
@@ -505,7 +505,7 @@ async function main() {
   assert.equal(requests, terminalRequests, 'disabled terminal refresh cannot start acquisition');
   offline = true;
   ids.result.textContent = 'Starting Cost Guard';
-  const unavailable = vm.createContext({LiveConnection: transport, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
+  const unavailable = vm.createContext({LiveConnection: transport, performance, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
      URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
   require('../fixtures/web_help_vm.cjs')(vm, unavailable);
    for (const script of ['/render.js', '/report-loading.js', '/cached-reports.js', '/reports.js', '/settings.js', '/app.js']) {

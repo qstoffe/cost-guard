@@ -7,7 +7,7 @@ class Node {
   constructor(tag, text = '', className) {
     Object.assign(this, {tag, textContent: text, className, children: [], attributes: {}, events: {}, style: {},
       clientWidth: 480, scrollLeft: 0, offsetWidth: 200, offsetHeight: 100,
-      classList: {toggle() {}}, style: {setProperty() {}}});
+      classList: {toggle() {}, add() {}}, style: {setProperty() {}}});
   }
   append(...nodes) { for (const node of nodes) this.insertBefore(typeof node === 'string' ? new Node('#text', node) : node, null); }
   insertBefore(node, before) {
@@ -24,6 +24,11 @@ class Node {
     this.append(...nodes);
   }
   setAttribute(name, value) { this.attributes[name] = String(value); }
+  removeAttribute(name) { delete this.attributes[name]; }
+  get parentNode() { return this.parent; }
+  get parentElement() { return this.parent; }
+  get isConnected() { return true; }
+  after(node) { this.parent.append(node); }
   addEventListener(name, fn) { this.events[name] = fn; }
   hidePopover() {}
   matches() { return false; }
@@ -33,7 +38,7 @@ class Node {
 let unit = 'credits';
 const context = vm.createContext({
   document: {documentElement: {lang: 'en'}, addEventListener() {}, createElementNS: (_, tag) => new Node(tag)},
-  innerWidth: 480, innerHeight: 640,
+  innerWidth: 480, innerHeight: 640, AbortController, performance,
   setTimeout() {}, clearTimeout() {},
   fakeReportView: {
     element: (...args) => new Node(...args),
@@ -45,6 +50,7 @@ const context = vm.createContext({
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8').replace(
   'const ReportView =', 'const formatter =') +
   '; const ReportView = {...formatter, ...fakeReportView};', context);
+vm.runInContext(fs.readFileSync('src/web/assets/report-loading.js', 'utf8'), context);
 vm.runInContext(fs.readFileSync('src/web/assets/account-timeline.js', 'utf8') +
   '; globalThis.View = AccountTimelineView.View;', context);
 
@@ -62,8 +68,8 @@ const frame = (scope, revision, pending, series, initial = pending, acquiring = 
 async function check() {
   const calls = [];
   let demand = 0;
-  const chart = new context.View((path, request) =>
-    new Promise(resolve => calls.push({path, request, resolve})), () => demand++);
+  const chart = new context.View((path, request, signal) =>
+    new Promise(resolve => calls.push({path, request, signal, resolve})), () => demand++);
   chart.active(true);
   chart.setScope('old');
   const old = chart.refresh();
@@ -73,15 +79,20 @@ async function check() {
   assert.equal(chart.view, undefined);
 
   const abandoned = chart.refresh();
+  const beforeSwitch = calls.at(-1);
   chart.select('today');
+  const today = calls.at(-1);
   chart.select('month');
-  calls.at(-1).resolve(frame('current', 2, [0], [first, second]));
+  const month = calls.at(-1);
+  assert.deepEqual([today.request.period, month.request.period], ['today', 'month']);
+  assert.ok(today.signal.aborted && beforeSwitch.signal.aborted && !month.signal.aborted);
+  today.resolve(frame('current', 2, [], [second]));
+  beforeSwitch.resolve(frame('current', 2, [0], [first, second]));
   await abandoned;
   assert.equal(chart.view, undefined, 'even a same-period reply from before a switch must be discarded');
 
-  const pending = chart.refresh();
-  calls.at(-1).resolve(frame('current', 3, [1], [first, second]));
-  await pending;
+  month.resolve(frame('current', 3, [1], [first, second]));
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(chart.shades.children.length, 1);
   assert.equal(chart.empty.hidden, true, 'a partial frame has only bucket-local loading');
   const rings = () => chart.layers.children.filter(node => node.attributes.class === 'account-timeline-ring').length;
@@ -173,9 +184,11 @@ async function checkWaitingProgress() {
     .filter(node => /ring|hourglass/.test(node.attributes.class))
     .map(node => [Number(node.attributes['data-bucket']), node.attributes.class.split('-').at(-1)]);
   for (const period of ['today', '7-days', '30-days', 'month']) {
+    response = {scope: 'current', unchanged: true};
     chart.setScope(null);
     chart.setScope('current');
     chart.select(period);
+    await new Promise(resolve => setImmediate(resolve));
     const slot = period === 'today' ? 3_600_000 : day;
     const publish = async (revision, waiting, points, acquiring = true) => {
       response = {scope: 'current', revision, acquiring, view: {period, timezone_id: 'UTC', start_ms: start,
@@ -201,6 +214,100 @@ async function checkWaitingProgress() {
     await publish(4, [], [point, zero, point, zero, null]);
     assert.deepEqual(cues(), []);
   }
+}
+
+async function checkPeriodLoading() {
+  let now = 0;
+  const timers = new Map(), calls = [];
+  context.performance = {now: () => now};
+  context.setTimeout = (fn, ms) => { timers.set(fn, now + ms); return fn; };
+  context.clearTimeout = fn => timers.delete(fn);
+  const advance = ms => {
+    now += ms;
+    for (const [fn, due] of [...timers]) if (due <= now) { timers.delete(fn); fn(); }
+  };
+  const chart = new context.View((_, request) => new Promise((resolve, reject) => calls.push({request, resolve, reject})), () => {});
+  chart.sharedHistory = chart.cacheEvents = true;
+  chart.setScope('current');
+  chart.active(true);
+  const button = period => chart.buttons.find(([key]) => key === period)[1];
+  const spinning = period => button(period).children.some(node => node.className === 'metric-spinner');
+  const select = period => {
+    chart.select(period);
+    assert.equal(calls.at(-1).request.period, period, 'dispatch cannot wait for a spinner');
+    return calls.at(-1);
+  };
+  const answer = async (call, revision, complete) => {
+    const result = frame('current', revision, [], [first]);
+    Object.assign(result.view, {period: call.request.period, history_progress: {complete}});
+    call.resolve(result);
+    await new Promise(resolve => setImmediate(resolve));
+  };
+  const fast = select('today');
+  advance(299);
+  assert.ok(!spinning('today'));
+  await answer(fast, 1, true);
+  advance(1);
+  assert.ok(!spinning('today'));
+
+  const old = select('7-days');
+  advance(200);
+  const slow = select('30-days');
+  advance(100);
+  assert.ok(!spinning('7-days') && !spinning('30-days'));
+  await answer(old, 2, true);
+  advance(199);
+  assert.ok(!spinning('30-days'));
+  advance(1);
+  assert.ok(spinning('30-days'));
+  await answer(slow, 3, false);
+  assert.ok(spinning('30-days'), 'HTTP success does not complete missing history');
+  const refresh = chart.refresh();
+  await answer(calls.at(-1), 4, true);
+  await refresh;
+  assert.ok(!spinning('30-days'), 'settlement clears the indicator without a minimum duration');
+
+  const abandoned = select('7-days');
+  chart.active(false);
+  advance(300);
+  await answer(abandoned, 5, false);
+  assert.ok(!spinning('7-days'), 'a retired route does not paint a late indicator');
+
+  chart.active(true);
+  const reject = async (call, retryable) => {
+    call.reject(Object.assign(new Error(retryable ? 'busy' : 'invalid_request'), {retryable}));
+    await new Promise(resolve => setImmediate(resolve));
+  };
+  const superseded = select('month'), failed = select('7-days');
+  advance(50);
+  await reject(superseded, false);
+  assert.ok(chart.historyError?.hidden !== false, 'superseded rejection stays quiet');
+  await reject(failed, false);
+  advance(250);
+  assert.equal(button('7-days').attributes['aria-pressed'], 'true');
+  assert.ok(!spinning('7-days') && !button('7-days').attributes['aria-busy']);
+  assert.equal(chart.historyError.hidden, false);
+  assert.match(chart.historyError.textContent, /retry/i);
+
+  const retry = select('7-days');
+  await reject(retry, true);
+  const beforeRetry = calls.length;
+  advance(350);
+  assert.equal(calls.length, beforeRetry + 1);
+  await reject(calls.at(-1), true);
+  advance(10_000);
+  assert.equal(calls.length, beforeRetry + 1, 'a retry is not an endless refresh loop');
+  assert.ok(!spinning('7-days') && !chart.historyError.hidden);
+  await answer(select('7-days'), 6, true);
+  assert.ok(chart.historyError.hidden);
+
+  chart.wake('new-cache-revision', false);
+  advance(0);
+  await reject(calls.at(-1), true);
+  const background = calls.length;
+  advance(10_000);
+  assert.equal(calls.length, background);
+  assert.ok(chart.historyError.hidden, 'a passive cache read is not a failed user selection');
 }
 
 async function checkLegendTotals() {
@@ -274,5 +381,5 @@ async function checkOverlayRanks() {
   }
 }
 
-check().then(checkWaitingProgress).then(checkOverlayRanks).then(checkLegendTotals)
+check().then(checkWaitingProgress).then(checkOverlayRanks).then(checkLegendTotals).then(checkPeriodLoading)
   .catch(error => { console.error(error); process.exitCode = 1; });
