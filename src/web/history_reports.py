@@ -47,6 +47,7 @@ class HistoryReports:
         self.projection = HistoryProjection(usage)
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-history-projection')
         self.publication = {}
+        self._committed = {}
         self.job = None
         self.job_key = None
         self.published_keys = {}
@@ -103,11 +104,15 @@ class HistoryReports:
             fact = ArchiveFact(str(now), now, dict(stamp=[*format_stamp, snapshot[0]], run=self.run,
                 views={kind.value: results[kind.value, period] for kind in KINDS}))
             try:
-                if not self.archive.publish(REPORT_CHECKPOINTS, VIEWS, {period: fact}):
+                committed = self.archive.publish_checkpoint(VIEWS, {period: fact})
+                if period not in committed:
                     return {}, True
             except (OSError, sqlite3.Error, ValueError):
                 LOG.warning('history_projection_checkpoint_unavailable', exc_info=True)
                 return {}, True
+            # Event consumers must see the committed frame even before the host
+            # tick collects this job. Do not share mutable projection results.
+            self._committed = {**self._committed, period: committed[period].value}
             if self.notify is not None:
                 self.notify(('ai-stats', 'token-mix'), (period,))
         return results, more
@@ -256,11 +261,15 @@ class HistoryReports:
         zone = str(config.get('timezone') or 'Europe/Stockholm')
         start = dict(calendar_periods(zone, int(time.time() * 1000)))[period]
         stamp = checkpoint_stamp(config, zone, start, settings_signature(config))
-        result = None
-        try:
-            result = self._read_checkpoint(period, stamp).get((request.kind.value, period))
-        except (sqlite3.Error, OSError):
-            pass  # The next publication or reconnect can recover the read.
+        frame = self._committed.get(period)
+        if frame is not None and frame['stamp'][:len(stamp)] == stamp:
+            result = frame['views'].get(request.kind.value)
+        else:
+            result = None
+            try:
+                result = self._read_checkpoint(period, stamp).get((request.kind.value, period))
+            except (sqlite3.Error, OSError):
+                pass  # The next publication or reconnect can recover the read.
         return dict(id=None, result_id=None, result=result, cache_first=True,
                     refresh='failed' if terminal_error else 'scheduled',
                     terminal=terminal_error is not None, stale=False, error=terminal_error,
@@ -268,3 +277,4 @@ class HistoryReports:
 
     def close(self):
         self.pool.shutdown(wait=True, cancel_futures=True)
+        self._committed = {}

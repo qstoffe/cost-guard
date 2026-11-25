@@ -13,6 +13,7 @@ import calendar
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone, tzinfo
 from enum import Enum
+from functools import lru_cache
 import math
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -80,17 +81,27 @@ class _EuropeStockholm(tzinfo):
 _STOCKHOLM_FALLBACK = _EuropeStockholm()
 
 
+@lru_cache(maxsize=1)
+def _stockholm_timezone() -> tzinfo:
+    # ZoneInfo caches successful loads, not missing data. On a clean Windows
+    # installation every report read would otherwise repeat the failed lookup.
+    try:
+        return ZoneInfo("Europe/Stockholm")
+    except ZoneInfoNotFoundError:
+        return _STOCKHOLM_FALLBACK
+
+
 def resolve_timezone(timezone_id: str) -> tzinfo:
     value = timezone_id.strip()
     if not value:
         raise TimezoneUnavailableError("Timezone ID cannot be empty")
     if value.upper() in {"UTC", "ETC/UTC", "GMT", "ETC/GMT"}:
         return timezone.utc
+    if value == "Europe/Stockholm":
+        return _stockholm_timezone()
     try:
         return ZoneInfo(value)
     except ZoneInfoNotFoundError as exc:
-        if value == "Europe/Stockholm":
-            return _STOCKHOLM_FALLBACK
         raise TimezoneUnavailableError(
             f"IANA timezone '{value}' is unavailable in this Python installation; "
             "use a host with IANA zoneinfo data or configure a supported timezone"

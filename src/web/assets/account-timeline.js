@@ -136,6 +136,8 @@ const AccountTimelineView = (() => {
       this.selected = new Map();
       this.colors = new Map();
       this.generation = 0;
+      this.readFailed = false;
+      this.selectionRead = null;
       this.width = 0;
       this.root = e('section', undefined, 'account-timeline');
       const title = e('h2', 'CCost'), id = 'account-timeline-title';
@@ -249,6 +251,8 @@ const AccountTimelineView = (() => {
       this.scope = scope;
       this.generation++;
       this.working = false;
+      this.readFailed = false;
+      this.selectionRead = null;
       this.initial = scope != null;
       this.cache.clear();
       this.priceRevision = undefined;
@@ -272,18 +276,22 @@ const AccountTimelineView = (() => {
     }
 
     select(period) {
-      if (this.period === period) return;
+      if (this.period === period && !this.readFailed) return;
+      ReportLoading.beginHistorySelection(this, this.buttons.find(([id]) => id === period)?.[1]);
+      this.retireRead();
       this.period = period;
       this.generation++;
       this.working = false;
+      this.readFailed = false;
+      this.selectionRead = {retried: false};
       this.focusKey = null;
       const cached = this.cache.get(period)?.view;
       this.initial = !cached || !!cached.initial_pending_buckets?.length;
       this.inspect(null);
       this.draw();
       this.scroller.scrollLeft = 0;
+      this.refresh();
       this.changeDemand();
-      this.schedule(0);
     }
 
     active(value) {
@@ -291,16 +299,27 @@ const AccountTimelineView = (() => {
       this.visible = value;
       this.generation++;
       this.working = false;
+      this.readFailed = false;
+      this.selectionRead = null;
       if (value) {
         const view = this.cache.get(this.period)?.view;
         this.initial = !view || !!view.initial_pending_buckets?.length;
         this.draw();
       } else {
+        ReportLoading.endHistorySelection(this);
+        this.retireRead();
         this.panel.hidePopover();
         this.inspect(null);
         this.draw();
       }
       this.schedule(0);
+    }
+
+    retireRead() {
+      this.pending?.abort();
+      this.pending = null;
+      this.cachePending = false;
+      clearTimeout(this.timer);
     }
 
     schedule(delay) {
@@ -318,10 +337,34 @@ const AccountTimelineView = (() => {
     async refresh() {
       if (!this.visible || this.pending) return;
       const period = this.period, revision = this.cache.get(period)?.revision ?? null;
-      const generation = this.generation;
-      this.pending = true;
+      const generation = this.generation, selection = this.selectionRead;
+      const request = new AbortController();
+      this.pending = request;
+      let retry = false;
       try {
-        const value = await this.api('/api/accounts/timeline', {period, revision});
+        let value;
+        try {
+          value = await this.api('/api/accounts/timeline', {period, revision}, request.signal);
+        } catch (error) {
+          if (this.pending !== request || generation !== this.generation || request.signal.aborted) return;
+          const working = this.working;
+          this.working = false;
+          if (selection) {
+            // The API's own timeout aborts the fetch, not this selection's signal.
+            const recoverable = error?.retryable === true || ['TypeError', 'AbortError'].includes(error?.name) ||
+              ['busy', 'source_starting'].includes(error?.message);
+            retry = recoverable && !selection.retried;
+            if (retry) selection.retried = true;
+            else {
+              this.selectionRead = null;
+              this.readFailed = true;
+              ReportLoading.endHistorySelection(this);
+            }
+          }
+          // Host health owns unattended read failures; don't turn them into selection errors.
+          if (working || this.readFailed && selection) this.draw();
+          return;
+        }
         if (generation !== this.generation) return;
         const terminalChanged = this.terminal !== (value.terminal === true);
         this.terminal = value.terminal === true;
@@ -329,6 +372,9 @@ const AccountTimelineView = (() => {
           if (!this.sharedHistory) return;
           this.setScope(value.scope);
         }
+        const recovered = this.readFailed;
+        this.readFailed = false;
+        this.selectionRead = null;
         const activityChanged = this.working !== (value.acquiring === true);
         this.working = value.acquiring === true;
         if (value.view) {
@@ -349,23 +395,21 @@ const AccountTimelineView = (() => {
           const prior = this.cache.delete(period);
           const empty = value.ready && !value.series.length;
           if (empty || prior) this.initial = !empty;
-          if (prior || empty || activityChanged || terminalChanged || this.rosterRevision !== value.revision) {
+          if (prior || empty || activityChanged || terminalChanged || recovered || this.rosterRevision !== value.revision) {
             this.rosterRevision = value.revision;
             this.roster = value.series;
             this.draw();
           }
-        } else if (activityChanged || terminalChanged) this.draw();
-      } catch (_) {
-        // Host health owns sign-in and connection UX. Never narrate retries.
-        if (generation === this.generation && this.working) {
-          this.working = false;
-          this.draw();
-        }
+        } else if (activityChanged || terminalChanged || recovered) this.draw();
       } finally {
-        this.pending = false;
-        if (generation !== this.generation || this.cachePending) this.schedule(0);
-        else if (!this.cacheEvents) this.schedule(this.initial ? 350 : 1500);
-        this.cachePending = false;
+        if (this.pending === request) {
+          this.pending = null;
+          if (generation !== this.generation || this.cachePending) this.schedule(0);
+          // One error-driven retry, not a new poll when cache events are enabled.
+          else if (retry) this.schedule(350);
+          else if (!this.cacheEvents) this.schedule(this.initial ? 350 : 1500);
+          this.cachePending = false;
+        }
       }
     }
 
@@ -419,8 +463,9 @@ const AccountTimelineView = (() => {
       this.buttons.forEach(([id, button]) => button.setAttribute('aria-pressed', String(id === this.period)));
       if (typeof ReportLoading !== 'undefined')
         ReportLoading.historyProgress(this, this.buttons.find(([id]) => id === this.period)?.[1],
-           this.terminal ? {terminal: true} :
-             view?.history_progress ?? (this.sharedHistory && !view ? {complete: false} : undefined));
+           !this.visible ? undefined : this.terminal ? {terminal: true} :
+              this.readFailed ? {terminal: true, error: 'Could not load CCost for this period. Select it again to retry.'} :
+                view?.history_progress ?? (this.sharedHistory && !view ? {complete: false} : undefined));
       this.legendFor(roster);
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];

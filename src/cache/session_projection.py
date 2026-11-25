@@ -1,4 +1,5 @@
 """Indexed ready Sessions metadata; display payloads are loaded only for the page."""
+import json
 from decimal import Decimal
 
 
@@ -112,60 +113,105 @@ def _overlay_window(start_ms, end_ms, finish_cutoff):
             (end_ms, finish_cutoff, *((lower, end_ms) * 3)))
 
 
-def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms, run=None, finish_cutoff=None):
+def _ready_window(start_ms, end_ms):
+    if start_ms is None:
+        return '1', ()
+    return ('''((last_activity_ms >= ? AND last_activity_ms < ?) OR
+                (latest_activity_ms >= ? AND latest_activity_ms < ?))''',
+            (max(1, start_ms), end_ms) * 2)
+
+
+def read_ready(db, *, offset, size, sort, direction, start_ms, end_ms):
     column = SORT_COLUMNS[sort]
     order = 'DESC' if direction == -1 else 'ASC'
-    if start_ms is None:
-        predicate, bounds = '1', ()
-    else:
-        predicate = '(last_activity_ms >= ? AND last_activity_ms < ?) OR (latest_activity_ms >= ? AND latest_activity_ms < ?)'
-        bounds = (max(1, start_ms), end_ms) * 2
-    overlay = []
-    if run is not None:
-        live_window, live_bounds = _overlay_window(start_ms, end_ms, finish_cutoff)
-        overlay, runtime, pending = read_runtime(db, run, start_ms, end_ms, live_window, live_bounds)
-        predicate = f'''({predicate}) AND NOT EXISTS (
-            SELECT 1 FROM session_live
-            WHERE run=? AND session_live.item=ready_sessions.item AND {live_window}
-        )'''
-        bounds += (run, *live_bounds)
-    historical = db.execute(f'SELECT count(*) FROM ready_sessions WHERE {predicate}', bounds).fetchone()[0]
-    total = len(overlay) + historical
+    predicate, bounds = _ready_window(start_ms, end_ms)
+    total = db.execute(f'SELECT count(*) FROM ready_sessions WHERE {predicate}', bounds).fetchone()[0]
     offset = min(offset, max(0, (total - 1) // size) * size)
-    shown = overlay[offset:offset + size]
     rows = db.execute(f'''SELECT f.item, f.revision, f.observed_ms, f.value, f.partition
         FROM (
             SELECT item, partition, algorithm, {column} AS sort_key
             FROM ready_sessions WHERE {predicate}
             ORDER BY {column} IS NULL, {column} {order}, item
             LIMIT ? OFFSET ?
-        ) AS page JOIN facts AS f ON f.partition=page.partition AND f.domain=? AND
-                                   f.algorithm=page.algorithm AND f.item=page.item
-        ORDER BY page.sort_key IS NULL, page.sort_key {order}, page.item''',
-        (*bounds, size - len(shown), max(0, offset - len(overlay)), SESSIONS_DOMAIN)).fetchall()
-    if run is None:
-        return total, offset, rows
-    cached = historical + sum(row[4] for row in overlay)
-    return total, offset, rows, shown, cached, runtime, pending
+         ) AS page JOIN facts AS f ON f.partition=page.partition AND f.domain=? AND
+                                    f.algorithm=page.algorithm AND f.item=page.item
+         ORDER BY page.sort_key IS NULL, page.sort_key {order}, page.item''',
+         (*bounds, size, offset, SESSIONS_DOMAIN)).fetchall()
+    return total, offset, rows
 
 
-def read_runtime(db, run, start_ms, end_ms, live_window, live_bounds):
-    runtime = db.execute('SELECT state, terminal FROM session_runtime WHERE run=?', (run,)).fetchone()
-    rows = db.execute(f'''SELECT item, payload, start_ms, finish_ms,
-            EXISTS (SELECT 1 FROM ready_sessions WHERE ready_sessions.item=session_live.item)
-        FROM session_live WHERE run=? AND {live_window}
-        ORDER BY start_ms IS NULL, start_ms DESC, finish_ms DESC, item''',
-        (run, *live_bounds)).fetchall()
-    condition = 'run=?'
-    bounds = (run,)
+def _page_rows(encoded):
+    # Explicit ordinals keep the result independent of aggregate input order.
+    return [tuple(row[1:]) for row in sorted(json.loads(encoded))]
+
+
+def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, run, finish_cutoff):
+    """Read coverage, counts and the visible slice in one SQLite result row."""
+    column = SORT_COLUMNS[sort]
+    order = 'DESC' if direction == -1 else 'ASC'
+    live_window, live_bounds = _overlay_window(start_ms, end_ms, finish_cutoff)
+    ready_window, ready_bounds = _ready_window(start_ms, end_ms)
+    # The same eligible live set shadows history for both count and page.
+    history = f'{ready_window} AND item NOT IN (SELECT item FROM live)'
+    pending_window, pending_bounds = '1', ()
     if start_ms is not None:
-        condition += ' AND (activity_ms IS NULL OR (activity_ms>=? AND activity_ms<?))'
-        bounds += (max(1, start_ms), end_ms)
-    unavailable = db.execute(f'SELECT count(*) FROM session_pending WHERE unavailable=1 AND {condition}',
-                             bounds).fetchone()[0]
-    complete = db.execute(f'SELECT 1 FROM session_pending WHERE unavailable=0 AND {condition} LIMIT 1',
-                          bounds).fetchone() is None
-    return rows, runtime, (complete, unavailable)
+        pending_window = '(activity_ms IS NULL OR (activity_ms>=? AND activity_ms<?))'
+        pending_bounds = (max(1, start_ms), end_ms)
+
+    # Keep payloads out of the counts, sort and offset work. JSON transports
+    # only the visible slice; payloads remain unmodified strings.
+    row = db.execute(f'''WITH
+        args(run, requested, size) AS (VALUES (?, ?, ?)),
+        live AS (
+            SELECT item, start_ms, finish_ms, EXISTS (
+                SELECT 1 FROM ready_sessions WHERE ready_sessions.item=session_live.item
+            ) AS saved
+            FROM session_live WHERE run=(SELECT run FROM args) AND {live_window}
+        ),
+        counts AS (
+            SELECT count(*) AS live_count, coalesce(sum(saved), 0) AS saved_count,
+                   (SELECT count(*) FROM ready_sessions WHERE {history}) AS history_count
+            FROM live
+        ),
+        position AS (
+            SELECT counts.*, size, min(requested, (max(0, live_count + history_count - 1) / size) * size) AS offset
+            FROM counts CROSS JOIN args
+        ),
+        history_slice AS (
+            SELECT item, partition, algorithm, {column} AS sort_key
+            FROM ready_sessions WHERE {history}
+            ORDER BY {column} IS NULL, {column} {order}, item
+            LIMIT (SELECT size - max(0, min(size, live_count - offset)) FROM position)
+            OFFSET (SELECT max(0, offset - live_count) FROM position)
+        ),
+        history_page AS (
+            SELECT *, row_number() OVER (ORDER BY sort_key IS NULL, sort_key {order}, item) AS ordinal
+            FROM history_slice
+        ),
+        live_page AS (
+            SELECT *, row_number() OVER (ORDER BY start_ms IS NULL, start_ms DESC, finish_ms DESC, item) AS ordinal
+            FROM live
+        )
+        SELECT live_count + history_count, offset, saved_count + history_count,
+            runtime.state, runtime.terminal,
+            NOT EXISTS (SELECT 1 FROM session_pending AS p
+                        WHERE p.run=args.run AND unavailable=0 AND {pending_window}),
+            (SELECT count(*) FROM session_pending AS p
+             WHERE p.run=args.run AND unavailable=1 AND {pending_window}),
+            (SELECT json_group_array(json_array(page.ordinal, f.item, f.revision, f.observed_ms, f.value, f.partition))
+             FROM history_page AS page JOIN facts AS f
+             ON f.partition=page.partition AND f.domain=? AND f.algorithm=page.algorithm AND f.item=page.item),
+            (SELECT json_group_array(json_array(page.ordinal, page.item, s.payload, page.start_ms,
+                                               page.finish_ms, page.saved))
+             FROM live_page AS page JOIN session_live AS s ON s.run=args.run AND s.item=page.item
+             WHERE page.ordinal > position.offset AND page.ordinal <= position.offset + position.size)
+        FROM position CROSS JOIN args
+        LEFT JOIN session_runtime AS runtime ON runtime.run=args.run''',
+        (run, offset, size, *live_bounds, *ready_bounds, *ready_bounds,
+         *pending_bounds, *pending_bounds, SESSIONS_DOMAIN)).fetchone()
+    total, offset, cached, state, terminal, complete, unavailable, historical, live = row
+    runtime = None if state is None else (state, terminal)
+    return total, offset, _page_rows(historical), _page_rows(live), cached, runtime, (bool(complete), unavailable)
 
 
 def update_runtime(db, run, *, state, terminal, reset_pending, pending, live):

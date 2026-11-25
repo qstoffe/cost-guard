@@ -194,11 +194,26 @@ const ReportLoading = (() => {
       await this.pause(Math.min(4000, 500 * 2 ** (this.retries - 1)));
     }
   }
+  const periodSpinnerDelay = 300;
+  function beginHistorySelection(view, button, started = performance.now()) {
+    endHistorySelection(view);
+    view.historySelection = {button, due: started + periodSpinnerDelay, timer: null};
+  }
+  function endHistorySelection(view) {
+    clearTimeout(view.historySelection?.timer);
+    view.historySelection = null;
+    historyProgress(view);
+  }
   function historyProgress(view, button, progress) {
     if (view.historyButton !== button) {
       view.historyButton?.removeAttribute('aria-busy');
       view.historySpinner?.remove();
       view.historyButton = button;
+    }
+    const selection = view.historySelection;
+    if (selection) {
+      clearTimeout(selection.timer);
+      selection.timer = null;
     }
     if (!button || !progress) {
       button?.removeAttribute('aria-busy');
@@ -212,11 +227,17 @@ const ReportLoading = (() => {
       view.historySpinner.setAttribute('aria-hidden', 'true');
     }
     const loading = !progress.terminal && (!progress.complete || progress.recovering || progress.restored);
-    if (loading) {
-      button.setAttribute('aria-busy', 'true');
+    if (loading) button.setAttribute('aria-busy', 'true');
+    else button.removeAttribute('aria-busy');
+    const delay = loading && selection?.button === button ? selection.due - performance.now() : 0;
+    if (delay > 0) {
+      view.historySpinner.remove();
+      selection.timer = setTimeout(() => {
+        if (view.historySelection === selection && button.isConnected) historyProgress(view, button, progress);
+      }, delay);
+    } else if (loading) {
       if (view.historySpinner.parentNode !== button) button.append(view.historySpinner);
     } else {
-      button.removeAttribute('aria-busy');
       view.historySpinner.remove();
     }
     if (progress.terminal || progress.complete && progress.unavailable) {
@@ -226,12 +247,13 @@ const ReportLoading = (() => {
         button.parentElement.after(view.historyError);
       }
       ReportView.text(view.historyError, progress.terminal ?
-        'History cannot continue. Check the OpenCode connection and settings.' :
+        progress.error ?? 'History cannot continue. Check the OpenCode connection and settings.' :
         'Some history is unavailable. Showing the saved results.');
       view.historyError.hidden = false;
     } else if (view.historyError) {
       view.historyError.hidden = true;
     }
   }
-  return {sections, reset, observe, waiting, show, paintCompletion, View, Attempt, retryable, interrupted, historyProgress};
+  return {sections, reset, observe, waiting, show, paintCompletion, View, Attempt, retryable, interrupted,
+    beginHistorySelection, endHistorySelection, historyProgress};
 })();

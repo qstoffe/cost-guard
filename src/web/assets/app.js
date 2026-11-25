@@ -124,6 +124,7 @@ function enterCachedReport(state) {
 }
 function selectStats(state, period) {
   if (state.period === period) return;
+  ReportLoading.beginHistorySelection(state.stats, state.stats.buttons.get(period));
   if (reportCacheEvents) {
     state.attempt?.controller.abort(); state.attempt = null; state.loading = false; state.active = null;
     state.cachePending = false;
@@ -143,6 +144,7 @@ function selectStats(state, period) {
 }
 function selectTokenMix(state, period) {
   if (state.period === period) return;
+  state.tokenMix.beginHistorySelection(period);
   // Retire only this browser attempt, not shared host work or another tab's demand.
   state.attempt?.controller.abort(); state.attempt = null; state.loading = false; state.active = null;
   state.cachePending = false;
@@ -724,6 +726,8 @@ function navigate() {
   if (current !== previous) {
     previous?.catalog?.detach();
     previous?.accountTimeline?.active(false);
+    if (previous?.stats) ReportLoading.endHistorySelection(previous.stats);
+    if (previous?.tokenMix) ReportLoading.endHistorySelection(previous.tokenMix);
   }
   // A requested report (including bounded admission backoff) belongs to its view,
   // not the active route. Navigation never abandons it or starts another attempt.

@@ -6,11 +6,13 @@ import logging
 import sqlite3
 from uuid import uuid4
 
+from src.analysis.cache import decode_trace_entry
 from src.analysis.metric_evidence import EMPTY_HISTORY
 from src.cache.session_projection import SESSIONS_DOMAIN, SORT_COLUMNS
 from src.cache.web_archive import ArchiveFact
 from src.reports import web_history_evidence
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
+from src.reports.session_models import backfill_efforts, needs_effort_backfill
 from src.reports.session_summary import decode_summary, encode_summary
 
 from . import detail_archive
@@ -20,6 +22,9 @@ from .session_catalog_scope import PAGE_SIZE, catalog_window
 
 LOG = logging.getLogger(__name__)
 DOMAIN = SESSIONS_DOMAIN
+EFFORT_EVIDENCE = 'model_effort_evidence'
+CURRENT_EFFORT_EVIDENCE = 2
+REQUIRES_SOURCE_EFFORT_EVIDENCE = 1
 
 
 class SessionArchive:
@@ -28,6 +33,8 @@ class SessionArchive:
         self.partition = None
         self.rows = {}
         self.authorities = {}
+        self.effort_backfill = set()
+        self.effort_refresh = set()
         self.loaded = False
         self.storage_ready = False
         self.run = uuid4().hex
@@ -38,7 +45,7 @@ class SessionArchive:
             return True
         # A new database can use a different revision encoding for the very
         # same roots. Existing history is not replayed solely for that reason.
-        return old[0] != revision and old[3] == target
+        return old[3] == target and (old[0] != revision or key in self.effort_refresh)
 
     def refresh_roots(self, pending, target):
         """Previously acquired roots that need refresh, not historical membership."""
@@ -57,13 +64,16 @@ class SessionArchive:
 
     def read_rows(self):
         decoded, authorities, ranks = {}, {}, {}
+        backfill, refresh = set(), set()
         for key, fact in self.storage.history_rows(DOMAIN):
             try:
                 row = decode_summary(fact.value['row'])
                 if row.session_id != key:
                     continue
+                upgrade = needs_effort_backfill(row)
             except (AttributeError, KeyError, TypeError, ValueError, InvalidOperation):
                 row = recover_summary(key, fact.value.get('row', fact.value))
+                upgrade = False
             if row is None:
                 continue
             row = replace(row, running=False)
@@ -74,8 +84,52 @@ class SessionArchive:
                 ranks[key] = fact.history_rank
                 decoded[key] = retain_readable_fields(row, prior)
                 authorities[key] = (fact.revision, fact.value.get('dependencies'), fact.value.get('models', ()),
-                                    fact.partition, fact.observed_ms)
+                                     fact.partition, fact.observed_ms)
+                backfill.discard(key)
+                refresh.discard(key)
+                if upgrade:
+                    marker = fact.value.get(EFFORT_EVIDENCE)
+                    if marker == REQUIRES_SOURCE_EFFORT_EVIDENCE:
+                        refresh.add(key)
+                    elif marker is None:
+                        backfill.add(key)
+        self.effort_backfill, self.effort_refresh = backfill, refresh
         return decoded, authorities
+
+    def upgrade_efforts(self, candidates):
+        """Bounded writer maintenance; committed display never enters this lane."""
+        results = {}
+        for key, authority in candidates:
+            revision, _, _, partition, observed = authority
+            try:
+                _, facts = self.storage.history_item(DOMAIN, key, 0)
+                before = next((fact for _, fact in facts if
+                    (fact.partition, fact.revision, fact.observed_ms) == (partition, revision, observed)), None)
+                if before is None or before.value.get(EFFORT_EVIDENCE) is not None:
+                    results[key] = authority, None, False
+                    continue
+                row = decode_summary(before.value['row'])
+                _, usage = self.storage.history_item(web_history_evidence.DOMAIN, key, 0)
+                retained = next((fact for _, fact in usage if fact.partition == partition and fact.revision == revision), None)
+                upgraded = None
+                if retained is not None:
+                    try:
+                        entries = tuple(decode_trace_entry(item) for item in retained.value['account_usage'])
+                        upgraded = backfill_efforts(row, entries)
+                        if upgraded is not None:
+                            decode_summary(encode_summary(upgraded))
+                    except (AttributeError, KeyError, TypeError, ValueError, InvalidOperation):
+                        upgraded = None
+                value = {**before.value, EFFORT_EVIDENCE: CURRENT_EFFORT_EVIDENCE if upgraded is not None
+                         else REQUIRES_SOURCE_EFFORT_EVIDENCE}
+                if upgraded is not None:
+                    value['row'] = encode_summary(upgraded)
+                times = tuple(at for at in (row.last_activity_ms, row.activity_latest_ms) if at is not None)
+                if self.storage.rewrite_session_fact(key, before, value, times=times or None):
+                    results[key] = authority, upgraded, upgraded is None
+            except (sqlite3.Error, OSError, ValueError, KeyError, TypeError, InvalidOperation):
+                LOG.warning('session_model_effort_backfill_unavailable')
+        return results
 
     def save(self, partition, key, revision, row, observed_ms, dependencies, models, usage, detail):
         from .session_epoch_page import sort_value
@@ -83,7 +137,8 @@ class SessionArchive:
         try:
             return self.storage.publish_session(partition, {
                 DOMAIN: {key: ArchiveFact(revision, observed_ms, dict(
-                    row=encode_summary(row), dependencies=dependencies, models=models))},
+                    row=encode_summary(row), dependencies=dependencies, models=models,
+                    model_effort_evidence=CURRENT_EFFORT_EVIDENCE))},
                 web_history_evidence.DOMAIN: {key: usage},
                 detail_archive.DOMAIN: {key: detail},
             }, key, {sort: sort_value(row, sort) for sort in SORT_COLUMNS},
@@ -233,10 +288,12 @@ def cached_page(archive, *, token, offset, sort, direction, period, navigation, 
         if row.running:
             for key, known in (
                 ('model', not row.model_pending and row.model != 'N/A'), ('effort', row.effort_key is not None),
-                ('ccost', row.ccost is not None), ('prompts', row.prompt_count is not None),
+                ('prompts', row.prompt_count is not None),
                 ('duration', row.duration_ms is not None), ('ctx', row.context_tokens is not None),
             ):
                 value['metric_states'][key] = 'ready' if known else 'pending'
+            value['metric_states']['ccost'] = ('retained' if row.ccost_retained else 'ready' if row.ccost is not None else
+                'unavailable' if row.ccost_unavailable else 'pending')
         if row.empty_history and saved and not row.running:
             value['metric_absences'] = dict.fromkeys(('model', 'ctx', 'activity'), EMPTY_HISTORY)
     state, terminal = runtime or ('loading', False)

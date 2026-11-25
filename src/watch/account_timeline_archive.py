@@ -1,6 +1,7 @@
 """Project Accounts history without requiring a current quota roster."""
 from collections import defaultdict
 from dataclasses import replace
+from functools import lru_cache
 
 from src.analysis.account_timeline import period_start, timeline_window
 from src.analysis.account_timeline_cost import TimelineValuation
@@ -33,6 +34,7 @@ class ArchivedAccountTimeline:
     def __init__(self, usage):
         self.usage = usage
         self.index = self.month_index = self.index_key = None
+        self.roster_key = self.reference = self.reference_signature = None
         self.roster = ()
         self.initial_periods = set()
         self.pending_periods = set()
@@ -46,16 +48,23 @@ class ArchivedAccountTimeline:
         catalog = prices() or catalog or PricingCatalog(())
         candidates = frozenset((route, item.account_key) for item in roster for route, _ in item.allocation)
         identities = tuple(replace(item, month=None) for item in roster)
-        index_key = cursor, catalog.diagnostic_signature, identities
-        if self.index_key != index_key:
+        roster_key = cursor, identities
+        index_key = cursor, catalog.analysis_signature, catalog.reference_stale, candidates
+        if self.index_key != index_key or self.roster_key != roster_key:
             entries = tuple(entry for fact in facts.values() for entry in fact.accounts or ())
-            valuation = TimelineValuation(catalog)
+        if self.roster_key != roster_key:
             self.roster = history_roster(entries, identities)
-            self.index = PeriodCCostIndex(entries,
-                valuation.reference, account_only=True, timeline_valuation=valuation,
-                timeline_accounts=candidates, shared_history=True)
-            self.month_index = PeriodCCostIndex(entries, catalog.reference_valuation,
-                                               account_only=True, shared_history=True)
+            self.roster_key = roster_key
+        if self.index_key != index_key:
+            if self.reference_signature != catalog.analysis_signature:
+                # The analysis signature covers the rate and model fields used by
+                # exact reference valuation. Cache request values only, not
+                # estimates or coverage. Avoid eviction in full history scans.
+                self.reference = lru_cache(maxsize=None)(catalog.reference_valuation)
+                self.reference_signature = catalog.analysis_signature
+            valuation = TimelineValuation(catalog, reference=self.reference)
+            self.index, self.month_index = PeriodCCostIndex.archived_timeline(
+                entries, valuation, timeline_accounts=candidates)
             self.index_key = index_key
         months = {item.key: item.month for item in roster}
         display_roster = tuple(replace(item, month=months.get(item.key)) for item in self.roster)

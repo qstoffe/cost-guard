@@ -22,7 +22,7 @@ from src.reports.history import WatchHistoryAcquisition
 from .account_timeline import AccountTimeline, CardToday
 from .card_workers import CardWorkers
 from .cards import WatchCards
-from .session_costs import SessionCosts
+from .session_costs import SessionCosts, SessionCostState
 from .coordinator import WatchCoordinator, WatchCycle
 from .quota_capacity_history import QuotaCapacityHistory
 from .running import running_prompts
@@ -35,8 +35,21 @@ from .web_account_history import AccountHistoryProgress, DailyAccountHistory, ac
 CATALOG_RUN_SECONDS = 20
 
 
+def _catalog_cost_offer(entry, revision):
+    state = entry.cost
+    value = state.value
+    if (value is None or state.source_key is None or state.validated_key is None
+            or state.source_key[:4] != state.validated_key[:4]
+            or value.valuation_revision != state.valuation_revision):
+        return None
+    current = (entry.verified_generation == entry.generation and not entry.capture.retained
+               and state.source_key == state.validated_key and not state.failed
+               and not state.catalog_unavailable and value.source_revision == revision)
+    return value, current
+
+
 def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
-    evidence, ends, failures, snapshots = [], [], [], {}
+    evidence, ends, failures, snapshots, costs = [], [], [], {}, {}
     for entry in cards.sessions.values():
         if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
                 or entry.source_status.failed_at is not None):
@@ -47,13 +60,20 @@ def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
         if entry.capture.catalog_prompt is not None:
             prompt, start = entry.capture.catalog_prompt
             evidence.append((root, revision, at, prompt, start, True, None, False))
+            if isinstance(getattr(entry, 'cost', None), SessionCostState) and entry.capture.source_epoch == cards.source_epoch:
+                # An explicit empty offer withdraws incompatible evidence. A
+                # missing capture still says nothing about a previous value.
+                costs[root.session_id] = _catalog_cost_offer(entry, revision)
             if (offer_snapshots and entry.verified_generation == entry.generation
                     and entry.capture.source_epoch == cards.source_epoch and not entry.capture.retained
                     and entry.cost.evidence is not None and entry.cost.evidence.complete):
                 snapshots[root.session_id] = at, entry.cost.evidence
         elif entry.capture.catalog_prompt_ends and entry.verified_generation == entry.generation:
             ends.append((root, revision, at, entry.capture.catalog_prompt_ends))
-    catalog.observe_prompts(evidence)
+    if costs:
+        catalog.observe_prompts(evidence, source_epoch=cards.source_epoch, costs=costs)
+    else:
+        catalog.observe_prompts(evidence)
     if ends:
         catalog.observe_prompt_ends(ends)
     if failures:

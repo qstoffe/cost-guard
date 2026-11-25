@@ -26,7 +26,7 @@ from src.reports.history_cohort import structure
 from src.runtime_errors import recoverable, recovered
 from src.sources.errors import SourceError
 from . import account_timeline_warm as warm
-from .account_timeline_archive import ArchivedAccountTimeline
+from .account_timeline_projection import ArchivedAccountProjection
 from .account_timeline_snapshots import AccountTimelineSnapshots
 
 
@@ -384,9 +384,9 @@ class AccountTimeline:
     """Live schedules at most one small slice; HTTP reads detached summaries only."""
 
     def __init__(self, factory, reads, repository=None, *, archived_usage=None, notify=None):
-        self.history = (ArchivedAccountTimeline(archived_usage) if archived_usage
-                        else TimelineHistory(factory, reads, repository))
         self.archive = archived_usage.archive if archived_usage else None
+        self.history = (ArchivedAccountProjection(self.archive) if self.archive
+                        else TimelineHistory(factory, reads, repository))
         self.snapshots = AccountTimelineSnapshots(self.archive, notify) if self.archive else None
         self.archive_generation = None
         self.unavailable_history = frozenset()
@@ -505,7 +505,7 @@ class AccountTimeline:
 
         if self.job is not None and self.job.done():
             try:
-                job_marker, values, more, removed, initial, pending, elapsed, cpu = self.job.result()
+                job_marker, job_revision, values, more, removed, initial, pending, elapsed, cpu = self.job.result()
                 if job_marker == marker and (available or self.archive):
                     if self.archive is not None:
                         self.archive_background_resume = now_ms + int(
@@ -531,6 +531,11 @@ class AccountTimeline:
                         rest = max(BACKGROUND_SLICE_MS, min(15_000, 3 * elapsed))
                         delay = elapsed + (rest if more else BACKGROUND_REFRESH_MS)
                     self.due = self.last_started + delay
+                    if self.archive is not None and job_revision != self.archive.generation(ARCHIVED_USAGE):
+                        # An earlier coherent snapshot may finish after a later
+                        # publication; keep its own coverage and converge normally.
+                        refresh = 1000 if foreground else ARCHIVE_BACKGROUND_MS
+                        self.due = min(self.due, now_ms + refresh)
                     if rolled:
                         self.due = 0
                 recovered('account-timeline')
@@ -612,14 +617,17 @@ class AccountTimeline:
         def step():
             started = monotonic()
             cpu = thread_time()
+            job_revision = self.archive.generation(ARCHIVED_USAGE) if self.archive else None
             extra = dict(unavailable_history=unavailable_history, live_roots=live_roots, progress_roots=progress_roots,
-                          pending_history=pending_history, source_available=coverage_confirmed) if self.archive else {}
+                          pending_history=pending_history, source_available=coverage_confirmed,
+                          archive_revision=job_revision) if self.archive else {}
             values, more, removed = self.history.step(source, observation, sorted(periods), roster,
                 zone, catalog, prices, migration_gap, now_ms, foreground=bool(fast), preferred=foreground,
                  shared_roots=shared_roots, require_prices=require_background_prices and not foreground, **extra)
-            return (marker, {period: value.to_json() for period, value in values.items()}, more, removed,
+            return (marker, job_revision, {period: value.to_json() for period, value in values.items()}, more, removed,
                       self.history.initial_periods.copy(), self.history.pending_periods.copy(),
-                      int((monotonic() - started) * 1000), thread_time() - cpu)
+                      int((monotonic() - started) * 1000),
+                      thread_time() - cpu + (self.history.child_cpu if self.archive else 0))
 
         self.job = self.pool.submit(step)
         with self.lock:
@@ -663,4 +671,11 @@ class AccountTimeline:
 
     def close(self):
         self.closed = True
+        if self.archive is not None:
+            self.history.stop()
         self.pool.shutdown(wait=True, cancel_futures=True)
+        if self.snapshots is not None:
+            try:
+                self.history.close()
+            finally:
+                self.snapshots.close()

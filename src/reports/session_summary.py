@@ -22,12 +22,16 @@ from .session_effort import SessionEffort, effort_name
 from .session_models import decode_models, valid_models
 from .session_summary_costs import decode_cost_groups
 
-ALGORITHM = "session-summary-14"
+ALGORITHM = "session-summary-15"
 NAMESPACE = "session-summary"
 
 
 def encode_summary(row):
     values = asdict(row)
+    if row.ccost_complete is None:
+        values.pop("ccost_complete")
+    if not row.ccost_retained:
+        values.pop("ccost_retained")
     for name in ("ccost", "main_ccost", "subagent_ccost"):
         values[name] = str(values[name])
     for part in values["cost_groups"]:
@@ -37,8 +41,14 @@ def encode_summary(row):
 
 def decode_summary(values, *, provisional=False):
     values = dict(values)
+    values.setdefault("ccost_complete", None)
+    values.setdefault("ccost_retained", False)
     if set(values) != {field.name for field in fields(SessionUsageRow)}:
         raise ValueError("incomplete_summary")
+    if values["ccost_complete"] is not None and (not provisional or type(values["ccost_complete"]) is not bool):
+        raise ValueError("invalid_live_cost_coverage")
+    if type(values["ccost_retained"]) is not bool or values["ccost_retained"] and not provisional:
+        raise ValueError("invalid_live_cost_retention")
     for name in ("ccost", "main_ccost", "subagent_ccost"):
         if provisional and values[name] == 'None':
             values[name] = None

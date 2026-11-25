@@ -336,6 +336,12 @@ class WebArchive:
     def publish(self, partition, domain, facts):
         return self.publish_batch(partition, {domain: facts})
 
+    def publish_checkpoint(self, domain, facts):
+        """Return detached wire values of the admitted, committed report frames."""
+        committed = {}
+        self._publish_batch(REPORT_CHECKPOINTS, {domain: facts}, committed=committed)
+        return committed
+
     def publish_batch(self, partition, domains):
         if not partition:
             return False
@@ -346,6 +352,24 @@ class WebArchive:
             return False
         return self._publish_batch(partition, domains, ready_session=(item, keys, last_at, latest_at, run))
 
+    def rewrite_session_fact(self, key, before, value, *, times):
+        """Replace an unchanged projection only; do not move its ready index."""
+        def encode(data):
+            return json.dumps(data, ensure_ascii=True, allow_nan=False, separators=(',', ':'))
+
+        scope = before.partition, session_projection.SESSIONS_DOMAIN, key, EVIDENCE_ENVELOPE
+        with self._connect(write=True) as db:
+            updated = db.execute('''UPDATE facts SET value=?
+                WHERE partition=? AND domain=? AND item=? AND algorithm=?
+                AND revision=? AND observed_ms=? AND value=?''',
+                (encode(value), *scope, before.revision, before.observed_ms, encode(before.value))).rowcount
+            if updated:
+                db.execute('INSERT OR REPLACE INTO fact_cursors (partition, domain, item, algorithm) VALUES (?, ?, ?, ?)',
+                           scope)
+        if updated:
+            self.note_publication((session_projection.SESSIONS_DOMAIN,), session_times=times)
+        return bool(updated)
+
     def ready_sessions_page(self, **page):
         with self._connect() as db:
             total, offset, values = session_projection.read_ready(db, **page)
@@ -353,7 +377,7 @@ class WebArchive:
 
     def sessions_page(self, **page):
         with self._connect() as db:
-            total, offset, values, live, cached, runtime, pending = session_projection.read_ready(db, **page)
+            total, offset, values, live, cached, runtime, pending = session_projection.read_runtime_page(db, **page)
             return total, offset, tuple(self._historical_facts(values)), live, cached, runtime, pending
 
     def update_sessions_runtime(self, run, *, state, terminal, reset_pending, pending, live):
@@ -386,7 +410,7 @@ class WebArchive:
         with self._connect(write=True) as db:
             session_projection.close_runtime(db, run)
 
-    def _publish_batch(self, partition, domains, *, ready_session=None):
+    def _publish_batch(self, partition, domains, *, ready_session=None, committed=None):
         values = [(partition, domain, key, EVIDENCE_ENVELOPE, fact.revision, fact.observed_ms,
                     json.dumps(fact.value, ensure_ascii=True, allow_nan=False, separators=(',', ':')))
                    for domain, facts in domains.items() for key, fact in facts.items()]
@@ -438,4 +462,8 @@ class WebArchive:
                                 changed.add(session_projection.SESSIONS_DOMAIN)
         if changed:
             self.note_publication(changed, session_times=session_times)
+        if committed is not None:
+            committed.update((key, fact) for key, fact in self._historical_facts(
+                (key, revision, observed, raw, partition)
+                for partition, _, key, _, revision, observed, raw in admitted))
         return True
