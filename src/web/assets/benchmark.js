@@ -84,13 +84,17 @@ const BenchmarkView = (() => {
         this.manual = false; this.status.textContent = 'Refresh failed; previous benchmark retained.';
       } finally { this.controls(this.writable); if (!this.manual) this.restoreFocus?.(); }
     }
-    async load(api, force = false) {
-      if (this.loading) { if (force) this.pending = true; return; }
+    async load(api, force = false, supersede = false) {
+      if (this.loading && !supersede) { if (force) this.pending = true; return; }
       if (!force && Date.now() - this.checked < 5000) return;
+      this.flight?.abort();
+      const flight = this.flight = new AbortController();
+      this.pending = false;
       this.loading = true; this.checked = Date.now();
       this.controls(this.writable, api);
       try {
-        const data = await api('/api/models/benchmark');
+        const data = await api('/api/models/benchmark', undefined, flight.signal);
+        if (this.flight !== flight) return;
         // Observation/progress is not row data. Keep rows, help and selection alive.
         const signature = JSON.stringify([data.rows, data.efforts]);
         this.data = data;
@@ -103,12 +107,15 @@ const BenchmarkView = (() => {
         } else if (data.refreshing) this.status.textContent = this.manual ? 'Refreshing…' : '';
         else if (!this.manual) this.status.textContent = '';
       } catch (_) {
+        if (this.flight !== flight) return;
         if (this.manual) { this.manual = false; this.status.textContent = 'Refresh failed; previous benchmark retained.'; }
         // Last-good rows/date survive network/host failure.
       } finally {
-        this.loading = false; this.controls(this.writable);
-        if (!this.manual) { this.restoreFocus?.(); this.restoreFocus = null; }
-        if (this.pending) { this.pending = false; this.load(api, true); }
+        if (this.flight === flight) {
+          this.flight = null; this.loading = false; this.controls(this.writable);
+          if (!this.manual) { this.restoreFocus?.(); this.restoreFocus = null; }
+          if (this.pending) { this.pending = false; this.load(api, true); }
+        }
       }
     }
     efforts() {
