@@ -12,7 +12,9 @@ module.exports = function miniHelp(controller, view, input, helpText) {
     controller.update(input); return view.promptRows.get('help-a');
   };
   const row = show(), title = row.children[1].children[0].children[0], ctx = row.children[4];
-  assert.equal(helpText(title), 'Example Session\nPrompt #21: Implement pagination for…');
+  const costHeading=()=>helpText(row.children[2].children[0]).split('\n')[0];
+  assert.match(helpText(title), /^▶Running[^\n]*\nExample Session$/);
+  assert.equal(costHeading(),'Prompt #21: Implement pagination for…');
   assert.equal(row.contextHelp,'');assert.equal(ctx.tabIndex,-1);
   const visible = row.textContent;
   for (const [preview, expected] of [
@@ -26,18 +28,18 @@ module.exports = function miniHelp(controller, view, input, helpText) {
     ['a'.repeat(22)+'... tail','a'.repeat(22)+'…'],
     ['<img src=x onerror=alert(1)>','<img src=x onerror=alert(…']]) {
     prompt.preview = preview; show();
-    assert.equal(helpText(title),'Example Session\nPrompt #21: '+expected);
+    assert.equal(costHeading(),'Prompt #21: '+expected);
     assert.equal(title.children.length,0,'preview remains text-only contextual help, not markup');
     assert.equal(row.textContent,visible,'tooltips do not change the compact row');
   }
   for (const preview of ['', ' \n ', null, undefined, 42]) {
     prompt.preview = preview; show();
-    assert.equal(helpText(title),'Example Session\nPrompt #21');
+    assert.equal(costHeading(),'Prompt #21');
   }
   prompt.preview = 'Available hint'; prompt.prompt_number = null; show();
-  assert.equal(helpText(title),'Example Session\nPrompt number unavailable\nPrompt: Available hint');
+  assert.equal(costHeading(),'Prompt number unavailable: Available hint');
   prompt.preview = ''; base.title = ''; show();
-  assert.equal(helpText(title),'help-a\nPrompt number unavailable','unnamed sessions retain stable identity');
+  assert.match(helpText(title),/^▶Running[^\n]*\nhelp-a$/,'unnamed sessions retain stable identity');
   base.title = 'Example Session';
   const history = structuredClone(base); history.focal_id = '';
   history.rows[0].prompt = {...prompt,in_progress:false,completed_at_ms:1000,preview:'Historical hint',prompt_number:20};
@@ -46,11 +48,12 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   assert.equal(view.promptRows.get('help-a'),row);
   assert.equal(ctx.textContent,'900k');
   assert.equal(row.contextHelp,'');
-  assert.equal(helpText(title),'Example Session\nPrompt #20: Historical hint');
+  assert.equal(helpText(title),'Example Session');
+  assert.equal(costHeading(),'Prompt #20: Historical hint');
   history.rows[0].live_context = null; show([], [history]);
   assert.equal(row.contextHelp,'');
   history.rows = []; show([], [history]);
-  assert.equal(helpText(title),'Example Session\nPrompt number unavailable');
+  assert.equal(helpText(title),'Example Session');
   assert.equal(row.contextHelp,'');
   prompt.prompt_number = 21; prompt.preview = 'Original hint'; show();
   for (const delta of ['0','+4k','-12k','N/A','~source-token']) {
@@ -85,7 +88,8 @@ module.exports = function miniHelp(controller, view, input, helpText) {
   next.session_summary.context.warning = null;
   show([base,next,other],[history]);
   assert.equal(view.promptRows.get('help-a'),row);
-  assert.equal(helpText(title),'Renamed session\nPrompt #22: Replacement hint');
+  assert.match(helpText(title),/^▶Running[^\n]*\nRenamed session$/);
+  assert.equal(costHeading(),'Prompt #22: Replacement hint');
   assert.equal(row.contextHelp,'');
   assert.equal(view.promptRows.get('help-b').contextHelp,'');
   assert.equal(row.children.length,5); assert.equal(row.querySelectorAll('button').length,0);

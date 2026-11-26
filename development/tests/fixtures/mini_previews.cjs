@@ -31,13 +31,13 @@ module.exports = (controller, view, input, helpText) => {
       assertPending(row,[0,2]);
       assert.equal(row.className,'');assert.doesNotMatch(row.attributes['aria-label'],/Prompt|Completed|Ended|Running/);
       assert.equal(row.children[0].textContent,'14:26');
-      assert.match(helpText(row.children[0].children[0]),/^Session activity · /);
+      assert.match(helpText(row.time),/^Session activity · /);
       assert.doesNotMatch(helpText(row.children[1].children[0].children[0]),/Prompt/);
     }
   }
   show();
   const row=view.promptRows.get('preview-0');
-  const clock=row.children[0].children[0].children[1];
+  const clock=row.time;
   const missing={...previews[0],activity_ms:null,display:{...previews[0].display,activity_clock:'Loading…'}};
   const showClock=state=>show([],[],[{...missing,hydration_state:state}]);
   showClock('waiting');
@@ -89,7 +89,8 @@ module.exports = (controller, view, input, helpText) => {
   assert.equal(view.promptRows.get('preview-0'),row);
   assert.ok(row.children[2].textContent);
   assert.equal(indicators(row)[0],undefined);
-  assert.match(row.attributes['aria-label'],/Completed/);
+  assert.match(row.attributes['aria-label'],/Catalog session 0 · Prompt 23$/);
+  assert.equal(row.statusIcon.hidden,true);
   assert.equal([...view.promptRows.keys()].filter(id=>id==='preview-0').length,1);
   real.session_summary.cost=null;
   show([],[real],[qualified,...previews.slice(1)]);

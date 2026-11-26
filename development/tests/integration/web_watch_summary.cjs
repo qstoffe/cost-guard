@@ -95,9 +95,9 @@ prompt.token_mix_percent=null;render();const pendingMix=pending(row.children[7].
 live.state='observed';render();assert.equal(pending(row.children[7].children[0],'token mix'),pendingMix);
 // Terminal rows leave Watch, without modifying the independent Mini history DTOs.
 const history=JSON.stringify(input.view.history_cards);
-prompt.in_progress=false;render();assert.equal(watch.cards.size,0);
+prompt.in_progress=false;live.ongoing=null;render();assert.equal(watch.cards.size,0);
 assert.equal(JSON.stringify(input.view.history_cards),history);
-prompt.in_progress=true;render();
+prompt.in_progress=true;live.ongoing={phase:'running'};render();
 // The one existing control survives detachment and another Watch view.
 context.parent.replaceChildren(new Node('div'));
 vm.runInContext('globalThis.reopened=new WatchView.View({miniControls:state.miniControls||document.getElementById("mini-watch-controls")});reopened.attach(parent)',context);
