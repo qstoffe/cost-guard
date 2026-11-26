@@ -4,6 +4,7 @@ from decimal import Decimal
 from src.numbers import ccost_amount, ccost_unit
 from .contracts import record
 from .effort_help import effort_help
+from .model_help import attribution_label
 
 
 def mini_groups(parts, *, complete=True, attribution=None):
@@ -40,8 +41,8 @@ def mini_cost_tokens(values):
         if ready and ccost_unit() == "credits":
             cost += " Credits"
         model = f"{part['model']} — {part['effort']}"
-        if part.get("attribution"):
-            model += f" ({part['attribution']})"
+        if attribution := attribution_label(part.get("attribution")):
+            model += f" ({attribution})"
         models.append((label, model))
         amounts.append(cost)
         evidence.append(ready)

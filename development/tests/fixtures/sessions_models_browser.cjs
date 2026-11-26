@@ -43,7 +43,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   const sections = help.split('\n\n').map(section => section.split('\n'));
   assert.equal(sections.length, 2);
   assert.equal(sections[0].shift(), 'Session Models:');
-  assert.deepEqual(sections[0].sort(), ['• main-provider/Earlier — high', '• main-provider/Model-00 — high',
+  assert.deepEqual(sections[0].sort(), ['• anthropic/Claude Sonnet 5.5 — high', '• main-provider/Model-00 — high',
     '• main-provider/Model-00 — low', '• main-provider/Model-00 — Default (unknown)'].sort());
   assert.deepEqual(sections[1], ['Sub Agents:', '• child-provider/Child — high']);
   await fixture('models-update');

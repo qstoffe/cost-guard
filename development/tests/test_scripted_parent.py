@@ -46,11 +46,12 @@ class ScriptedParentTests(unittest.TestCase):
         for text in (wire["model_display_help"], session["model_display_help"], session["model_help"]):
             self.assertIn("Local scripted fixture", text)
             self.assertIn("claude-agent/Claude Opus 5.5 · Max", text)
-            self.assertIn("recorded claude-agent/opus", text)
             self.assertIn("Execution/inference and usage/cost unverified", text)
             self.assertNotIn("gpt-6-luna", text)
         for text in (wire["model_display_help"], session["model_help"]):
+            self.assertIn("recorded claude-agent/opus", text)
             self.assertIn("Selected/attempted subagents", text)
+        self.assertNotIn("recorded claude-agent/opus", session["model_display_help"])
         main, agents = session["model_display_help"].split("\n\n")
         self.assertTrue(main.startswith("Session Models:\n"))
         self.assertTrue(agents.startswith("Sub Agents:\nNo executed subagent model is verified."))

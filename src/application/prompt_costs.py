@@ -114,8 +114,8 @@ def mini_cost_detail(row):
     if not row.agent_coverage:
         missing = max(0, row.linked_agent_count - len({part.session_id for part in row.cost_parts if part.agent}))
     return (("mini_cost_groups", mini_groups(row.cost_parts, complete=not row.unresolved_cost,
-            attribution={index: attribution_label(agent.attribution)
-                         for index, agent in enumerate(row.agent_coverage, 1)})),
+            attribution={index: agent.attribution for index, agent in enumerate(row.agent_coverage, 1)
+                         if agent.attribution != "verified"})),
             ("mini_missing_agents", missing))
 
 

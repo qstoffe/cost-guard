@@ -71,8 +71,6 @@ def linked_selections(snapshot, records, catalog, revision, *, index=None):
             if name != model.recorded_model:
                 qualifier = "catalog estimate; " if model.resolution else ""
                 line += f" ({qualifier}recorded {model.provider}/{model.recorded_model})"
-            if scope.inferred_path:
-                line += " (linked by prompt timing)"
             state = next((agent.state for agent in record.agent_coverage if agent.session_id == scope.session_id), "")
             line += {
                 "not-executed": " — No request recorded in complete child history.",

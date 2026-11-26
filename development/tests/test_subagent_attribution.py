@@ -258,7 +258,7 @@ class SubagentAttributionTests(unittest.TestCase):
             ("u1", [(root, "a1"), (root, "a2"), (child, "ca"), (child, "ca2")], 326),
             ("u2", [(root, "a3"), (child, "ca3")], 163),
         )
-        detail_rows = export_block(block, details=True).to_json()["rows"]
+        detail_rows = with_display(export_block(block, details=True)).to_json()["rows"]
         self.assertEqual(2, len(bundle.prompts))
         self.assertEqual(2, len(detail_rows))
         self.assertEqual(2, len(block.rows))
@@ -287,6 +287,18 @@ class SubagentAttributionTests(unittest.TestCase):
                     live["history_cards"][0]["rows"][0]["prompt"],
                 ):
                     self.assertEqual((D(cost), len(keys)), (D(view["ccost"]), view["calls"]))
+                    for unit, child_cost in (("credits", ("204 Credits", "102 Credits")[index]),
+                                             ("usd", ("$2.04", "$1.02")[index])):
+                        display = {**view["display"], **view["display_units"][unit]}
+                        child_model = "github-copilot/claude-test"
+                        self.assertIn(f"• {child_model} — Low — ({child_cost})", display["cost_detail_help"])
+                        self.assertIn(["Sub Agents", f"{child_model} — Low"], display["mini_cost_models"])
+                        for key in ("model_detail_help", "main_model_help", "calls_help"):
+                            self.assertIn(f"Subagent 1 — {child_model}", display[key])
+                        for text in (view.get("model_display_help", ""), view.get("watch_calls_help", ""),
+                                     *(display[key] for key in ("model_detail_help", "main_model_help",
+                                                               "calls_help", "cost_detail_help"))):
+                            self.assertNotIn("linked by prompt timing", text.casefold())
         self.assertEqual(D(3 * 61 + 3 * 102), sum(row.ccost for row in block.rows))
         self.assertEqual((D(489), 6), (block.total_ccost, block.total_calls))
 
@@ -312,6 +324,21 @@ class SubagentAttributionTests(unittest.TestCase):
         self.assertEqual(
             2, text.count("Some subagent work linked by prompt timing; not verified by a tool call.")
         )
+
+    def test_inferred_child_selection_remains_unverified_without_a_timing_label(self):
+        with incident_source(name="custom-worker") as (source, _server):
+            snapshot = source.load_session_snapshot("ses_current")
+        snapshot = replace(snapshot, invocations=tuple(inv for inv in snapshot.invocations
+                           if inv.session_id == snapshot.root.session_id))
+        bundle, block = self.project(snapshot)
+
+        row, = with_display(export_block(block, details=True)).to_json()["rows"]
+
+        self.assertEqual("inferred", bundle.prompts[0].agent_coverage[0].attribution)
+        self.assertEqual((2, D(122)), (row["calls"], D(row["ccost"])))
+        self.assertIn("github-copilot/Claude Test · Low", row["model_display_help"])
+        self.assertIn("not a confirmed executed contributor", row["model_display_help"])
+        self.assertNotIn("linked by prompt timing", row["model_display_help"].casefold())
 
     def test_later_native_launch_without_a_new_child_turn_is_visible_but_not_charged_again(self):
         with incident_source() as (source, server):
