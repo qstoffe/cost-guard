@@ -40,7 +40,8 @@ assert.equal(row.attributes['aria-label'],'Prompt 37 · Running');
 assert.equal(card.title.className,'watch-running-title');
 const headers=card.root.querySelectorAll('th');
 assert.equal(helpText(headers[1].children[0]),'Time spent on this prompt.');
-assert.equal(helpText(headers[5].children[0]),'Reference cost of this prompt, including attributed linked subagent calls.');
+const definition = require('../fixtures/ccost_definition.cjs');
+definition(helpText(headers[5].children[0]), /this prompt.*linked subagent/);
 assert.doesNotMatch(helpText(headers[7].children[0]),/N\/A or running|No reliable/);
 assert.match(helpText(row.children[5].children[0]),/Session Models:\n• [\s\S]*Sub Agents:\n• /);
 assert.doesNotMatch(helpText(row.children[5].children[0]),/Duration: N\/A/);
@@ -49,7 +50,8 @@ assert.match(helpText(row.children[6].children[0]),/fixture\/main-model \(High\)
 assert.match(helpText(row.children[6].children[0]),/fixture\/child-model \(Low\): 2 calls/);
 assert.doesNotMatch(helpText(row.children[6].children[0]),/Subagent|Main prompt|Total Calls|prompts|tier/);
 assert.deepEqual(watch.daily.children.map(n=>n.textContent),['CCost Today','34','37 prompts']);
-for(const node of watch.daily.children)assert.equal(node.events.focus,undefined);
+definition(helpText(watch.daily.children[0]), /local calendar day/);
+for(const node of watch.daily.children.slice(1))assert.equal(node.events.focus,undefined);
 // Exact shared compact list, including quota modes, unit changes and edge cases.
 vm.runInContext('globalThis.compact=new AccountCards.CompactView();compact.update(input.view)',context);
 assert.equal(watch.accounts.textContent,context.compact.root.textContent);

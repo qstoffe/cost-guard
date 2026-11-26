@@ -67,7 +67,7 @@ const TokenMixView = (() => {
         'Attributed model requests in available shown history.',
          'Recorded Input, Cached input, Cache write and Output token volume.',
         ...definitions.map(text => text + ' Share of tokens, not cost.'),
-        'Sum of known category reference valuations at each request’s actual model and price tier; not billing.'];
+        ReportView.ccostHelp('Sum of known reference costs at each request’s model and price tier; not billing.')];
       this.headers = columns.map((label, column) => {
         const th = e('th'), button = e('button', label); th.scope = 'col'; button.type = 'button';
         if (help[column]) ContextHelp.heading(button, help[column]);

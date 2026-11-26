@@ -10,6 +10,7 @@ class Node {
       classList: {toggle() {}, add() {}}, style: {setProperty() {}}});
   }
   append(...nodes) { for (const node of nodes) this.insertBefore(typeof node === 'string' ? new Node('#text', node) : node, null); }
+  prepend(...nodes) { for (const node of nodes.reverse()) this.insertBefore(node, this.children[0]); }
   insertBefore(node, before) {
     node.remove();
     this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, node);
@@ -37,16 +38,18 @@ class Node {
 
 let unit = 'credits';
 const context = vm.createContext({
-  document: {documentElement: {lang: 'en'}, addEventListener() {}, createElementNS: (_, tag) => new Node(tag)},
+  document: {documentElement: {lang: 'en'}, addEventListener() {}, createElement: tag => new Node(tag),
+    createTextNode: text => new Node('#text', text), createElementNS: (_, tag) => new Node(tag)},
   innerWidth: 480, innerHeight: 640, AbortController, performance,
   setTimeout() {}, clearTimeout() {},
   fakeReportView: {
-    element: (...args) => new Node(...args),
+    element: (...args) => Object.assign(new Node(...args), {ownerDocument: context.document}),
     text: (el, value) => { el.textContent = value; },
     compare: (a, b) => Number(a) - Number(b),
     display: item => item.display_units?.[unit]?.amount ?? item.display.amount
   }
 });
+require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8').replace(
   'const ReportView =', 'const formatter =') +
   '; const ReportView = {...formatter, ...fakeReportView};', context);

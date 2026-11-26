@@ -417,7 +417,9 @@ const WatchView = (() => {
     }
   }
   function daily(parent, value, state) {
-    if (!parent.children.length) parent.append(el('strong', 'CCost Today'), el('span', '', 'metric-value'), el('span'));
+    if (!parent.children.length) parent.append(
+      ContextHelp.value(el('strong', 'CCost Today'), ReportView.headerHelp.todayCost),
+      el('span', '', 'metric-value'), el('span'));
     text(parent.children[1], () => display(value, 'daily_ccost'));
     text(parent.children[2], value ? `${value.prompt_count} prompts` : '');
   }
@@ -442,7 +444,7 @@ const WatchView = (() => {
     ['Prompt', 'The prompt’s number within its session and a short preview of your message.'],
     ['Model', ReportView.headerHelp.model],
     ['Effort', 'How much reasoning the model was asked to do.'],
-    ['CCost', 'Reference cost of this prompt, including attributed linked subagent calls.'],
+    ['CCost', ReportView.headerHelp.promptCost],
     ['Calls', ReportView.headerHelp.calls],
     ['Token Mix %', 'Token percentages in I / C / W / O order, not cost.\n\nI — Input: new input.\nC — Cached input: reused input.\nW — Cache write: input saved for reuse.\nO — Output: generated tokens, including reasoning.'],
     ['Ictx', 'Input context size on this prompt’s first request; may be estimated.\nN/A — First-request data unavailable, not zero.\nNot the next session context or a sum of requests.'],
@@ -549,7 +551,9 @@ const WatchView = (() => {
       this.costLabel = el('span'); this.costStatus = el('span');
       this.costHelp = ContextHelp.value(this.costLabel, () =>
         ReportView.sessionCostHelp(this.summaryValue?.cost, this.summaryValue));
-      const costLine = el('div'); costLine.append(el('span', 'Total CCost: '), this.costHelp, this.costStatus);
+      const costLine = el('div');
+      costLine.append(ContextHelp.value(el('span', 'Total CCost:'), ReportView.headerHelp.sessionCost),
+        ' ', this.costHelp, this.costStatus);
       this.summary.append(contextLine, costLine);
       this.root.append(heading, this.message, scroll, this.summary, this.activity);
     }

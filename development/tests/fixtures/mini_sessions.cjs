@@ -24,8 +24,9 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   assert.deepEqual(headers.map(n=>n.textContent),['Activity','Session','CCost','Total','Ctx']);
   assert.match(helpText(headers[0].children[0]),/oldest at the top and newest at the bottom/);
   assert.equal(helpText(headers[1].children[0]),'The name of the session.');
-  assert.equal(helpText(headers[2].children[0]),"Reference cost of this session's latest represented prompt, including attributed linked subagent calls.");
-  assert.equal(helpText(headers[3].children[0]),'The entire session’s reference cost, including attributed linked subagents.');
+  const definition = require('./ccost_definition.cjs');
+  definition(helpText(headers[2].children[0]), /latest represented prompt.*linked subagent/);
+  definition(helpText(headers[3].children[0]), /entire session.*linked subagent/);
   assert.equal(helpText(headers[4].children[0]),'Estimated context for this session, in tokens.');
   const runningFour = [2,0,3,1].map(i=>card('a'+i,[20,105,113,120][i],true));
   const fifteen = Array.from({length:15},(_,i)=>card('end'+i,100+i));

@@ -44,7 +44,7 @@ module.exports=async({command,evaluate,until,sessionId,navigate,checks})=>{
       // Unlimited legitimately changes the track shape; other values retain bars.
       if(phase!=='unlimited')assert.equal(facts.bar,true);
       for(const [selector,expected] of [
-        ['.watch-subscription > .metric-value .help-value',"This account's reference cost for the local calendar day."],
+        ['.watch-subscription > .metric-value .help-value:last-child',"This account's reference cost for the local calendar day."],
         ...(['native','unlimited'].includes(phase)?[]:[
           ['.watch-quota-capacity .help-value',phase==='ratio'?
             'Capacity: ~'+(unit==='usd'?'$1.25':'125 Credits'):

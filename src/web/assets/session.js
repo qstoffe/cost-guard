@@ -6,12 +6,12 @@ const SessionDetail = (() => {
     ['Prompt', 'Local start time, prompt number and preview. [RUNNING] requires observed ongoing work.'],
     ['Model', ReportView.headerHelp.model],
     ['Effort', 'Reasoning effort requested for the main prompt.'],
-    ['CCost', 'Reference cost of this prompt, including linked work; not your bill.'],
+    ['CCost', ReportView.headerHelp.promptCost],
     ['Calls', ReportView.headerHelp.calls],
     ['Duration', ReportView.headerHelp.duration],
     ['Ictx', 'Context on the first request of this prompt, not the next session context. N/A is unknown.'],
-    ['Ictx CCost', 'Reference incoming-context cost component. Estimates and unavailable evidence retain their canonical meaning.'],
-    ['Extra CCost', 'Other reference cost: output, later requests and linked subagents.'],
+    ['Ictx CCost', ReportView.headerHelp.incomingContextCost],
+    ['Extra CCost', ReportView.headerHelp.extraCost],
     ['Token Mix %', 'Token percentages in Input / Cached input / Cache write / Output order. Output includes reasoning. Not cost.']
   ];
   const footerMetrics = {

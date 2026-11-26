@@ -8,11 +8,17 @@ const ReportView = (() => {
   let timezone = null;
   function setTimezone(value) { timezone = value; }
   function configuredTimezone() { return timezone; }
+  const ccostDefinition = 'Comparative Cost Based on GitHub Reference Price List';
+  const ccostHelp = context => context ? `${ccostDefinition}\n${context}` : ccostDefinition;
   const headerHelp = {
     model: '• Main model — The model shown in this column.\n• Linked subagents, multiple models or different effort levels — If marked *, hover, focus or tap the Model value for details.',
     calls: 'Model requests for this prompt, including linked subagents.\nNot tool calls.',
     duration: 'Time spent on this prompt.',
-    sessionCost: 'The entire session’s reference cost, including attributed linked subagents.',
+    sessionCost: ccostHelp('The entire session’s reference cost, including attributed linked subagents.'),
+    promptCost: ccostHelp('Reference cost of this prompt, including attributed linked subagent calls.'),
+    incomingContextCost: ccostHelp('Reference cost of the incoming context on the first request.'),
+    extraCost: ccostHelp('Other reference cost: output, later requests and linked subagents.'),
+    todayCost: ccostHelp('Reference cost for the local calendar day.'),
     context: 'Estimated context for this session, in tokens.'
   };
   function activityHelp(value, zone, running = false, started = null) {
@@ -437,7 +443,7 @@ const ReportView = (() => {
     }
     return compare(a, b) * direction;
   }
-  function table(parent, title, columns, rows, cells, totals, state, key, values = cells) {
+  function table(parent, title, columns, rows, cells, totals, state, key, values = cells, columnHelp = {}) {
     const section = element('section');
     const remote = key === 'sessions' ? state.result?.view?.session_page : null;
     state.filters ||= {}; state.sorts ||= {};
@@ -453,7 +459,9 @@ const ReportView = (() => {
     const headers = [], headerLabels = [];
     columns.forEach((column, index) => {
       const th = element('th'), button = element('button', column); th.scope = 'col';
-      headerLabels.push(ContextHelp.heading(button, 'Sort this column; activate again to reverse or clear sorting.\nUnknown values stay last. Sorting does not change totals.'));
+      const sortHelp = 'Sort this column; activate again to reverse or clear sorting.\nUnknown values stay last. Sorting does not change totals.';
+      const context = columnHelp[column];
+      headerLabels.push(ContextHelp.heading(button, context ? `${context}\n${sortHelp}` : sortHelp));
       button.addEventListener('click', () => {
         const old = state.sorts[key];
         if (old?.index === index && old.direction === -1) delete state.sorts[key];
@@ -815,8 +823,10 @@ const ReportView = (() => {
       if (obs.status === 'blocked') card.append(element('p', accountStatus(obs, compact), 'account-status'));
       for (const scope of account.ccost_scopes) {
         const line = element('p', undefined, 'metric-value');
-        line.append(ContextHelp.value(element('span', () => `CCost ${scope.name}: ${display(scope.cost, 'account_ccost')}`),
-          `This account’s reference cost for ${scope.name}.`)); card.append(line);
+        const context = `This account’s reference cost for ${scope.name}.`;
+        line.append(ContextHelp.value(element('span', `CCost ${scope.name}:`), ccostHelp(context)), ' ',
+          ContextHelp.value(element('span', () => display(scope.cost, 'account_ccost')), context));
+        card.append(line);
       }
       if ((!compact && detailed && !watch) || account.billed_today != null) card.append(element('p', 'Billed today: ' + display(account, 'billed_today')));
       if ((!compact && detailed && !watch) || account.billed_month != null) card.append(element('p', 'Billed month: ' + display(account, 'billed_month')));
@@ -864,8 +874,9 @@ const ReportView = (() => {
   }
   function prompts(parent, block, state, index, zone) {
     const title = element('h3', block.title || 'Session'); parent.append(title, link(block.session_id));
-    const totals = element('p', 'Full-session CCost ');
-    totals.append(costValue(block, 'total_ccost'), element('span', () => ` · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
+    const totals = element('p');
+    totals.append(ContextHelp.value(element('span', 'Full-session CCost'), headerHelp.sessionCost), ' ',
+      costValue(block, 'total_ccost'), element('span', () => ` · Billing ${display(block, 'billed_cost')} · Duration ${display(block, 'duration_ms')}`));
     parent.append(totals);
     if (block.active_hour) parent.append(element('p', () => hourlySummary(block.active_hour), 'detail'));
     if (block.total_has_cost_breakdown) parent.append(element('p',
@@ -879,7 +890,8 @@ const ReportView = (() => {
          display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)],
       state, 'prompts-' + index,
       row => [row.prompt_number, row.ccost, row.calls, row.duration_ms, row.incoming_context_tokens,
-        row.incoming_context_ccost, row.extra_ccost, row.token_mix_percent?.join('/')]);
+         row.incoming_context_ccost, row.extra_ccost, row.token_mix_percent?.join('/')],
+       {'CCost': headerHelp.promptCost, '~Ictx CCost': headerHelp.incomingContextCost, '~Extra CCost': headerHelp.extraCost});
   }
   function hourlySummary(value) {
     return `Reference cost per active hour: ${display(value, 'rate')} · Active execution ${display(value, 'duration_ms')}`;
@@ -907,7 +919,11 @@ const ReportView = (() => {
     parent.replaceChildren();
     parent.append(element('p', `Snapshot: ${timestamp(result.observed_at_ms, view.timezone_id)}`, 'snapshot'));
     const definitions = element('details');
-    definitions.append(element('summary', 'Reading this report'), element('p', 'CCost — Estimated reference cost, not your bill. Unknown prices are not zero.\nDuration — Recorded execution time, frozen with this snapshot.\nSearch, sorting and pages change what you see, not the totals or report scope.\nRefresh acquires a new snapshot. Navigation and live updates do not refresh reports.\nClosing this tab does not stop Cost Guard; the CLI runs separately.', 'help-copy'));
+    const costExplanation = 'Estimated reference cost, not your bill. Unknown prices are not zero.';
+    const explanation = element('p', undefined, 'help-copy');
+    explanation.append(ContextHelp.value(element('span', 'CCost'), ccostHelp(costExplanation)),
+      ` — ${costExplanation}\nDuration — Recorded execution time, frozen with this snapshot.\nSearch, sorting and pages change what you see, not the totals or report scope.\nRefresh acquires a new snapshot. Navigation and live updates do not refresh reports.\nClosing this tab does not stop Cost Guard; the CLI runs separately.`);
+    definitions.append(element('summary', 'Reading this report'), explanation);
     if (!overview) parent.append(definitions);
     parent.append(element('p', 'Token category order: ' + mixLegend(view), 'detail'));
     if (view.session_usage.length || view.kind === 'sessions') {
@@ -916,7 +932,8 @@ const ReportView = (() => {
         row => { const name = element('span'); name.append(link(row.session_id), element('span', row.title, 'detail'),
             element('span', [row.archived && 'Archived', row.running && 'Running at snapshot'].filter(Boolean).join(' · '), 'detail'));
           return [name, row.model + (row.multiple_models ? ' · multiple models' : ''), costValue(row), known(row.prompt_count), display(row, 'duration_ms')]; },
-        null, state, 'sessions', row => [row.title + ' ' + row.session_id, row.model, row.ccost, row.prompt_count, row.duration_ms]);
+         null, state, 'sessions', row => [row.title + ' ' + row.session_id, row.model, row.ccost, row.prompt_count, row.duration_ms],
+         {CCost: headerHelp.sessionCost});
     }
     view.prompt_blocks.forEach((block, index) => prompts(parent, block, state, index, view.timezone_id));
     const accounts = view.accounts_quotas;
@@ -946,5 +963,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, latestModels, latestModelsHelp, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, valueSlot, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, headerHelp, activityHelp, costGroups, sessionCostHelp};
+  return {render, renderLive, element, modelHeading, latestModels, latestModelsHelp, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, valueSlot, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, ccostHelp, headerHelp, activityHelp, costGroups, sessionCostHelp};
 })();

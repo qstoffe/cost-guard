@@ -1,9 +1,9 @@
 // Real shared source-derived Decimal projections, delivered through the HTTP/SSE fixture.
 const assert = require('node:assert/strict');
-module.exports = async ({command,evaluate,until,owner,mini,checks,layouts,full,prompt,total}) => {
+module.exports = async ({command,evaluate,until,owner,mini,checks,layouts,full,prompt,total,heading}) => {
   await evaluate(owner,`window.tinyAccounts=new AccountCards.View();
     document.body.append(tinyAccounts.root)`);
-  const account = '.live-account-cards .account-subscription .metric-value .help-value';
+  const account = '.live-account-cards .account-subscription .metric-value .help-value:last-child';
   for (const mode of ['tiny','tiny-partial']) {
     await evaluate(owner,`(() => {
       window.tinyPublication={...liveValue,view:structuredClone(liveValue.probe_ccost_unavailable['${mode}'])};
@@ -20,7 +20,9 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts,full,p
         miniWatch.view.root.querySelector(${JSON.stringify(prompt)}),
         miniWatch.view.root.querySelector(${JSON.stringify(total)}),
         document.querySelector(${JSON.stringify(account)})];
-    })()`);
+     })()`);
+    if (mode === 'tiny') await heading(owner,'.live-account-cards .account-subscription .metric-value span:first-child',
+      'CCost Today:',/account.*local calendar day/);
     for(const [theme,scheme,width] of [['classic','light',1280],['web','dark',360],['web','light',1280]]) {
       for(const id of [owner,mini]) await command('Emulation.setEmulatedMedia',
         {features:[{name:'prefers-color-scheme',value:scheme}]},id);
@@ -39,7 +41,7 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts,full,p
               fits:n.scrollWidth<=n.clientWidth+1,
               same:n===${id===mini?'opener.':''}tinyNodes[${index}]};
           })()`);
-          assert.equal(facts.text,index===3?'CCost Today: '+expected:expected);
+           assert.equal(facts.text,expected);
           assert.equal(facts.same,true,'unit toggle preserves amount DOM');
           assert.ok(facts.width>0 && facts.fits,JSON.stringify(facts));
           if(index===1 || index===2) assert.equal(facts.aria,

@@ -274,7 +274,7 @@ async function main() {
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},owner);
       await evaluate(owner,`document.documentElement.dataset.theme='${theme==='classic'?'classic':'web'}';miniWatch.syncTheme()`);
       const cost=await interaction(owner,'.watch-active th:nth-child(6) button');
-       assert.match(cost,/not your bill[\s\S]*value for Incoming\/Extra CCost and model\/subagent details/);
+       require('../fixtures/ccost_definition.cjs')(cost, /this prompt.*linked subagent/);
       assert.doesNotMatch(cost,/displayed zero|N\/A|not zero|cannot be priced|Input token share/);
       const mix=await focus(owner,'.watch-active th:nth-child(8) button');
       assert.match(mix,/I \/ C \/ W \/ O[\s\S]*I — Input[\s\S]*C — Cached[\s\S]*W — Cache write[\s\S]*O — Output[\s\S]*reasoning/);
@@ -300,7 +300,7 @@ async function main() {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},owner);
       await evaluate(owner,`document.documentElement.style.zoom='${zoom}'`);
        const layout=await evaluate(owner,`(() => {const d=document.querySelector('.watch-daily');return {cues:document.querySelectorAll('.help-cue').length,targets:d.querySelectorAll('.help-value').length,overlaps:[...d.children].some((n,i)=>[...d.children].slice(i+1).some(m=>{const a=n.getBoundingClientRect(),b=m.getBoundingClientRect();return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;})),pageOverflow:document.documentElement.scrollWidth>innerWidth};})()`);
-       assert.equal(layout.cues,0);assert.equal(layout.targets,0);
+       assert.equal(layout.cues,0);assert.equal(layout.targets,1); // daily label, not the amount
       assert.equal(layout.overlaps,false);assert.equal(layout.pageOverflow,false);
        layouts.push({case:'daily-value-targets',width,zoom,...layout});
        for (const table of ['watch-active','watch-history']) {
@@ -331,7 +331,7 @@ async function main() {
     const heading=await focus(mini,'.mini-prompts > table th:nth-child(2) button');
      assert.equal(heading,'The name of the session.');
      const totalHeading=await focus(mini,'.mini-prompts > table th:nth-child(3) button');
-      assert.equal(totalHeading,"Reference cost of this session's latest represented prompt, including attributed linked subagent calls.");
+       require('../fixtures/ccost_definition.cjs')(totalHeading, /latest represented prompt.*linked subagent/);
     assert.equal(await evaluate(mini,`document.querySelector('#context-help script')===null`),true);
     await key(mini,'Escape');
     await evaluate(owner,`miniWatch.update=helpMiniUpdate;delete window.helpMiniUpdate;delete window.helpMiniEpoch;miniWatch.update(liveValue)`);

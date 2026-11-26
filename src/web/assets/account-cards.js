@@ -136,10 +136,12 @@ const AccountCards = (() => {
         this.root.dataset.exhausted = String([item().primary, ...item().secondary].some(q => ReportView.quotaView(q.quota, q).exhausted));
       });
       const cost = el('p', undefined, 'metric-value');
+      const todayHelp = "This account's reference cost for the local calendar day.";
+      cost.append(ContextHelp.value(el('span', 'CCost Today:'), ReportView.ccostHelp(todayHelp)), ' ');
       cost.append(ContextHelp.value(el('span', () => {
         const today = item().ccost_scopes.find(scope => scope.name === 'today');
-        return `CCost Today: ${display(today?.cost, 'account_ccost')}`;
-      }), "This account's reference cost for the local calendar day."));
+        return display(today?.cost, 'account_ccost');
+      }), todayHelp));
       const primary = el('div', undefined, 'watch-primary-details');
       quotaDetails(primary, () => item().primary);
       const track = quotaTrack(() => item().primary, () => this.capacityCurrent);

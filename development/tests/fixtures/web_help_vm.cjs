@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 module.exports = function loadHelp(vm, context) {
   const doc = context.document, sample = doc.createElement('div'), proto = Object.getPrototypeOf(sample);
-  if (!Object.getOwnPropertyDescriptor(proto, 'classList')) Object.defineProperty(proto, 'classList', {get() {
+  if (!('classList' in sample)) Object.defineProperty(proto, 'classList', {get() {
     return {toggle: (name, enabled) => {
       const names = new Set((this.className || '').split(' ').filter(Boolean));
       if (enabled) names.add(name); else names.delete(name); this.className = [...names].join(' ');
@@ -14,6 +14,12 @@ module.exports = function loadHelp(vm, context) {
   proto.contains ||= function(node) { return this === node || this.children.some(child => child.contains(node)); };
   if (!Object.getOwnPropertyDescriptor(proto,'isConnected')) Object.defineProperty(proto,'isConnected',{get:()=>true});
   if (!proto.helpEventsInstalled) {
+    // Browser append() converts literal separators/copy into text nodes.
+    const append = proto.append;
+    proto.append = function(...items) {
+      return append.call(this, ...items.map(item => typeof item === 'string' ?
+        Object.assign(new this.constructor('#text'), {textContent: item}) : item));
+    };
     const add = proto.addEventListener || function(kind, callback) { (this.events ||= {})[kind] = callback; };
     proto.addEventListener = function(kind, callback) {
       const old = this.events?.[kind];

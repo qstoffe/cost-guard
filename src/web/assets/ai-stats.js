@@ -8,13 +8,13 @@ const AIStatsView = (() => {
     'Overlapping work counts once. Individual models can have higher or lower hourly rates.';
   const definitions = [
     ['hourly-rate', '💸', 'AI Hourly Rate', idleRateHelp],
-    ['total-cost', '💰', 'Total AI Cost', 'Your token bonfire. Bring marshmallows.'],
-    ['subagent-cost', '🦾', 'Subagent Cost', 'The boss delegated. The bots sent the bill.'],
+    ['total-cost', '💰', 'Total AI Cost', 'Total reference cost in the selected period.'],
+    ['subagent-cost', '🦾', 'Subagent Cost', 'Reference cost of subagent work in the selected period.'],
     ['total-tokens', '🍿', 'Total Tokens', 'The robots have eaten the entire context buffet.'],
     ['token-rate', '🍽️', 'Token Consumption Rate', 'The silicon sprinters are racing for snacks.'],
     ['working-time', '⏱️', 'AI Working Time', 'Time on the robot clock.\n\nOverlapping calls share the same clock time.'],
-    ['average-cost', '📊', 'Average Cost per Session', 'The cover charge for a typical robot adventure.'],
-    ['expensive-session', '🏆', 'Most Expensive Session', 'The quest with the biggest token tab.'],
+    ['average-cost', '📊', 'Average Cost per Session', 'Average reference cost per session in the selected period.'],
+    ['expensive-session', '🏆', 'Most Expensive Session', 'Session with the highest reference cost in the selected period.'],
     ['longest-session', '🔥', 'Longest Session', 'The longest robot marathon in this period.'],
     ['busiest-day', '📅', 'Busiest Day', 'The calendar’s boss level.'],
     ['night-owl', '🦉', 'Night Owl', 'The robots brought night-vision goggles.\n\nWork between 10 pm and 6 am.'],
@@ -159,8 +159,11 @@ const AIStatsView = (() => {
           card.dataset.metric = key;
           const retained = {metric: null, podium: []};
           const hourly = key === 'hourly-rate', hasPodium = podiumMetrics.has(key), response = key === 'token-rate';
-          const heading = cardHeading(icon, title, () => retained.metric && (hourly || response || key === 'total-tokens') ?
-            ReportView.display(retained.metric, hourly ? 'rate_help' : response ? 'response_help' : 'token_help') : help);
+          const heading = cardHeading(icon, title, () => {
+            const context = retained.metric && (hourly || response || key === 'total-tokens') ?
+              ReportView.display(retained.metric, hourly ? 'rate_help' : response ? 'response_help' : 'token_help') : help;
+            return costMetrics.has(key) ? ReportView.ccostHelp(context) : context;
+          });
           const value = e('p', '', 'ai-stat-value'), detail = e('p', '', 'ai-stat-detail');
           const podium = e('div', undefined, 'ai-stat-podium');
           if (hasPodium) {

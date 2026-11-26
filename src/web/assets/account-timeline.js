@@ -138,7 +138,9 @@ const AccountTimelineView = (() => {
       this.selectionRead = null;
       this.width = 0;
       this.root = e('section', undefined, 'account-timeline');
-      const title = e('h2', 'CCost'), id = 'account-timeline-title';
+      const title = e('h2'), id = 'account-timeline-title';
+      title.append(ContextHelp.button('CCost',
+        ReportView.ccostHelp('Observed reference cost by account and period. Provider-native totals are separate.')));
       title.id = id;
       this.root.setAttribute('aria-labelledby', id);
       const filters = e('div', undefined, 'ai-stats-periods');
@@ -169,6 +171,11 @@ const AccountTimelineView = (() => {
       this.plot.append(this.shades, this.highlight, this.layers, this.labels, this.targets);
       this.scroller.append(this.plot);
       this.range = e('p', undefined, 'account-timeline-range');
+      this.observedCost = ContextHelp.value(e('span', 'Observed OpenCode daily CCost'),
+        ReportView.ccostHelp('Daily reference cost observed in OpenCode, separate from the provider’s total.'));
+      this.observedSeparator = document.createTextNode(' · ');
+      this.rangeLabel = e('span');
+      this.range.append(this.rangeLabel);
       this.selectedLegend = e('ul', undefined, 'account-timeline-selected');
       this.selectedLegend.setAttribute('role', 'list');
       this.selectedLegend.setAttribute('aria-label', 'Selected accounts');
@@ -548,8 +555,13 @@ const AccountTimelineView = (() => {
       const layout = sameGeometry ? this.layout : this.layout = layoutSlots(view, width);
       const {slots, group} = layout;
       this.range.hidden = !!unselected;
-      ReportView.text(this.range, (nativeMonth ? 'Observed OpenCode daily CCost · ' : '') +
-        `Range: ${rangeLabel(view, layout)}`);
+      if (nativeMonth && !this.observedCost.parentNode) {
+        this.range.prepend(this.observedCost, this.observedSeparator);
+      } else if (!nativeMonth && this.observedCost.parentNode) {
+        this.observedCost.remove();
+        this.observedSeparator.remove();
+      }
+      ReportView.text(this.rangeLabel, `Range: ${rangeLabel(view, layout)}`);
       if (!sameGeometry) {
         const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
         this.plot.style.setProperty('--timeline-min-width', `${minimum}px`);
