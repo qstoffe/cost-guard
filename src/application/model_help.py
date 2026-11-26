@@ -1,14 +1,39 @@
 """Request identity copy from recorded selectors, never labels or pricing guesses."""
+import re
+
 from src.domain.model_identity import CATALOG_ESTIMATE_HELP, catalog_display_name
 from src.reports.model_details import selected_effort
 
 from .effort_help import effort_help
 
 
+_TIMING_PARENTHETICAL = re.compile(r" \(linked by prompt timing\)", re.IGNORECASE)
+_TIMING_LINE = re.compile(r"(?:Subagent \d+ — )?linked by prompt timing", re.IGNORECASE)
+_RECORDED_SELECTION = re.compile(
+    r" \((?:catalog estimate; )?recorded .+\)(?= — (?:No request recorded|Pending;|Partial source;|Execution/inference))"
+)
+
+
+def without_legacy_timing_copy(text):
+    """Remove old tooltip decorations without changing the stored attribution."""
+    if "linked by prompt timing" not in text.casefold():
+        return text
+    return "\n".join(_TIMING_PARENTHETICAL.sub("", line) for line in text.split("\n")
+                     if not _TIMING_LINE.fullmatch(line))
+
+
+def _linked_selection_lines(item, *, concise=False):
+    lines = (without_legacy_timing_copy(line) for line in item.linked_model_selections)
+    if concise:
+        lines = (_RECORDED_SELECTION.sub("", line) for line in lines)
+    return dict.fromkeys(line for line in lines if line)
+
+
 def linked_selection_help(item):
-    if not item.linked_model_selections:
+    lines = _linked_selection_lines(item)
+    if not lines:
         return ""
-    return ("Selected/attempted subagents\n" + "\n".join("• " + line for line in item.linked_model_selections)
+    return ("Selected/attempted subagents\n" + "\n".join("• " + line for line in lines)
         + "\nRecorded selection only; not a confirmed executed contributor.")
 
 
@@ -17,8 +42,7 @@ def fixture_help(provider, model):
 
 
 def attribution_label(basis):
-    return {"inferred": "Linked by prompt timing",
-            "mixed": "Verified and timing-inferred work"}.get(basis, "")
+    return "Verified and timing-inferred work" if basis == "mixed" else ""
 
 
 def prompt_display_help(row):
@@ -55,8 +79,6 @@ def session_display_help(item):
         omitted = False
         for part in models:
             label = f"{part.provider}/{part.display_model or part.model}"
-            if part.display_model and part.display_model != part.model:
-                label += f" [recorded: {part.model}]"
             efforts = {}
             for evidence in part.efforts:
                 key = selected_effort(evidence.selected)
@@ -90,7 +112,7 @@ def session_display_help(item):
         agents.append("No subagent model was used." if item.contributor_models_complete and not item.linked_agent_count
                       else "No executed subagent model is verified.")
     agents.extend(f"Selected/attempted: {selection} — execution not verified."
-                  for selection in item.linked_model_selections)
+                   for selection in _linked_selection_lines(item, concise=True))
     if not item.contributor_models_complete:
         for lines in (main, agents):
             lines.append("Observed model coverage may be incomplete.")

@@ -1,10 +1,12 @@
 """Persist completed detail projections without native snapshots or raw tool data."""
+from dataclasses import replace
 import logging
 import sqlite3
 
 from src.cache.web_archive import ArchiveFact
 from src.cache.prompt_range import DETAIL_DOMAIN as DOMAIN
 
+from .model_help import without_legacy_timing_copy
 from .projection import identity, project
 from .session_activity import ActivityHistory, activity_summary
 from .session_values import value_authority
@@ -84,7 +86,13 @@ def readable_detail(key, candidates):
                 readable.append(fact)
         except (KeyError, TypeError, ValueError):
             continue
-    return _reconcile(key, readable) if readable else None
+    if not readable:
+        return None
+    fact = _reconcile(key, readable)
+    view = fact.value['view']
+    block, = view['prompt_blocks']
+    rows = [_current_row_help(row) for row in block['rows']]
+    return replace(fact, value={**fact.value, 'view': {**view, 'prompt_blocks': [{**block, 'rows': rows}]}})
 
 
 def _reconcile(key, candidates):
@@ -139,6 +147,33 @@ def _fill_display(current, old, names):
     return {**current, **fields, 'display': merge(current.get('display') or {}, old.get('display') or {}),
             'display_units': {unit: merge(values, old_units.get(unit, {}))
                               for unit, values in (current.get('display_units') or {}).items()}}
+
+
+def _current_row_help(row):
+    """Refresh only tooltip text in pre-rendered detail rows, including unit overlays."""
+    def clean_text(values, keys):
+        return {**values, **{key: without_legacy_timing_copy(values[key]) for key in keys
+                            if isinstance(values.get(key), str)}}
+
+    def clean_display(display):
+        display = clean_text(display, ('model_detail_help', 'main_model_help', 'calls_help', 'cost_detail_help'))
+        if 'mini_cost_models' in display:
+            display['mini_cost_models'] = [
+                [role, without_legacy_timing_copy(model)] for role, model in display['mini_cost_models']
+            ]
+        return display
+
+    row = clean_text(row, ('model_display_help', 'watch_calls_help'))
+    if 'display' in row:
+        row['display'] = clean_display(row['display'])
+    if 'display_units' in row:
+        row['display_units'] = {unit: clean_display(display) for unit, display in row['display_units'].items()}
+    detail = row.get('cost_detail')
+    if detail and 'attributed_agents' in detail:
+        row['cost_detail'] = {**detail, 'attributed_agents': [
+            clean_text(agent, ('label',)) for agent in detail['attributed_agents']
+        ]}
+    return row
 
 
 def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisition, runtime=None, size=None):

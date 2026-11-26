@@ -13,7 +13,8 @@ def models_source(source, *, updated=False):
         main = f"Model-{index:02}"
         if index == 4:
             main += "-" + "long-model-name-" * 12
-        requests = tuple(replace(request, model=ModelRef("main-provider", main if number else "Earlier"),
+        earlier = ModelRef("anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5")
+        requests = tuple(replace(request, model=ModelRef("main-provider", main) if number else earlier,
             variant="high") for number, request in enumerate(snapshot.invocations))
         if index == 0:
             requests = tuple(replace(request, variant=effort) for request, effort in

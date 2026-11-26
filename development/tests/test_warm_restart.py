@@ -17,7 +17,7 @@ from development.tests.fixtures.synthetic_month import SyntheticMonthSource, mak
 from development.tests.test_account_timeline import NOV_5, projected
 from development.tests.fixtures.session_snapshots import DAY as DAY_MS
 from src.application.account_timeline import account_roster
-from src.application.detail_archive import load_detail
+from src.application.detail_archive import DOMAIN as DETAILS, load_detail
 from src.application.session_archive import DOMAIN as SESSIONS, SessionArchive
 from src.application.session_catalog import SessionCatalog
 from src.application.session_quota import source_scope
@@ -282,6 +282,32 @@ class DisplayHistoryTests(unittest.TestCase):
         self.tick(second, replacement)
         self.assertEqual(2, second.page(period='all')['total'])
         self.assertEqual(7, self.request_count(reopened, replacement))
+
+    def test_stored_detail_help_replays_child_cost_and_calls_without_old_timing_labels(self):
+        model = 'github-copilot/claude-test — Low'
+        decorated = model + ' (Linked by prompt timing)'
+        def cost(label, amount):
+            return f'Sub Agents:\n• {label} — ({amount})'
+
+        row = dict(event_id='p1', ccost='102', calls=1,
+                   model_display_help='Subagent 1 (Linked by prompt timing) — ' + model,
+                   watch_calls_help=model + ': 1 calls\nSubagent 1 — Linked by prompt timing',
+                   display=dict(cost_detail_help=cost(decorated, '102 Credits'),
+                                mini_cost_models=[['Sub Agents', decorated]]),
+                   display_units={'usd': dict(cost_detail_help=cost(decorated, '$1.02'))})
+        fact = ArchiveFact('old', self.now, {'view': {'prompt_blocks': [{'session_id': 'root', 'rows': [row]}]}})
+        archive, _ = self.restore('old')
+        archive.publish('original', DETAILS, {'root': fact})
+
+        replay = load_detail(WebArchive(self.directory), 'root')
+
+        current, = replay.value['view']['prompt_blocks'][0]['rows']
+        self.assertEqual(('102', 1), (current['ccost'], current['calls']))
+        self.assertEqual('Subagent 1 — ' + model, current['model_display_help'])
+        self.assertEqual(model + ': 1 calls', current['watch_calls_help'])
+        self.assertEqual([['Sub Agents', model]], current['display']['mini_cost_models'])
+        self.assertEqual(cost(model, '102 Credits'), current['display']['cost_detail_help'])
+        self.assertEqual(cost(model, '$1.02'), current['display_units']['usd']['cost_detail_help'])
 
     def test_unrecognized_summary_shape_keeps_readable_fields_without_reviving_running(self):
         source = self.source(1, 8)
