@@ -105,9 +105,13 @@ async function main() {
   assert.equal(states.at(-1).kind, 'connected', 'recent healthy visibility return does not invent an outage');
   await turns();
   now += 20000;
+  const priorProbe = states.at(-1).authenticatedAt, priorCalls = calls;
   vm.runInContext('connection.resync()', context);
-  assert.equal(states.at(-1).kind, 'reconnecting', 'stale idle resume invalidates retained DOM before fetching');
+  assert.equal(states.at(-1).kind, 'connected', 'elapsed time alone is not an observed disconnect');
+  assert.equal(states.at(-1).authenticatedAt, priorProbe, 'foreground alone cannot authenticate the snapshot');
   await turns();
+  assert.equal(calls, priorCalls + 1);
+  assert.equal(states.at(-1).authenticatedAt, now);
    const start = states.length;
   for (let n = 0; n < 120; n++) await tick();
    assert.ok(states.slice(start).every(s => s.kind === 'connected'), 'twenty healthy virtual minutes never flap');
