@@ -375,9 +375,11 @@ class DisplayHistoryTests(unittest.TestCase):
 
     def test_page_reads_prior_commit_under_live_writer_and_catalog_locks_then_sees_publication(self):
         notices = []
-        archive = WebArchive(self.directory, retain_writer=True, notify_sessions=notices.append)
+        archive = WebArchive(self.directory, retain_writer=True, retain_session_readers=True,
+                             notify_sessions=notices.append)
         archive.initialize()
         self.addCleanup(archive.close_writer)
+        self.addCleanup(archive.close_session_readers)
         catalog = SessionCatalog(archive=archive, clock_ms=lambda: self.now)
         self.addCleanup(catalog.close)
         def publish(live, *, pending):
@@ -532,12 +534,14 @@ class DisplayHistoryTests(unittest.TestCase):
         self.tick(catalog, source)
         key, deleted = 'root-0000', 'root-0001'
         ready = catalog.page(period='all')['view']['session_usage']
+        self.assertTrue(catalog.page(period='today')['history_progress']['complete'])
         self.assertTrue(ready)
         self.assertNotIn(key, {row['session_id'] for row in ready})
         self.assertNotIn(deleted, {row['session_id'] for row in ready})
         del source.snapshots[deleted]  # Discovered, never enriched.
         active = self.source(1, 2, today_roots=1, now_ms=self.now, running_roots=1).snapshots[key]
-        active = replace(active, source_revision='takeover')
+        root = replace(active.root, created_at_ms=source.snapshots[key].root.created_at_ms)
+        active = replace(active, root=root, sessions=(root,), source_revision='takeover')
         source.snapshots[key] = active
         observe()
         with patch.object(source, 'load_session_snapshot', wraps=source.load_session_snapshot) as reads:
@@ -560,6 +564,13 @@ class DisplayHistoryTests(unittest.TestCase):
         entry = SimpleNamespace(snapshot=final, capture=capture, generation=1, verified_generation=1,
                                 source_status=SimpleNamespace(failed_at=None))
         publish_catalog_prompts(catalog, SimpleNamespace(sessions={key:entry}, source_epoch='one'), offer_snapshots=False)
+        self.assertTrue(catalog.page(period='today')['history_progress']['complete'])
+        # The old root ended without a committed historical row. Let the
+        # presentation grace expire without hydrating or changing the period.
+        self.now += 180_000
+        observe()
+        self.assertTrue(catalog.page(period='today')['history_progress']['complete'])
+        self.assertNotIn(key, {item for item, _ in archive.history_rows(SESSIONS)})
         # One Live read may establish the end before a distinct qualified
         # finalization. The forbidden duplicate is a replay *after* publication.
         for _ in range(2):
@@ -729,7 +740,10 @@ class DisplayHistoryTests(unittest.TestCase):
         # Same-source refresh, genuinely new work, and late discovery of a
         # week-only root arrive together. Do not run an archive tick to hide a restart.
         source.snapshots[recent] = replace(source.snapshots[recent], source_revision='new-prompt')
-        add(2, self.now + 1000)
+        created = self.now + 1000
+        self.now += 2000
+        observe()  # This tick misses the Live addition.
+        arrival = add(2, created)
         add(3, self.now - 2 * DAY_MS)
         self.now += 3000
         observe()
@@ -739,10 +753,22 @@ class DisplayHistoryTests(unittest.TestCase):
             self.assertFalse(catalog.page(period='7-days')['history_progress']['complete'])
             self.assertTrue(catalog.page(period='today')['history_progress']['complete'])
 
-        catalog.observe(None)
-        progress = catalog.page(period='today')['history_progress']
-        self.assertFalse(progress['complete'])
-        self.assertTrue(progress['recovering'])
+        for confirmed in (False, True):
+            catalog.observe(None, source_interrupted=confirmed)
+            page = catalog.page(period='today')
+            self.assertEqual(not confirmed, page['history_progress']['complete'])
+            self.assertEqual(confirmed, page['history_progress']['recovering'])
+            self.assertEqual([recent], [r['session_id'] for r in page['view']['session_usage']])
+
+        gap = add(4, self.now + 1000)
+        self.now += 3000
+        observe()
+        self.assertFalse(catalog.page(period='today')['history_progress']['complete'])
+        for _ in range(3):
+            self.tick(catalog, source)
+        recovered = catalog.page(period='today')
+        self.assertTrue(recovered['history_progress']['complete'])
+        self.assertEqual({recent, arrival, gap}, {r['session_id'] for r in recovered['view']['session_usage']})
 
     def test_short_prompt_discovered_and_finished_before_history_catches_up(self):
         from concurrent.futures import ThreadPoolExecutor
