@@ -24,7 +24,7 @@ def current_tool_details(snapshot, capture, row, now_ms, origins):
     return replace(aggregate, **{name: getattr(fresh, name) for name in (
         'running_invocation', 'background_invocation', 'running_invocations',
         'background_invocations', 'failed_invocations', 'running_tool', 'running_ms',
-        'running_invocation_count', 'background_invocation_count', 'background_kinds', 'background_ms')})
+        'running_invocation_count', 'running_starts', 'background_invocation_count', 'background_kinds', 'background_ms')})
 
 
 @dataclass(frozen=True, slots=True)

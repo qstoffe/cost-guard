@@ -123,12 +123,14 @@ def running_invocation(part, origin, history, *, budget, fallback_start):
         return None
     kind = shell_kind(part)
     inputs = tool_input(part.data)
-    if kind not in SHELL_TOOLS:
-        return _part_detail(part, kind, inputs, budget, fallback_start)
-    start, anchor = foreground_start(part)
-    timing = history.timing(part, inputs, start=start, anchor=anchor, mode='foreground',
-                            comparable=inputs.get('background') is not True and not part.data.get('detached_job'))
-    return _part_detail(part, kind, inputs, budget, start or fallback_start, timing)
+    start, timing = fallback_start, None
+    if kind in SHELL_TOOLS:
+        execution_start, anchor = foreground_start(part)
+        timing = history.timing(part, inputs, start=execution_start, anchor=anchor, mode='foreground',
+                                 comparable=inputs.get('background') is not True and not part.data.get('detached_job'))
+        start = execution_start or fallback_start
+    return replace(_part_detail(part, kind, inputs, budget, start, timing),
+                   visibility_start_ms=fallback_start)
 
 
 def failed_invocations(parts, origin, *, budget=MAX_INPUT_TEXT):

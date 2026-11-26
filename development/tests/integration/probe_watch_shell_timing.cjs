@@ -56,7 +56,7 @@ module.exports = async (evaluate, command, session) => {
     const linked = tool.running_invocations, legacy = tool.running_invocation;
     tool.running_invocations = []; tool.running_invocation = null; render();
     const withheld = root.node.open && !timing.isConnected && !timing.textContent.includes('2026-') && !job.input.textContent
-      && /original call details.*not available/i.test(root.node.innerText);
+      && /no source-qualified call details/i.test(root.note.innerText) && !root.note.querySelector('.metric-spinner');
     tool.running_invocations = linked; tool.running_invocation = legacy; render();
     const recovered = root.node.open && !job.node.open && job.timing.node.isConnected;
     const lastNode = job.timing.node;

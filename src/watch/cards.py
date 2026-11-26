@@ -1,4 +1,5 @@
 """Web history membership and prompt-card lifecycle; no CLI retention changes."""
+from bisect import bisect_right
 from dataclasses import dataclass, field, replace
 
 from .invocation import invocation_scope
@@ -47,6 +48,8 @@ class CardSession:
     retry_at_ms: int = 0
     admitted_at_ms: int | None = None
     terminal_failure: bool = False
+    admitted_generation: int = 0
+    awaiting_invocation_revision: bool = False
 
 
 class WatchCards:
@@ -106,6 +109,13 @@ class WatchCards:
                 if entry.revision != revision or (key in previous[0]) != (key in self.active_candidates):
                     self.generation += 1
                     entry.revision, entry.generation = revision, self.generation
+                    # The worker can bracket a newer source revision before the
+                    # Live catalog sees it. The next catalog change may confirm
+                    # that exact invocation evidence before the next card read.
+                    if (entry.awaiting_invocation_revision and revision == entry.snapshot.source_revision
+                            and entry.source_status.failed_at is None):
+                        entry.invocation_generation = entry.generation
+                    entry.awaiting_invocation_revision = False
                     # Keep visible history and its coherent metrics during refresh.
                     # Evicted captures still need fresh ranking before selection.
                     if entry.capture is None:
@@ -122,7 +132,10 @@ class WatchCards:
 
     def accept(self, result, now_ms):
         entry = self.sessions.get(result.session_id)
-        if entry is None or entry.generation != result.generation:
+        if entry is None:
+            return
+        late = entry.generation != result.generation
+        if late and (result.phase != "rows" or result.generation != entry.admitted_generation):
             return
         if (entry.capture is not None and result.captured_at_ms is not None
                 and result.captured_at_ms < entry.capture.observed_at_ms):
@@ -137,10 +150,13 @@ class WatchCards:
             source_rows = capture.rows
             if (capture.session_id != entry.root.session_id or (snapshot is not None and
                     (snapshot.root.session_id != entry.root.session_id
-                     or snapshot.root.provenance != entry.root.provenance))):
+                     or snapshot.root.provenance != entry.root.provenance
+                     or capture.source_epoch != self.source_epoch))):
                 entry.refresh_requested = entry.retry_on_tick = True
                 return
             revision_matches = snapshot is None or snapshot.source_revision == entry.revision
+            if late and (snapshot is None or not capture.authoritative or not revision_matches):
+                return
             if entry.capture is not None and capture.observed_at_ms < entry.capture.observed_at_ms:
                 return
             previous = {row.event_id: row for row in entry.capture.rows} if entry.capture else {}
@@ -199,14 +215,16 @@ class WatchCards:
             # union used for historical accounting. Missing old history is not a
             # reason to hide a currently verified physical call's safe input.
             entry.invocation_generation = entry.generation if capture.authoritative and revision_matches else 0
+            entry.awaiting_invocation_revision = capture.authoritative and not revision_matches
             entry.latest_ms = capture.latest_ms
             representative = capture.history_row
             entry.finished_ms = (representative.completed_at_ms or 0) if representative else 0
             entry.state = "partial" if capture.retained else "observed"
             if capture.authoritative and revision_matches:
                 entry.source_status.clear()
-            if capture.authoritative and revision_matches:
                 entry.verified_generation = entry.generation
+                if late:
+                    entry.refresh_requested = False
                 entry.retry_on_tick = False
                 entry.retry_at_ms = entry.failures = 0
                 entry.terminal_failure = False
@@ -226,6 +244,7 @@ class WatchCards:
                 self._backoff(entry, now_ms)
         else:
             entry.source_status.fail(result.value)
+            entry.awaiting_invocation_revision = False
             entry.failure_code = str(getattr(result.value, "code", "unknown_source_failure"))
             entry.refresh_requested = True
             entry.retry_on_tick = True
@@ -381,6 +400,7 @@ class WatchCards:
                 entry = self.sessions[request.root.session_id]
                 entry.refresh_requested = False
                 entry.admitted_at_ms = now_ms
+                entry.admitted_generation = request.generation
                 # Revisions and rejected results must not reset queue position:
                 # otherwise changing early IDs can starve a stopped running card.
                 entry.admission_order = admission_turns[request.root.session_id]
@@ -392,6 +412,7 @@ class WatchCards:
                 if key not in self.workers.jobs:
                     entry.capture = None
                     entry.cost.evidence = None
+                entry.awaiting_invocation_revision = False
 
     def _tick_costs(self, now_ms):
         if self.costs is None:
@@ -425,12 +446,18 @@ class WatchCards:
                     tool = without_live_activity(tool)
                 elapsed = max(0, tool.running_ms - RUNNING_VISIBLE_AFTER_MS + now_ms - capture.observed_at_ms)
                 show_running = row.in_progress and elapsed >= RUNNING_VISIBLE_AFTER_MS
+                cutoff = now_ms - RUNNING_VISIBLE_AFTER_MS
+                details = tuple(detail for detail in tool.running_invocations
+                    if (detail.visibility_start_ms or detail.started_at_ms) <= cutoff) if show_running else ()
+                visible_count = (bisect_right(tool.running_starts, cutoff) if tool.running_starts
+                                 else tool.running_invocation_count) if show_running else 0
+                legacy_detail = tool.running_invocation if show_running and not tool.running_invocations else None
                 tool = replace(tool, running_tool=tool.running_tool if show_running else "",
                     running_ms=elapsed if show_running else 0,
-                    running_invocation=tool.running_invocation if show_running else None,
-                    running_invocations=tuple(detail for detail in tool.running_invocations
-                        if now_ms - detail.started_at_ms >= RUNNING_VISIBLE_AFTER_MS) if show_running else (),
-                    running_invocation_count=tool.running_invocation_count if show_running else 0,
+                    running_invocation=details[0] if details else legacy_detail,
+                    running_invocations=details,
+                    running_invocation_count=visible_count,
+                    running_starts=(),
                     # Canonical fresh lifecycle also includes linked child work,
                     # which need not have a background-registry invocation.
                     background_kinds=row.background_kinds if row.in_progress else (),
@@ -440,9 +467,11 @@ class WatchCards:
                     background_ms=max(0, now_ms - row.background_started_ms)
                         if row.in_progress and row.background_kinds else 0)
                 if not invocation_verified or row.execution_unverified:
+                    unavailable = (state == "unavailable" or entry.terminal_failure or row.execution_unverified
+                        or entry.history_status.state(retained=True) == "unavailable")
                     tool = replace(tool, running_invocation=None, background_invocation=None,
                         running_invocations=(), background_invocations=(), failed_invocations=(),
-                        detail_state="invalidated" if state == "unavailable" or row.execution_unverified else "pending")
+                        detail_state="invalidated" if unavailable else "pending")
             projected.append(WatchRow(capture.session_id, capture.title, row, marker, tool))
         return WatchCard(capture.session_id, capture.title, focal.event_id if focal else "",
             tuple(projected), state,

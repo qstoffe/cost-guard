@@ -2,12 +2,16 @@ const assert = require('node:assert/strict');
 
 // Session Detail via its real route, qualified synthetic detail + Live publications.
 module.exports = async ({evaluate, until, fixture}) => {
+  await fixture('date-shell-pending');
+  await until(`current.detail.invocations.running.summary.checkVisibility()`);
+  await evaluate(`window.shellDetail = current.detail.invocations.running; shellDetail.summary.click()`);
+  await until(`shellDetail.note.querySelector('.metric-spinner[aria-label="Loading tool call details"]')?.checkVisibility()`);
   await fixture('date-shell-open');
   const started = '2026-03-29 01:45:20 (native execution start)';
   await until('current.detail.invocations.running.jobs.size === 1');
-  await evaluate(`window.shellDetail = current.detail.invocations.running;
-    shellDetail.summary.click();
-    window.shellJob = [...shellDetail.jobs.values()][0];
+  assert.equal(await evaluate(`shellDetail.node.open && !shellDetail.note.querySelector('.metric-spinner') &&
+    shellDetail.list.innerText.includes('python fixture_task.py')`), true);
+  await evaluate(`window.shellJob = [...shellDetail.jobs.values()][0];
     shellJob.input.scrollIntoView({block:'nearest'});
     shellDetail.summary.focus({preventScroll:true});
     window.shellInput = shellJob.input.firstChild;
@@ -36,8 +40,12 @@ module.exports = async ({evaluate, until, fixture}) => {
   assert.equal(await evaluate('shellDetail.node.open'), false);
   await evaluate('shellDetail.summary.click()');
   assert.equal(await evaluate('shellDetail.node.open && shellJob.node.open'), true);
+  await fixture('date-shell-absent');
+  await until(`shellDetail.node.open && shellDetail.note.innerText.includes('No source-qualified call details')`);
+  assert.equal(await evaluate(`!!shellDetail.note.querySelector('.metric-spinner') ||
+    shellDetail.list.textContent.includes('fixture_task.py')`), false);
   await fixture('date-shell-clear');
   await until('current.detail.invocations.root.hidden');
   assert.equal(await evaluate('shellDetail.jobs.size === 0 && !shellJob.input.textContent'), true);
-  return ['Session Detail qualified Shell start/ETA/deadline to seconds, source zone shift, live elapsed countdown, stable focus/selection/scroll, close/reopen and cleared inputs'];
+  return ['Expanded Session Detail spinner resolves automatically to the qualified command and timing; stable focus/selection/scroll across ticks, settled absence without stale input, then removal'];
 };

@@ -50,6 +50,7 @@ class ToolInvocation:
     started_at_ms: int = 0
     mode: str = "foreground"
     shell_timing: ShellTiming | None = None
+    visibility_start_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +84,7 @@ class ToolObservation:
     failed_invocations: tuple[ToolFailure, ...] = ()
     # Pending means only prior UI membership may survive, never prior input.
     detail_state: str = "observed"
+    running_starts: tuple[int, ...] = ()
 
     @property
     def cancelled_count(self) -> int:

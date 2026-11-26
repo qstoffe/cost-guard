@@ -23,7 +23,8 @@ def running_detail(item):
 
 def card_row(row, now_ms, invocation_verified=True, detail_state="observed"):
     tool = row.tool
-    detail_state = detail_state if detail_state != "observed" or tool is None else tool.detail_state
+    if tool is not None and detail_state != "invalidated" and tool.detail_state != "observed":
+        detail_state = tool.detail_state
     if row.prompt.execution_unverified or not invocation_verified and detail_state == "observed":
         detail_state = "invalidated"
     activity_verified = invocation_verified and detail_state == "observed"
@@ -77,6 +78,7 @@ def card(value, now_ms):
         activity_scope=value.activity_scope,
         invocation_verified=value.invocation_verified,
         rows=tuple(card_row(row, now_ms, value.invocation_verified if value.invocation_verified is not None else value.state == "observed",
+            "invalidated" if value.state == "unavailable" else
             "observed" if value.invocation_verified or value.state == "observed" else
             "pending" if value.state in {"partial", "pending", "loading", "refreshing", "retrying", "retained"}
             else "invalidated") for row in value.rows), state=value.state,
