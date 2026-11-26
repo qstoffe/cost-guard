@@ -2,11 +2,13 @@
 from dataclasses import replace
 
 
-def _pending_value(catalog, key, active):
-    if key in active or key not in catalog.roots:
+def _pending_value(catalog, key, live_roots):
+    if key not in catalog.roots:
         return None
     if catalog._archive_unavailable(key):
         return catalog.activity.get(key), True
+    if key in live_roots:
+        return None
     if key in catalog.history_pending:
         previous = catalog.archive.authorities.get(key)
         if previous is None or previous[3] != catalog.archive_target:
@@ -50,7 +52,8 @@ def publish_report_runtime(catalog, keys=None):
     """Publish under the caller's catalog lock; report reads do not enter it."""
     if not catalog.archive.loaded:
         return
-    status = catalog.state, catalog.index_terminal
+    state = 'observed' if catalog.history_observed() else catalog.state
+    status = state, catalog.index_terminal
     live_roots = catalog.running_roots | catalog.recent_finishes.keys()
     live_keys = live_roots | catalog.report_live.keys() if keys is None else keys
     live = {}
@@ -63,10 +66,10 @@ def publish_report_runtime(catalog, keys=None):
                         catalog.archive_rejections.keys() | catalog.failures.keys())
     else:
         pending_keys = keys
-    active = catalog.active | catalog.running_roots | catalog.live_arrivals
+    progress_live_roots = catalog.history_progress_live_roots()
     pending = {}
     for key in pending_keys:
-        value = _pending_value(catalog, key, active)
+        value = _pending_value(catalog, key, progress_live_roots)
         if catalog.report_pending.get(key) != value:
             pending[key] = value
     if status == catalog.report_status and not pending and not live:

@@ -109,7 +109,8 @@ class SessionCatalog:
         self.orders = OrderedDict()
         self.discovery = {}
         self.recent_arrivals = {}
-        self.live_arrivals = set()
+        self.live_owned = set()
+        self.continuous_since_ms = None
         self.discovery_sequence = 0
         self.preview_totals = {}
         self.wake_identity = uuid4().hex
@@ -149,11 +150,13 @@ class SessionCatalog:
                 self.history_pending.clear()
                 self.history_queue.clear()
                 self.finalize_roots.clear()
-                self.live_arrivals.clear()
+                self.live_owned.clear()
+                self.continuous_since_ms = None
                 self.report_live_costs.clear()
                 self.rows.clear()
                 self.valid.clear()
                 self.orders.clear()
+                self.state = 'loading'
                 self.wake_revision += 1
                 self._publish_report_runtime()
             return self.archive.partition, self.archive_target
@@ -304,7 +307,8 @@ class SessionCatalog:
                     self.interrupted = True
                     self.lifecycle_cutoff_ms = self.clock_ms()
                     self.recent_finishes.clear()
-                    self.live_arrivals.clear()
+                    self.live_owned.clear()
+                    self.continuous_since_ms = None
                     self.report_live_costs.clear()
                 self.state = "source_unavailable"
                 if self.archive is not None:
@@ -343,14 +347,16 @@ class SessionCatalog:
             if self.observed is not None and not source_changed:
                 added = self.roots.keys() - previous_roots.keys()
                 self.recent_arrivals.update((key, now) for key in added)
-                since_ms = None if self.interrupted or self.archive is None else self.observed_ms
-                self.live_arrivals = retain_live_arrivals(
-                    self.live_arrivals, self.roots, previous_roots, added, since_ms, now_ms)
+                self.live_owned = retain_live_arrivals(
+                    self.live_owned, self.roots, previous_roots, added, self.continuous_since_ms, now_ms)
                 if added:
                     self.background_due = min(self.background_due, now + 15)
             elif source_changed:
                 self.background_due = now
-                self.live_arrivals.clear()
+                self.live_owned.clear()
+                self.continuous_since_ms = None
+            if self.archive is not None and self.continuous_since_ms is None:
+                self.continuous_since_ms = now_ms
             self.discovery = {key: age for key, age in self.discovery.items() if key in self.roots}
             for key in self.roots:
                 if key not in self.discovery:
@@ -459,7 +465,8 @@ class SessionCatalog:
             return None
         now = self.clock()
         while (key := self.history_queue.next(now)) is not None:
-            if self._archive_live_candidate(key) or key in self.recent_finishes or key in self.finalize_roots:
+            if (self._archive_live_candidate(key) or key in self.recent_finishes or key in self.finalize_roots
+                    or key in self.live_owned):
                 self.history_queue.remove(key)
             elif self._eligible(key):
                 return self.history_queue.next(now, take=take)
@@ -474,9 +481,13 @@ class SessionCatalog:
         return self.active | self.running_roots | self._new_live_roots()
 
     def history_progress_live_roots(self):
-        """Live additions do not reopen historical acquisition when their UI grace expires."""
-        return self._archive_urgent() | self.live_arrivals | {
-            key for key in self.prompt_activity if self._finish_known(key)}
+        """Live ownership outlives Running, finalization and the display grace period."""
+        return self.active | self.running_roots | self.finalize_roots | self.live_owned
+
+    def history_observed(self):
+        """A transient failed tick does not revoke the last observed coverage."""
+        return self.state == 'observed' or (
+            self.state == 'source_unavailable' and self.observed is not None and not self.interrupted)
 
     def history_refresh_roots(self):
         return self.archive.refresh_roots(self.history_pending, self.archive_target)
@@ -644,6 +655,8 @@ class SessionCatalog:
         self.prompt_activity[key] = evidence
         if evidence.running:
             self.running_roots.add(key)
+            if self.archive is not None:
+                self.live_owned.add(key)
             self.history_queue.remove(key)
             if wake and (not was_running or previous is not None and previous.identity != evidence.identity):
                 self.urgent_takeover.add(key)
@@ -753,7 +766,8 @@ class SessionCatalog:
 
     def _archive_urgent(self):
         return ({key for key in self.active if self._archive_live_candidate(key)} |
-                self.running_roots | self._new_live_roots() | self.recent_finishes.keys() | self.finalize_roots)
+                self.running_roots | self._new_live_roots() | self.recent_finishes.keys() | self.finalize_roots |
+                self.live_owned & self.history_pending.keys())
 
     def _archive_live_candidate(self, key):
         if self._running(key):

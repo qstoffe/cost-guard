@@ -66,7 +66,7 @@ class WebHost:
             previous = store.directory if store else previous_archive_directory
             if directory is not None:
                 archive = WebArchive(directory, previous_directory=previous, retire_previous=previous is not None,
-                    retain_writer=True,
+                    retain_writer=True, retain_session_readers=True,
                     notify_sessions=lambda times: self.session_cache_events.committed(times))
             usage = ArchivedUsage(archive) if archive is not None else None
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
@@ -240,8 +240,8 @@ class WebHost:
                         driver = self.live.driver
                         selection = driver.coordinator.report_service.selection if driver else None
                         self.history_reports.tick(selection=selection,
-                            config=self.history_config, catalog=self.live.catalog,
-                            ready=bool(driver and driver.error is None and self.live.observed.is_set()),
+                             config=self.history_config, catalog=self.live.catalog,
+                             ready=bool(driver and not driver.terminal and self.live.catalog.history_observed()),
                             price_signature=self.dependencies.reference_signature,
                             foreground=self.dispatcher.history_foreground())
                         self._tick_history_accounts(selection)
@@ -290,20 +290,20 @@ class WebHost:
                     self.runtime_failed(RuntimeError("web_listener_shutdown_timeout"))
             try:
                 try:
-                    try:
-                        self.benchmark.close()
-                    finally:
-                        self.jobs.close()
+                    self.events.close(self.reason or "runtime_fault")
+                    self.server.server_close()
                 finally:
                     try:
+                        try:
+                            self.benchmark.close()
+                        finally:
+                            self.jobs.close()
+                    finally:
                         try:
                             if self.live:
                                 self.live.close()
                         finally:
                             self._close_history()
-                    finally:
-                        self.events.close(self.reason or "runtime_fault")
-                        self.server.server_close()
             except BaseException as error:
                 self.runtime_failed(error)
             finally:
@@ -334,10 +334,16 @@ class WebHost:
             raise
         finally:
             try:
-                if not self.thread and self.live:
-                    self.live.close()
                 if not self.thread:
-                    self._close_history()
+                    try:
+                        if self.server:
+                            self.server.server_close()
+                    finally:
+                        try:
+                            if self.live:
+                                self.live.close()
+                        finally:
+                            self._close_history()
             finally:
                 # Preserve actual use queued since the last host-loop flush. The
                 # finite drain fails soft on contention; never acquire source here.
@@ -363,7 +369,11 @@ class WebHost:
                         self.watch_history.close()
                 finally:
                     if self.history_reports:
-                        self.history_reports.archive.close_writer()
+                        archive = self.history_reports.archive
+                        try:
+                            archive.close_session_readers()
+                        finally:
+                            archive.close_writer()
 
     def _tick_history_accounts(self, selection):
         accounts, source, observation, captured_at = self.live.account_observation
@@ -371,8 +381,8 @@ class WebHost:
         terminal = self.live.source_failure is not None or (self.live.driver is not None and self.live.driver.terminal)
         catalog = self.live.catalog
         with catalog.lock:
-            covered = (available and observation is not None and observation is catalog.last_observation
-                       and catalog.state == 'observed')
+            covered = (not terminal and observation is not None and observation is catalog.last_observation
+                       and catalog.history_observed())
             unavailable = catalog.unavailable_history()
             live_roots = frozenset(catalog.history_live_roots())
             progress_roots = frozenset(catalog.history_progress_live_roots()), frozenset(catalog.history_refresh_roots())

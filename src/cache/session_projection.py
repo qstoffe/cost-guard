@@ -1,4 +1,5 @@
 """Indexed ready Sessions metadata; display payloads are loaded only for the page."""
+from contextlib import closing
 import json
 from decimal import Decimal
 
@@ -168,7 +169,7 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
 
     # Keep payloads out of the counts, sort and offset work. JSON transports
     # only the visible slice; payloads remain unmodified strings.
-    row = db.execute(f'''WITH
+    with closing(db.execute(f'''WITH
         args(run, requested, size) AS (VALUES (?, ?, ?)),
         live AS (
             SELECT item, start_ms, finish_ms, EXISTS (
@@ -216,7 +217,8 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
         FROM position CROSS JOIN args
         LEFT JOIN session_runtime AS runtime ON runtime.run=args.run''',
         (run, offset, size, *live_bounds, *ready_bounds, *ready_bounds,
-         *pending_bounds, *pending_bounds, SESSIONS_DOMAIN)).fetchone()
+          *pending_bounds, *pending_bounds, SESSIONS_DOMAIN))) as cursor:
+        row = cursor.fetchone()
     total, offset, cached, state, terminal, complete, unavailable, historical, live = row
     runtime = None if state is None else (state, terminal)
     return total, offset, _page_rows(historical), _page_rows(live), cached, runtime, (bool(complete), unavailable)

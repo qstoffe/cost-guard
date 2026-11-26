@@ -8,6 +8,7 @@ from threading import Lock
 
 from . import prompt_range, session_projection
 from .legacy_report_cache import retire_cache
+from .session_readers import SessionReaders
 from .signature import dependency_signature
 
 
@@ -49,7 +50,7 @@ class ArchiveFact:
 
 class WebArchive:
     def __init__(self, directory, *, previous_directory=None, retire_previous=False, notify_sessions=None,
-                 retain_writer=False):
+                 retain_writer=False, retain_session_readers=False):
         self.path = (directory / WEB_ARCHIVE_FILENAME).absolute()
         self._uri = self.path.as_uri()
         self._lock = Lock()
@@ -57,6 +58,8 @@ class WebArchive:
         self._writer_lock = Lock() if retain_writer else None
         self._writer = None
         self._writer_closed = False
+        self._session_readers = SessionReaders(
+            lambda: self._open(write=False, check_same_thread=False, snapshot=False)) if retain_session_readers else None
         self._runtime_owner = None
         self.notify_sessions = notify_sessions
         self._retire_paths = {}
@@ -88,14 +91,15 @@ class WebArchive:
         db.execute('''CREATE INDEX IF NOT EXISTS fact_history_by_item
                       ON fact_cursors (domain, item, cursor)''')
 
-    def _open(self, *, write, check_same_thread=True):
+    def _open(self, *, write, check_same_thread=True, snapshot=True):
         mode = 'rw' if write else 'ro'
         db = sqlite3.connect(f'{self._uri}?mode={mode}', uri=True, timeout=0.1,
                              check_same_thread=check_same_thread)
         try:
             if not write:
                 db.execute('PRAGMA query_only=ON')
-                db.execute('BEGIN')
+                if snapshot:
+                    db.execute('BEGIN')
             if (db.execute('PRAGMA application_id').fetchone()[0],
                     db.execute('PRAGMA user_version').fetchone()[0]) != (APPLICATION_ID, SCHEMA):
                 raise sqlite3.DatabaseError('unrecognized report cache')
@@ -133,6 +137,10 @@ class WebArchive:
                 if self._writer is not None:
                     self._writer.close()
                     self._writer = None
+
+    def close_session_readers(self):
+        if self._session_readers is not None:
+            self._session_readers.close()
 
     def initialize(self):
         self._initialize_schema()
@@ -411,7 +419,10 @@ class WebArchive:
             return session_projection.next_ready_activity(db, now)
 
     def sessions_page(self, **page):
-        with self._connect() as db:
+        # The page is one fully consumed SELECT. There is no read transaction
+        # between leases; schema setup and retirement belong to initialize().
+        connection = self._session_readers.borrow() if self._session_readers is not None else self._connect()
+        with connection as db:
             total, offset, values, live, cached, runtime, pending = session_projection.read_runtime_page(db, **page)
             return total, offset, tuple(self._historical_facts(values)), live, cached, runtime, pending
 
