@@ -41,8 +41,10 @@ def configure(runtime, command):
     for key, root in catalog.roots.items():
         if catalog._current(key):
             continue
-        row, revision = session_summary(service, root, catalog.revisions[key], active=key in catalog.active)
+        ended = {}
+        row, revision = session_summary(service, root, catalog.revisions[key], active=key in catalog.active,
+                                        on_prompt_ends=ended.update)
         catalog.rows[key] = row
         catalog.valid[key] = revision, catalog.clock()
         catalog.activity_valid[key] = revision
-        catalog._record_summary_prompt(key, row, catalog.clock_ms())
+        catalog._record_summary_prompt(key, row, catalog.clock_ms(), ended_prompts=ended)
