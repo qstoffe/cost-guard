@@ -12,6 +12,7 @@ import unittest
 from unittest.mock import patch
 
 from development.tests.fixtures.account_periods import subscription
+from development.tests.fixtures.catalog_prompt_activity import publish_verified_capture
 from development.tests.fixtures.report_runtime import FakePricingProvider
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource, make_root_snapshot
 from development.tests.test_account_timeline import NOV_5, projected
@@ -24,9 +25,11 @@ from src.application.session_quota import source_scope
 from src.cache import CacheDatabase, CacheRepository
 from src.cache import session_projection
 from src.cache.web_archive import ArchiveFact, PREVIOUS_ARCHIVE_FILENAME, WebArchive
+from src.domain import TerminalEvidence, TerminalOutcome
 from src.reports.models import SessionUsageRow
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.reports import ai_stats_warm
+from src.reports.watch_capture import capture_rows
 from src.reports.archived_usage import ArchivedUsage
 from src.sources.selection import SourceSelection
 from src.watch.account_timeline import TimelineHistory
@@ -577,25 +580,33 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual((key, True, 2), (first['session_id'], first['running'], first['prompt_count']))
         self.assertNotIn(key, {item for item, _ in archive.history_rows(SESSIONS)})
 
-        from src.reports.watch_capture import capture_rows
-        from src.watch.web_coordinator import publish_catalog_prompts
         self.now += 6000
+        aborted_at = self.now - 170
         root = replace(active.root, active=False, updated_at_ms=self.now)
         final = replace(active, root=root, sessions=(root,), source_revision='settled',
-            messages=(*active.messages[:-1], replace(active.messages[-1], completed_at_ms=self.now, finish_reason='stop')),
-            invocations=(*active.invocations[:-1], replace(active.invocations[-1], completed_at_ms=self.now, finish_reason='stop')))
+            messages=(*active.messages[:-1], replace(active.messages[-1], completed_at_ms=aborted_at,
+                termination=TerminalEvidence(aborted_at, TerminalOutcome.CANCELLATION))),
+            invocations=(*active.invocations[:-1], replace(active.invocations[-1], completed_at_ms=aborted_at)))
         source.snapshots[key] = final
         observe()
         capture, _ = capture_rows(report_service(source, self.cache, self.now, self.pricing), root, fresh=final)
-        entry = SimpleNamespace(snapshot=final, capture=capture, generation=1, verified_generation=1,
-                                source_status=SimpleNamespace(failed_at=None))
-        publish_catalog_prompts(catalog, SimpleNamespace(sessions={key:entry}, source_epoch='one'), offer_snapshots=False)
-        self.assertTrue(catalog.page(period='today')['history_progress']['complete'])
-        # The old root ended without a committed historical row. Let the
-        # presentation grace expire without hydrating or changing the period.
+        publish_verified_capture(catalog, final, capture)
+        def pending_row():
+            page = catalog.page(period='all', sort='name', direction=-1)
+            self.assertTrue(catalog.page(period='today')['history_progress']['complete'])
+            rows = page['view']['session_usage']
+            self.assertEqual(page['total'], len({row['session_id'] for row in rows}))
+            self.assertEqual((key, False, False), (rows[0]['session_id'], rows[0]['running'], rows[0]['indexed']))
+            return rows[0]
+
+        self.assertEqual('aborted', pending_row().get('terminal_status'))
+        # No archive fact exists. The status expires, but not the row or its priority.
         self.now += 180_000
         observe()
-        self.assertTrue(catalog.page(period='today')['history_progress']['complete'])
+        late = pending_row()
+        self.assertNotIn('terminal_status', late)
+        self.assertEqual(('pending', 'retained', 2),
+                         (late.get('finalization_status'), late['metric_states']['prompts'], late['prompt_count']))
         self.assertNotIn(key, {item for item, _ in archive.history_rows(SESSIONS)})
         # One Live read may establish the end before a distinct qualified
         # finalization. The forbidden duplicate is a replay *after* publication.
@@ -604,6 +615,9 @@ class DisplayHistoryTests(unittest.TestCase):
             if key in {item for item, _ in archive.history_rows(SESSIONS)}:
                 break
         self.assertIn(key, {item for item, _ in archive.history_rows(SESSIONS)})
+        last = catalog.page(period='all', sort='name', direction=-1)['view']['session_usage'][-1]
+        self.assertEqual((key, True, aborted_at), (last['session_id'], last['indexed'], last['last_activity_ms']))
+        self.assertNotIn('finalization_status', last)
         with patch.object(source, 'load_session_snapshot', wraps=source.load_session_snapshot) as reads:
             for _ in range(12):
                 self.tick(catalog, source)
@@ -801,7 +815,6 @@ class DisplayHistoryTests(unittest.TestCase):
         from threading import Event
         from unittest.mock import Mock
         from src.reports.session_summary import session_summary
-        from src.reports.watch_capture import capture_rows
         from src.watch.web_coordinator import WebWatchCoordinator
 
         source = self.source(2, 1, today_roots=2, now_ms=self.now)
@@ -860,10 +873,52 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual((key, False, None, snapshot.events[-1].created_at_ms),
             (pending['session_id'], pending['running'], pending['last_activity_ms'], pending['prompt_started_ms']))
         self.assertEqual(peer, older['session_id'])
+        self.assertEqual('completed', pending.get('terminal_status'))
+        transitioned = self.now
         self.now += 6000
         self.tick(catalog, source)
+        verified, older = rows()
+        self.assertEqual((key, 'completed', end, 2, 'ready'),
+            (verified['session_id'], verified.get('terminal_status'), verified['last_activity_ms'],
+             verified['prompt_count'], verified['metric_states']['prompts']))
+        self.assertNotIn('finalization_status', verified)
+        # Re-observing the end while already final does not renew the display interval.
+        self.now = transitioned + 29_999
+        publish(final)
+        self.assertEqual('completed', rows()[0].get('terminal_status'))
+        self.now += 1
         older, verified = rows()
         self.assertEqual((peer, key, end), (older['session_id'], verified['session_id'], verified['last_activity_ms']))
+        self.assertNotIn('terminal_status', verified)
+
+    def test_next_running_prompt_supersedes_abort_and_failure_does_not_inherit_it(self):
+        _, catalog = self.restore('one')
+        source = self.source(0, 0)
+        def publish(snapshot):
+            source.snapshots[snapshot.root.session_id] = snapshot
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+            service = report_service(source, self.cache, self.now, self.pricing)
+            capture, _ = capture_rows(service, snapshot.root, fresh=snapshot)
+            publish_verified_capture(catalog, snapshot, capture)
+            row, = catalog.page(period='all')['view']['session_usage']
+            return row
+
+        start = self.now
+        for prompts, outcome, label in ((1, TerminalOutcome.CANCELLATION, 'aborted'),
+                                        (2, TerminalOutcome.FAILURE, None)):
+            self.now += 1_000
+            snapshot = self.source(1, prompts, today_roots=1, running_roots=1,
+                                   now_ms=start + 3_600_000).snapshots['root-0000']
+            running = publish(replace(snapshot, source_revision=f'run-{prompts}'))
+            self.assertEqual((True, snapshot.events[-1].created_at_ms, None),
+                             (running['running'], running['prompt_started_ms'], running.get('terminal_status')))
+            self.now += 100
+            root = replace(snapshot.root, active=False)
+            ended = publish(replace(snapshot, root=root, sessions=(root,), source_revision=f'end-{prompts}',
+                messages=(*snapshot.messages[:-1], replace(snapshot.messages[-1], completed_at_ms=self.now,
+                    termination=TerminalEvidence(self.now, outcome)))))
+            self.assertEqual((False, snapshot.events[-1].created_at_ms, label),
+                             (ended['running'], ended['prompt_started_ms'], ended.get('terminal_status')))
 
 
 if __name__ == '__main__':

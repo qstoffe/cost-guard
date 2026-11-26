@@ -488,6 +488,8 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-prompt-label > :not(.session-preview) { flex-shrink: 0; }
 .session-preview { flex: 1; }
 .sessions-table .session-running, .sessions-table .session-running :is(td, a, span, button) { color: var(--watch-running); }
+.sessions-table .session-completed, .sessions-table .session-completed :is(td, a, span, button) { color: var(--watch-success); }
+.sessions-table .session-aborted, .sessions-table .session-aborted :is(td, a, span, button) { color: var(--error); }
 .sessions-table .session-activity-feedback td { grid-column: 1 / -1; color: var(--muted); white-space: normal; }
 .sessions-action-status { margin-block: .45rem; color: var(--muted); }
 .session-metric-pending { color: var(--muted); }

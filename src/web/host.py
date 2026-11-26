@@ -67,7 +67,8 @@ class WebHost:
             if directory is not None:
                 archive = WebArchive(directory, previous_directory=previous, retire_previous=previous is not None,
                     retain_writer=True, retain_session_readers=True,
-                    notify_sessions=lambda times: self.session_cache_events.committed(times))
+                    notify_sessions=lambda times: self.session_cache_events.committed(times),
+                    schedule_session_expiries=lambda times: self.session_cache_events.schedule_expiries(times))
             usage = ArchivedUsage(archive) if archive is not None else None
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire

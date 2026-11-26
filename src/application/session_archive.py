@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from src.analysis.cache import decode_trace_entry
 from src.analysis.metric_evidence import EMPTY_HISTORY
-from src.cache.session_projection import SESSIONS_DOMAIN, SORT_COLUMNS
+from src.cache.session_projection import SESSIONS_DOMAIN, SORT_COLUMNS, TERMINAL_HIGHLIGHT_MS
 from src.cache.web_archive import ArchiveFact
 from src.reports import web_history_evidence
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
@@ -49,6 +49,10 @@ class SessionArchive:
         # A new database can use a different revision encoding for the very
         # same roots. Existing history is not replayed solely for that reason.
         return old[3] == target and (old[0] != revision or key in self.effort_refresh)
+
+    def compatible_row(self, key):
+        authority = self.authorities.get(key)
+        return self.rows.get(key) if authority is not None and authority[3] == self.partition else None
 
     def refresh_roots(self, pending, target):
         """Previously acquired roots that need refresh, not historical membership."""
@@ -168,11 +172,7 @@ class SessionArchive:
             return False
 
     def update_runtime(self, *, state, terminal, reset_pending, pending, live):
-        values = {key: (start, finish, row.last_activity_ms, row.activity_latest_ms,
-                        json.dumps(encode_summary(row), separators=(',', ':')))
-                  if entry is not None else None
-                  for key, entry in live.items()
-                  for row, start, finish in (entry or (None, None, None),)}
+        values = {key: _encode_live(entry) if entry is not None else None for key, entry in live.items()}
         try:
             self.storage.update_sessions_runtime(self.run, state=state, terminal=terminal,
                 reset_pending=reset_pending, pending=pending, live=values)
@@ -187,6 +187,18 @@ class SessionArchive:
                 self.storage.close_sessions_runtime(self.run)
             except (sqlite3.Error, OSError):
                 LOG.warning('session_runtime_close_unavailable')
+
+
+def _encode_live(entry):
+    row, start, terminal = entry
+    payload = encode_summary(row)
+    finish, outcome, finalization = terminal or (None, None, None)
+    if outcome is not None:
+        payload['terminal_outcome'] = outcome
+    if finalization is not None:
+        payload['finalization'] = finalization
+    return (start, finish, row.last_activity_ms, row.activity_latest_ms,
+            json.dumps(payload, separators=(',', ':')), finalization is not None)
 
 
 def historical_amount(value):
@@ -277,44 +289,54 @@ def _display_row(key, data, *, provisional=False):
         return recover_summary(key, data)
 
 
-def cached_page(archive, *, token, offset, sort, direction, period, navigation, now, zone, unit, finish_grace):
+def cached_page(archive, *, token, offset, sort, direction, period, navigation, now, zone, unit):
     """One committed snapshot for ready rows, Live overlays and period coverage."""
     window = catalog_window(period, zone, now)
     try:
         total, offset, facts, live, cached, runtime, pending = archive.storage.sessions_page(
             offset=offset, size=PAGE_SIZE, sort=sort, direction=direction, start_ms=window.start_ms,
-            end_ms=window.end_ms, run=archive.run, finish_cutoff=now - finish_grace + 1)
+            end_ms=window.end_ms, run=archive.run, finish_cutoff=now - TERMINAL_HIGHLIGHT_MS + 1)
     except (sqlite3.Error, OSError):
         total, offset, facts, live, cached, runtime, pending = 0, 0, (), (), None, ('cache_recovering', False), (False, 0)
     shown = []
-    for key, payload, running_since, _, saved in live:
-        row = _display_row(key, json.loads(payload), provisional=running_since is not None)
+    for key, payload, running_since, terminal_at, saved in live:
+        data = json.loads(payload)
+        outcome = data.pop('terminal_outcome', None)
+        finalization = data.pop('finalization', None)
+        recent = terminal_at is not None and now < terminal_at + TERMINAL_HIGHLIGHT_MS
+        row = _display_row(key, data, provisional=running_since is not None or finalization is not None)
         if row is not None:
-            shown.append((replace(row, running=running_since is not None), bool(saved)))
+            shown.append((replace(row, running=running_since is not None), bool(saved),
+                          outcome if recent else None, finalization, recent))
     for key, fact in facts:
         row = _display_row(key, fact.value.get('row'))
         if row is not None:
-            shown.append((replace(row, running=False), True))
-    view = session_view(tuple(row for row, _ in shown), zone, unit)
-    for value, (row, saved) in zip(view['session_usage'], shown):
+            shown.append((replace(row, running=False), True, None, None, False))
+    view = session_view(tuple(entry[0] for entry in shown), zone, unit)
+    for value, (row, saved, outcome, finalization, recent) in zip(view['session_usage'], shown):
         value['indexed'] = saved
         value['has_summary'] = saved
         value['new_arrival'] = False
         value['catalog_activity_ms'] = None
         value['activity_state'] = 'ready' if row.running or row.last_activity_ms is not None else 'unavailable'
-        value['metric_state'] = 'pending' if row.running and not saved else 'ready'
+        value['metric_state'] = 'pending' if finalization or row.running and not saved else 'ready'
         value['metric_states'] = dict.fromkeys(('model', 'effort', 'ccost', 'prompts', 'duration', 'ctx'),
                                                 value['metric_state'])
-        if row.running:
+        if outcome:
+            value['terminal_status'] = outcome
+        if finalization and (not recent or finalization == 'unavailable'):
+            value['finalization_status'] = finalization
+        if row.running or finalization:
+            known_state = 'retained' if finalization else 'ready'
             for key, known in (
                 ('model', not row.model_pending and row.model != 'N/A'), ('effort', row.effort_key is not None),
                 ('prompts', row.prompt_count is not None),
                 ('duration', row.duration_ms is not None), ('ctx', row.context_tokens is not None),
             ):
-                value['metric_states'][key] = 'ready' if known else 'pending'
+                value['metric_states'][key] = known_state if known else 'pending'
             value['metric_states']['ccost'] = ('retained' if row.ccost_retained else 'ready' if row.ccost is not None else
                 'unavailable' if row.ccost_unavailable else 'pending')
-        if row.empty_history and saved and not row.running:
+        if row.empty_history and saved and not row.running and not finalization:
             value['metric_absences'] = dict.fromkeys(('model', 'ctx', 'activity'), EMPTY_HISTORY)
     state, terminal = runtime or ('loading', False)
     complete, unavailable = pending

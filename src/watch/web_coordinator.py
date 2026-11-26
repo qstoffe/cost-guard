@@ -69,7 +69,7 @@ def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
                     and entry.cost.evidence is not None and entry.cost.evidence.complete):
                 snapshots[root.session_id] = at, entry.cost.evidence
         elif entry.capture.catalog_prompt_ends and entry.verified_generation == entry.generation:
-            ends.append((root, revision, at, entry.capture.catalog_prompt_ends))
+            ends.append((root, revision, at, entry.capture.catalog_prompt_ends, entry.capture.source_epoch))
     if costs:
         catalog.observe_prompts(evidence, source_epoch=cards.source_epoch, costs=costs)
     else:
