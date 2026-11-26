@@ -186,9 +186,9 @@ const SessionsCatalog = (() => {
     }
     wake(hint) {
       if (typeof hint !== 'string' || !hint || hint === this.liveHint) return;
-      this.liveHint = hint;
       if (!this.attached || document.hidden || this.offset !== 0 && !this.data?.cache_first ||
           this.terminal || this.operation?.failed) return;
+      this.liveHint = hint;
       const pending = this.wakePending; this.wakePending = true;
       // Explicit navigation owns the request/cohort. Keep one trailing wake,
       // never cancel or restart an action or an in-flight passive request.
@@ -196,16 +196,20 @@ const SessionsCatalog = (() => {
       clearTimeout(this.timer);
       this.timer = setTimeout(() => this.poll(), 100);
     }
-    catchUp() {
-      if (!this.attached || document.hidden || this.terminal || !this.data?.cache_first ||
-          this.operation?.failed) return;
+    catchUp(since = performance.now(), hiddenOrRecovery = true) {
+      if (!this.attached || document.hidden || this.terminal || this.operation?.failed) return;
       // An authenticated host is usable again. Retire only a stale passive
       // request; keep the selected page, sort and any explicit navigation.
       this.retryDelay = 0;
-      if (this.busy && !this.operation) this.retire();
-      this.poll();
+      if (this.busy) {
+        if (!this.operation && (this.archive || this.data?.cache_first) && this.flight?.started <= since &&
+            (hiddenOrRecovery || !this.flight.foreground)) this.retire();
+        else { this.wakePending = true; return; }
+      }
+      this.interest();
+      this.poll(true);
     }
-    async poll() {
+    async poll(foreground = false) {
       if (!this.attached || this.busy || this.terminal) return;
       clearTimeout(this.timer);
       if (document.hidden) {
@@ -214,7 +218,7 @@ const SessionsCatalog = (() => {
       }
       if (this.operation?.failed) this.recoverNavigation();
       const generation = this.generation;
-      await this.load();
+      await this.load(foreground);
       if (generation === this.generation && this.attached && !this.terminal) {
         const delay = this.retryDelay || (this.rerun ? 0 : this.operation ? 1000 :
           this.wakePending && (this.offset === 0 || this.data?.cache_first) ? 100 :
@@ -231,14 +235,14 @@ const SessionsCatalog = (() => {
       if (previous) Object.assign(this, {period: previous.period, sort: previous.sort, direction: previous.direction});
       this.periodSelection(); this.canonicalPeriod = true;
     }
-    async load() {
+    async load(foreground) {
       if (this.busy || this.terminal) return;
       const entering = this.rerun;
       this.busy = true; this.rerun = false;
       if (!this.operation) this.wakePending = false;
       this.pagerBusy();
       const generation = this.generation;
-      const flight = {controller: new AbortController()}; this.flight = flight;
+      const flight = {controller: new AbortController(), started: performance.now(), foreground}; this.flight = flight;
       if (this.operation) this.admission = setTimeout(() => {
         if (generation === this.generation && this.operation && !this.operation.pending)
           this.showProgress();

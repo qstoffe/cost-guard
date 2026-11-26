@@ -132,7 +132,7 @@ async function main() {
   let calls = 0;
   const document = {createElement: tag => new Node(tag), activeElement: null,
     createElementNS: (namespaceURI, tag) => Object.assign(new Node(tag), {namespaceURI})};
-  const context = vm.createContext({document, console, setTimeout: () => 1, clearTimeout: () => {},
+  const context = vm.createContext({document, console, AbortController, setTimeout: () => 1, clearTimeout: () => {},
     window: {getSelection: () => ({isCollapsed: !selected, anchorNode: selected, focusNode: selected}),
       addEventListener() {},matchMedia: () => ({addEventListener() {},removeEventListener() {}})},
     api: async path => { assert.equal(path, '/api/live'); calls++; return JSON.parse(JSON.stringify(snapshot)); },

@@ -21,10 +21,11 @@ def run_benchmark(sender, request):
 
 
 class BenchmarkLane:
-    def __init__(self, root, *, jobs=None, clock=time.monotonic, wall_clock=time.time):
+    def __init__(self, root, *, jobs=None, clock=time.monotonic, wall_clock=time.time, notify=None):
         self.jobs = jobs or ReportJobs(target=run_benchmark)
         self.cache = BenchmarkCache(root)
         self.clock, self.wall_clock = clock, wall_clock
+        self.notify = notify
         self.lock = RLock()
         self.snapshot = None
         self.job = None
@@ -45,7 +46,10 @@ class BenchmarkLane:
     def _publish(self):
         # Parsed snapshots are immutable. Swap only after the file commit (or
         # when control state changes), and never make readers join writer work.
+        prior = getattr(self, 'published', None)
         self.published = self.snapshot, self.error is not None, self.forced or self.job is not None
+        if self.notify and self.published != prior:
+            self.notify(('models',), ('benchmark',))
 
     def _parse(self, value):
         if value.get('schema') != 1 or value['fetched_at_ms'] > int(self.wall_clock() * 1000):

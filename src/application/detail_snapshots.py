@@ -49,7 +49,7 @@ class DetailSnapshots:
             self.written[key] = status
             self.pending.pop(key, None)
 
-    def read(self, key, after):
+    def read(self, key, after, *, proof=None):
         try:
             (frame, projection), candidates = self.archive.detail_snapshot(DOMAIN, self.run, key)
             saved = readable_detail(key, candidates)
@@ -65,7 +65,13 @@ class DetailSnapshots:
                 and 0 <= self.clock() - validated <= 3600 and frame['generation'] > after)
         # Settled data from the historical lane can be newer than the detail
         # lane's capture. Never displace a current Running proof with old facts.
-        newer_saved = (saved is not None and not frame['running']
+        running_proof = bool(frame['running'])
+        if running_proof and proof and proof['scope'] == frame.get('execution_scope') and (
+                proof['observed_at_ms'] > (frame['observed'] or 0)):
+            running_proof = bool(set(frame.get('running_ids', ())).intersection(proof['running']))
+        elif running_proof and live and self.clock() - validated > 300:
+            running_proof = False
+        newer_saved = (saved is not None and not running_proof
                        and saved.partition == frame['partition']
                        and saved.observed_ms > (frame['observed'] or 0))
         if live and not newer_saved:

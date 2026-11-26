@@ -27,6 +27,7 @@ const LiveConnection = (() => {
     }
     function stop(message, kind = 'stopped') {
       stopped = true;
+      syncing?.controller.abort();
       if (source) source.close();
       clock.cancel(timer);
       report(kind, message);
@@ -51,13 +52,17 @@ const LiveConnection = (() => {
           values.sessions_cache, values.report_cache);
       }
     }
-    async function sync() {
+    async function sync(supersede = false) {
       if (stopped) return;
-      if (syncing) { dirty = true; return syncing; }
-      syncing = (async () => {
+      if (syncing && !supersede) { dirty = true; return syncing.result; }
+      syncing?.controller.abort();
+      const flight = {controller: new AbortController()};
+      syncing = flight;
+      dirty = false;
+      flight.result = (async () => {
         try {
-          const snapshot = await api('/api/live');
-          if (stopped) return;
+          const snapshot = await api('/api/live', undefined, flight.controller.signal);
+          if (stopped || syncing !== flight) return;
           if (instance && snapshot.instance_id !== instance) {
             stop('Host identity changed. Obtain a fresh authorized launcher link.', 'identity_changed'); return;
           }
@@ -71,7 +76,7 @@ const LiveConnection = (() => {
           publish(true, reconnected);
           openStream();
         } catch (error) {
-          if (stopped) return;
+          if (stopped || syncing !== flight) return;
           if (['authentication_required', 'bootstrap_expired_or_used', 'csrf_required'].includes(error.message)) {
             stop('AUTHENTICATION EXPIRED — NOT LIVE. Obtain a fresh launcher link.', 'authorization_required');
           } else if (error.message === 'host_identity_changed') {
@@ -84,7 +89,8 @@ const LiveConnection = (() => {
           }
         }
       })();
-      await syncing;
+      await flight.result;
+      if (syncing !== flight) return;
       syncing = null;
       const buffered = pending; pending = [];
       for (const [kind, event] of buffered) accept(kind, event);
@@ -108,9 +114,9 @@ const LiveConnection = (() => {
         catch (_) { sync(); }
         return; // A received terminal notice must stop retry even across a replay gap.
       }
-      if (number !== sequence + 1) { sync(); return; }
+      if (number !== sequence + 1) { recoveringHost = true; sync(); return; }
       try { values[kind] = JSON.parse(event.data); }
-      catch (_) { sync(); return; }
+      catch (_) { recoveringHost = true; sync(); return; }
       sequence = number; publish(kind === 'live');
     }
     function openStream() {
@@ -120,7 +126,9 @@ const LiveConnection = (() => {
       const current = () => !stopped && source === opened;
       for (const kind of ['live', 'progress', 'watch_history', 'history', 'sessions_cache', 'report_cache', 'terminal'])
         opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
-      opened.addEventListener('resync', () => { if (current()) sync(); });
+      opened.addEventListener('resync', () => {
+        if (current()) { recoveringHost = true; sync(); }
+      });
       opened.addEventListener('authorization_required', () => {
         if (!current()) return;
         // A concurrent initial handoff may have replaced this stream's cookie.
@@ -139,12 +147,14 @@ const LiveConnection = (() => {
       await sync();
       if (!stopped) timer = clock.later(probe, 10000);
     }
-    function revalidate(afterNetworkChange = false) {
+    function revalidate(afterNetworkChange = false, foreground = false) {
       if (stopped) return;
       if (afterNetworkChange) recoveringHost = true;
-      if (!streamOpen || authenticatedAt == null || clock.now() - authenticatedAt >= 15000)
+      if (!streamOpen)
         report('reconnecting', 'RECONNECTING — revalidating after idle; last observation retained, not live.');
-      sync();
+      // A foreground read needs the snapshot committed now, not the response
+      // selected by an older watchdog/focus request. SSE ownership is unchanged.
+      sync(foreground);
     }
     report('starting', 'STARTING — connecting to the authorized host.');
     probe();

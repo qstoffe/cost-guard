@@ -105,9 +105,8 @@ class CacheHousekeeping:
             if host.dispatcher.price_actions or any(tab['visible'] and (tab['request'] or tab['section'] in
                     {'sessions', 'session'}) for tab in host.dispatcher.tabs.values()):
                 return True
-        with host.live.details.lock:
-            if any(host.live.details.clock() - lease['touched'] <= 300 for lease in host.live.details.leases.values()):
-                return True
+        if host.live.details.has_leases():
+            return True
         with host.live.catalog.lock:
             if any(host.live.catalog._browsing(lease) for lease in host.live.catalog.leases.values()):
                 return True

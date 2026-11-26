@@ -71,12 +71,13 @@ class WebHost:
             usage = ArchivedUsage(archive) if archive is not None else None
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
-        if jobs is None:
-            self.dispatcher = (DataDispatcher(self.jobs, owner_kinds=(ReportKind.NORMAL,), archive=archive)
-                               if usage else DataDispatcher(self.jobs))
-        self.model_snapshots = self.dispatcher.models if usage else None
         self.report_cache_events = ReportCacheEvents(self.events) if usage else None
         notify_reports = self.report_cache_events.committed if usage else None
+        if jobs is None:
+            self.dispatcher = (DataDispatcher(self.jobs, owner_kinds=(ReportKind.NORMAL,), archive=archive,
+                                               notify=notify_reports)
+                                if usage else DataDispatcher(self.jobs))
+        self.model_snapshots = self.dispatcher.models if usage else None
         self.history_reports = HistoryReports(usage, self.dependencies.prices, notify=notify_reports) if usage else None
         self.history_accounts = AccountTimeline(None, None, archived_usage=usage,
                                                notify=notify_reports) if usage else None
@@ -104,7 +105,7 @@ class WebHost:
         self.cache_housekeeping = CacheHousekeeping(root, defer_demand=archive is not None)
         self.log_housekeeping = LogHousekeeping(root)
         from .benchmark import BenchmarkLane
-        self.benchmark = BenchmarkLane(root)
+        self.benchmark = BenchmarkLane(root, notify=notify_reports)
 
     def runtime_failed(self, error):
         self.failure = self.failure or error

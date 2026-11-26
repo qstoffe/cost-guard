@@ -26,6 +26,7 @@ let settingsView = null;
 let cachedReportTimer = null;
 let cachedReportOwner = null;
 let reportCacheEvents = false;
+let reportPublications = null;
 let demand = null; // Enabled only after the authenticated host advertises it.
 let tokenMixBinding = null;
 const sourceNotice = document.getElementById('source-compatibility');
@@ -101,24 +102,56 @@ function scheduleCachedReport() {
   const delay = Math.max(0, (state.checkedAt || CachedReports.observation(state.result)) + cadence - Date.now());
   cachedReportTimer = setTimeout(check, delay);
 }
-function wakeCachedReport(live, publications, reconnected) {
+function reportHint(state) {
+  const period = state.period || 'all';
+  return `${period}:${reportPublications?.[state.section]?.[period] ?? 0}:${sourceValue?.state}`;
+}
+function wakeCachedReport() {
   if (!reportCacheEvents || !current || document.hidden) return;
   const state = current;
   const chart = state.accountTimeline;
-  if (chart) chart.wake(`${chart.period}:${publications?.accounts?.[chart.period] ?? 0}:${live?.state}`, reconnected);
-  if (!automaticHistory(state) || !reportReadable(state)) return;
-  const hint = `${state.period}:${publications?.[state.section]?.[state.period] ?? 0}:${live?.state}`;
-  if (state.cacheHint === hint && !reconnected) return;
+  if (chart) chart.wake(`${chart.period}:${reportPublications?.accounts?.[chart.period] ?? 0}:${sourceValue?.state}`);
+  if (!historical(state) || !reportReadable(state)) return;
+  const benchmarkHint = reportPublications?.models?.benchmark;
+  if (state.benchmark && state.benchmarkHint !== benchmarkHint) {
+    state.benchmarkHint = benchmarkHint;
+    state.benchmark.load(api, true);
+  }
+  const hint = reportHint(state);
+  if (state.cacheHint === hint) return;
   state.cacheHint = hint;
-  if (state.loading) state.cachePending = true;
-  else acquire(state, !!state.result);
+  readCommittedReport(state);
 }
-function enterCachedReport(state) {
+function reconcileForeground(hiddenOrRecovery) {
+  if (!current || !csrf || document.hidden || hostState.terminal) return;
+  const state = current;
+  const activated = performance.now();
+  state.catalog?.catchUp(activated, hiddenOrRecovery);
+  if (!historyBlocked()) state.detail?.catchUp(activated, hiddenOrRecovery);
+  state.accountTimeline?.catchUp();
+  if (!historical(state) || !reportReadable(state)) return;
+  if (!reportCacheEvents) { enterCachedReport(state, false); return; }
+  state.cacheHint = reportHint(state);
+  state.benchmarkHint = reportPublications?.models?.benchmark;
+  state.benchmark?.load(api, true, hiddenOrRecovery || !state.benchmark.manual);
+  if (demand && state.loading && !state.userInitiated && !state.priceRefreshing &&
+      state.attempt?.started <= activated && (hiddenOrRecovery || !state.attempt.foreground)) {
+    // Retire the pre-activation reader, not the owner job or an explicit action.
+    state.attempt?.controller.abort();
+    state.attempt = null; state.loading = false; state.active = null; state.cachePending = false;
+  }
+  readCommittedReport(state, true);
+}
+function readCommittedReport(state, foreground = false) {
+  if (state.loading) state.cachePending = true;
+  else acquire(state, !!state.result, false, reportCacheEvents && state.section === 'models', foreground);
+}
+function enterCachedReport(state, useDispatcher = true) {
   if (!historical(state)) return;
   if (state.pageNavigation && state.failed) return; // Explicit Retry owns failed paging, not a lookup timer.
   const band = CachedReports.entry(state.result, state.section);
   state.withheld = state.section === 'ai-stats' ? !!state.result && !AIStatsView.valid(state.result) : band === 'withhold';
-  if (demand && !document.hidden && reportReadable(state)) { acquire(state, !!state.result && !state.withheld); return; }
+  if (useDispatcher && demand && !document.hidden && reportReadable(state)) { readCommittedReport(state); return; }
   if (!document.hidden && hostState.writable && state.result && ['quiet', 'withhold'].includes(band))
     acquire(state, !state.withheld);
 }
@@ -205,9 +238,6 @@ function connectionStatus(message, state = {}) {
     .includes(hostState.sourceError);
   if (hostState.sourceBlocked) hostState.writable = false;
   if (hostState.kind !== 'connected' || hostState.sourceBlocked) current?.detail?.updateInvocations();
-  if (!wasWritable && hostState.writable || !couldReadHistory && archiveReadable()) {
-    current?.detail?.catchUp();
-  }
   if (sourceNotice) {
     sourceNotice.hidden = hostState.kind !== 'connected' || state.sourceGeneration !== 'v1';
     sourceNoticeGeometry();
@@ -252,9 +282,16 @@ function connectionStatus(message, state = {}) {
   }
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
-  if ((!wasWritable && hostState.writable || !couldReadHistory && archiveReadable()) &&
-      automaticHistory(current) && !current.loading)
-    enterCachedReport(current);
+  if (!wasWritable && hostState.writable || !couldReadHistory && archiveReadable()) {
+    // A source may become readable without a browser transport reconnect.
+    // Let a receipt of that same snapshot start its reconciliation first.
+    const state = current;
+    queueMicrotask(() => {
+      if (!state || current !== state || document.hidden || hostState.terminal) return;
+      if (state.detail && !state.detail.busy && !historyBlocked()) state.detail.catchUp();
+      if (automaticHistory(state) && !state.loading) enterCachedReport(state);
+    });
+  }
   scheduleCachedReport();
 }
 function retryableReadError(message, cause) {
@@ -456,7 +493,7 @@ function reportWork(progress) {
 function failure(code, state) {
   return 'Could not load. Try again.';
 }
-async function acquire(state, background = false, prices = false) {
+async function acquire(state, background = false, prices = false, committedOnly = false, foreground = false) {
   if (state.loading || !reportReadable(state)) return;
   // A disabled native button loses focus before the replacement DOM is captured.
   // Restore only this explicit action, unless the user focused/clicked elsewhere.
@@ -476,6 +513,8 @@ async function acquire(state, background = false, prices = false) {
   let retry = !!state.failed && !background && !automaticHistory(state);
   state.loading = true;
   const attempt = state.attempt = new ReportLoading.Attempt({paging: state.pageNavigation === true});
+  attempt.started = performance.now();
+  attempt.foreground = foreground;
   state.priceRefreshing = prices; state.priceMessage = '';
   state.failed = false;
   state.dispatchError = null;
@@ -501,7 +540,8 @@ async function acquire(state, background = false, prices = false) {
         const retryOnce = retry;
         retry = false; // Only the explicit user attempt may clear host backoff.
          const admission = await api(prices ? '/api/models/refresh' : demand ? '/api/data' : '/api/reports', prices ? {} :
-           demand ? {request: scope, retry: retryOnce} : scope, attempt.controller.signal);
+            demand ? {request: scope, retry: committedOnly ? false : retryOnce,
+              ...(committedOnly ? {cache_only: true} : {})} : scope, attempt.controller.signal);
         if (state.attempt !== attempt) return;
          state.active = admission.id;
          state.waitingReason = null;
@@ -519,7 +559,8 @@ async function acquire(state, background = false, prices = false) {
            else if (admission.error === 'source_identity_changed' && automaticHistory(state)) {
                state.result = null; state.statsResults?.clear(); state.statsIdentity = 'invalidated';
             }
-           if (!admission.result && state.result && !automaticHistory(state) && !state.pageNavigation) { state.withheld = true; show(state); }
+            if (!admission.result && state.result && !automaticHistory(state) && !state.pageNavigation &&
+                (!committedOnly || admission.stale)) { state.withheld = true; show(state); }
           if (admission.result) publication = {status: 'complete', result: admission.result,
              publication_id: admission.result_id || admission.id};
             else if (admission.cache_first && !admission.terminal && reportCacheEvents) {
@@ -599,7 +640,7 @@ async function acquire(state, background = false, prices = false) {
           const initial = !state.result || state.withheld;
           const revision = [job.publication_id || state.active, job.result.instance_id,
             job.result.sequence, CachedReports.observation(job.result)].join(':');
-          if (demand && !prices && state.result && state.dataRevision === revision) break;
+           if (demand && !prices && state.result && !state.withheld && state.dataRevision === revision) break;
          if (state.section === 'models' && (!job.result.view || job.result.view.kind !== 'normal' ||
              !['acquired', 'partial'].includes(job.result.source?.status))) throw new Error('report_unavailable');
           if (state.section === 'ai-stats') {
@@ -653,7 +694,7 @@ async function acquire(state, background = false, prices = false) {
        if (state.cachePending) {
          state.cachePending = false;
          if (state === current && !document.hidden) queueMicrotask(() => {
-           if (state === current && !document.hidden) acquire(state, !!state.result);
+            if (state === current && !document.hidden) readCommittedReport(state);
          });
        }
      }
@@ -810,26 +851,24 @@ async function connect() {
     accountTimelineAvailable = state.account_timeline === true && typeof AccountTimelineView !== 'undefined';
    statusLine.textContent = '';
     if (!liveConnection && typeof LiveConnection !== 'undefined') {
-       liveConnection = LiveConnection.connect(api, (value, progress, watchHistory, historyHints, reconnected, sessionsCache, reportsCache) => {
+        liveConnection = LiveConnection.connect(api, (value, progress, watchHistory, historyHints, reconnected, sessionsCache, reportsCache) => {
         const firstLiveView = !sourceValue?.view && !!value?.view;
         sourceValue = value?.view || !sourceValue?.view ? value : {...value,
           view: sourceValue.view, source_observed_at_ms: sourceValue.source_observed_at_ms};
-        liveValue = watchValue(sourceValue, watchHistory);
+         liveValue = watchValue(sourceValue, watchHistory);
+         reportPublications = reportsCache;
         // A first entry can precede source selection. Use the existing Live
         // readiness signal once rather than polling the optional facts.
         if (firstLiveView && current?.stats && !current.stats.hasOpenCodeDatabaseFacts)
           current.stats.refreshDatabaseSizes();
         miniWatch?.update(liveValue);
-        if (reconnected) {
-          current?.catalog?.catchUp();
-          if (archiveReadable()) current?.detail?.catchUp();
-        }
+         if (reconnected) reconcileForeground(true);
          const sessionsPeriod = current?.catalog?.period;
          current?.catalog?.wake(sessionsCache ? `sessions:${sessionsPeriod}:${
            sessionsCache.periods?.[sessionsPeriod] ?? sessionsCache.revision}` :
           historyHints?.catalog_hint ?? value?.catalog_hint);
          current?.detail?.wake(historyHints?.detail_hints ?? value?.detail_hints);
-         wakeCachedReport(value, reportsCache, reconnected);
+          if (!reconnected) wakeCachedReport();
         current?.detail?.updateInvocations();
         if (current?.live) { current.message = 'Live observation; source/account freshness shown below.'; show(current); }
         for (const job of progress?.jobs || []) {
@@ -883,8 +922,25 @@ window.addEventListener('hashchange', () => {
   }
   navigate();
 });
-window.addEventListener('pageshow', () => liveConnection?.resync());
-window.addEventListener('focus', () => current?.detail?.catchUp());
+let needsForegroundRead = true;
+let wasHidden = document.hidden;
+function activateForeground() {
+  if (document.hidden || !needsForegroundRead) return;
+  const wasSuspended = wasHidden;
+  needsForegroundRead = false;
+  wasHidden = false;
+  // Local committed reads do not wait for the stream's authenticated snapshot.
+  reconcileForeground(wasSuspended);
+  liveConnection?.resync(false, true);
+  firstReport();
+  scheduleCachedReport();
+}
+window.addEventListener('blur', () => { needsForegroundRead = true; });
+window.addEventListener('pageshow', event => {
+  if (event.persisted) { needsForegroundRead = true; wasHidden = true; }
+  activateForeground();
+});
+window.addEventListener('focus', activateForeground);
 if (sessionsNav) {
   sessionsNav.addEventListener('click', event => {
     if (rememberedSession || event.button > 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -897,13 +953,8 @@ window.addEventListener('online', () => liveConnection?.resync(true));
 document.addEventListener('visibilitychange', () => {
   current?.catalog?.interest();
   current?.accountTimeline?.active(!document.hidden && !!csrf && (hostState.writable || archiveReadable()));
-  // Keep existing acquisitions, but never schedule new hidden-route refreshes.
-  if (!document.hidden) liveConnection?.resync();
-  if (!document.hidden) {
-    current?.catalog?.poll(); current?.detail?.catchUp();
-    enterCachedReport(current);
-    firstReport();
-  }
+  if (document.hidden) { needsForegroundRead = true; wasHidden = true; }
+  else activateForeground();
   scheduleCachedReport();
 });
 document.getElementById('search').addEventListener('input', event => {

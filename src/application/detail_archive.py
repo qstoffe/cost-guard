@@ -141,7 +141,7 @@ def _fill_display(current, old, names):
                               for unit, values in (current.get('display_units') or {}).items()}}
 
 
-def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisition, runtime=None):
+def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisition, runtime=None, size=None):
     payload = fact.value
     view = payload['view']
     block, = view['prompt_blocks']
@@ -154,7 +154,7 @@ def archived_page(fact, revision, offset, anchor, *, mode, begin, chunk, acquisi
         offset = next((i for i, row in enumerate(rows) if row['id'] == anchor), offset)
     offset = (max(0, len(rows) - 50) if offset >= 2**52 else
               max(0, min(offset, max(0, len(rows) - 1))))
-    shown = rows[offset:offset + (25 if begin or chunk else 50)]
+    shown = rows[offset:offset + (size or (25 if begin or chunk else 50))]
     view = {**view, 'prompt_blocks': [{**block, 'rows': shown}]}
     authority = payload.get('value_authority')
     if authority is not None:

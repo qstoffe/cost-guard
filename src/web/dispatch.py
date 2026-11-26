@@ -80,7 +80,8 @@ def cadence(request, result, foreground):
 
 
 class DataDispatcher:
-    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, owner_kinds=FINITE, archive=None):
+    def __init__(self, jobs, *, clock=time.monotonic, wall_clock=time.time, owner_kinds=FINITE, archive=None,
+                 notify=None):
         self.jobs, self.clock, self.wall_clock = jobs, clock, wall_clock
         self.lock = RLock()
         self.entries = OrderedDict()
@@ -95,7 +96,7 @@ class DataDispatcher:
         self.ready = False
         self.warm_allowed = False
         self.owner_kinds = frozenset(owner_kinds)
-        self.models = ModelSnapshots(archive) if archive is not None else None
+        self.models = ModelSnapshots(archive, notify=notify) if archive is not None else None
 
     def price_refresh(self, key):
         with self.lock:
@@ -202,6 +203,9 @@ class DataDispatcher:
                     and (not valid or retry)):
                 self._submit(request, entry)
             return self._admission(entry, valid)
+
+    def lookup_models_cache(self):
+        return {**(self.models.read() or self._empty_models_frame()), 'cache_first': True}
 
     @staticmethod
     def _empty_models_frame():

@@ -49,8 +49,9 @@ def handle(handler, value):
                 elif value['section'] == 'watch':
                     housekeeping.use_watch(owner, history=value.get('history', False))
         else:
-            if (set(value) != {'request', 'retry'}
-                    or type(value['retry']) is not bool):
+            if (set(value) - {'cache_only'} != {'request', 'retry'}
+                    or type(value['retry']) is not bool
+                    or 'cache_only' in value and (value['cache_only'] is not True or value['retry'])):
                 raise ValueError('invalid_request')
             request = parse_report(value['request'])
             if request.kind not in FINITE:
@@ -62,6 +63,11 @@ def handle(handler, value):
                 failure = driver.error if driver and driver.terminal else live.source_failure
                 handler.reply(200, archive.lookup(request, owner.history_config,
                     terminal_error=failure.code.value if failure else None))
+                return True
+            if value.get('cache_only'):
+                if request.kind is not ReportKind.NORMAL or dispatcher.models is None:
+                    raise ValueError('cache_lookup_unavailable')
+                handler.reply(200, dispatcher.lookup_models_cache())
                 return True
             startup = getattr(owner, 'source_startup', None)
             if startup is not None:

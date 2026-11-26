@@ -87,12 +87,15 @@ const SessionDetail = (() => {
       `${name} · Multiple models or different effort levels`);
     else node.removeAttribute('aria-label');
   }
+  function promptLabel(value) {
+    return `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`;
+  }
   function cells(value, modelValue, mixNode) {
     const label = el('span', undefined, 'session-prompt-label');
     const clock = ContextHelp.value(el('span', value.display?.clock || '—'), value.display?.date_time || 'Start time unavailable');
     const preview = el('span', value.preview || value.label || 'Prompt', 'session-preview');
     ContextHelp.value(preview, value.preview || value.label || 'Prompt');
-    label.append(clock, el('span', `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`), preview);
+    label.append(clock, el('span', promptLabel(value), 'session-prompt-state'), preview);
     const cost = ContextHelp.value(el('span', () => ReportView.display(value, 'ccost')),
       () => (value.prompt_number == null ? '' : `Prompt #${value.prompt_number}\n`) +
         ReportView.costGroups(value) + (Number.isFinite(value.duration_ms) ?
@@ -123,6 +126,8 @@ const SessionDetail = (() => {
       this.heading = el('h1');
       this.exporter = typeof SessionExport === 'undefined' ? null : new SessionExport.Action(api, id);
       this.status = el('p', '', 'warning'); this.status.setAttribute('role', 'status'); this.status.hidden = true;
+      this.liveActivityStatus = el('p'); this.liveActivityStatus.setAttribute('role', 'status');
+      this.liveActivityStatus.hidden = true;
       this.retry = el('button', 'Try again'); this.retry.type = 'button'; this.retry.hidden = true;
       this.retry.addEventListener('click', () => this.retrySource());
       this.loader = new ReportLoading.View();
@@ -150,7 +155,7 @@ const SessionDetail = (() => {
       this.values = new Values();
       this.quotaUsage = typeof AccountCards === 'undefined' ? null : new AccountCards.SessionUsage();
       this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.activityAnnouncement, this.status,
-        this.retry, this.loader.root, scroll, this.context.root, this.invocations.root, this.activity.root);
+        this.retry, this.liveActivityStatus, this.loader.root, scroll, this.context.root, this.invocations.root, this.activity.root);
       if (this.quotaUsage) this.root.append(this.quotaUsage.root);
       if (this.exporter) this.heading.after(this.exporter.root);
       this.loading(); this.freshness();
@@ -166,6 +171,7 @@ const SessionDetail = (() => {
     detach() {
       this.exporter?.close();
       this.attached = false; this.generation++; clearTimeout(this.timer);
+      this.flight?.controller.abort(); this.flight = null; this.busy = false;
       this.showActivityFeedback(null);
       this.activity.update(null); this.activityLimit = 25;
       this.invocations.update(null);
@@ -176,28 +182,38 @@ const SessionDetail = (() => {
     }
     wake(hints) {
       const hint = hints?.find(item => item.session_id === this.id)?.hint;
-      if (!hint || hint === this.liveHint) return;
+      if (!hint || hint === this.liveHint || document.hidden) return;
       this.liveHint = hint;
-      if (!document.hidden) this.poll();
+      this.poll();
     }
-    catchUp() {
+    catchUp(since = performance.now(), hiddenOrRecovery = true) {
       if (!this.attached || document.hidden) return;
-      this.revalidate = true; this.poll();
+      if (this.retry.disabled) { this.trailing = true; return; }
+      if (this.flight) {
+        // A provisional open (including the legacy path) keeps its owner.
+        // Warm cached readers pin by revision and may supersede a stale flight.
+        if (!this.data?.cache_first || !this.token || this.flight.started > since ||
+            this.flight.foreground && !hiddenOrRecovery) { this.trailing = true; return; }
+        this.generation++;
+        this.flight.controller.abort(); this.flight = null; this.busy = false;
+      }
+      this.initialFailed = false; this.readFailures = 0;
+      this.poll(true);
     }
     updateInvocations(data = this.data) {
       this.invocations.update(this.attached ? this.live() : null, this.id, data?.activity?.invocation_scope);
     }
-    async poll() {
+    async poll(foreground = false) {
       if (!this.attached || this.initialFailed) return;
       if (this.busy) { this.trailing = true; return; }
       clearTimeout(this.timer);
       if (document.hidden) { this.timer = setTimeout(() => this.poll(), 30000); return; }
       this.trailing = false;
       const generation = this.generation;
-      this.pendingLoad = this.load();
+      this.pendingLoad = this.load(foreground);
       await this.pendingLoad;
-      if (this.attached && !this.initialFailed) this.timer = setTimeout(() => this.poll(),
-        this.trailing || generation !== this.generation ? 0 : this.waiting ? 500 : 5000);
+      if (generation === this.generation && this.attached && !this.initialFailed) this.timer = setTimeout(() => this.poll(),
+        this.trailing ? 0 : this.waiting ? 500 : 5000);
     }
     async retrySource() {
       if (this.retry.disabled || !this.token) return;
@@ -225,29 +241,38 @@ const SessionDetail = (() => {
         }
       } finally { this.retry.disabled = false; }
     }
-    async load() {
+    async load(foreground) {
       if (this.busy) return;
       this.busy = true;
       const generation = this.generation;
-      try {
-        if (!this.token) this.loading('Opening session…');
+      const flight = this.flight = {controller: new AbortController(), started: performance.now(), foreground};
+      const read = value => this.api('/api/detail', value, flight.controller.signal);
+      const current = () => this.attached && generation === this.generation;
+      const begin = async () => {
         if (!this.token) {
-          const opened = (await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'})).token;
-          if (!this.attached || generation !== this.generation) { this.api('/api/detail', {action: 'close', token: opened}).catch(() => {}); return; }
-          this.token = opened;
+          this.loading('Opening session…');
+          // An issued token belongs to this flight, even if navigation retired it.
+          const {token} = await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'});
+          if (!current()) { this.api('/api/detail', {action: 'close', token}).catch(() => {}); return; }
+          this.token = token;
         }
-        if (this.revalidate) {
-          this.revalidate = false;
-          await this.api('/api/detail', {action: 'wake', token: this.token});
-          if (!this.attached || generation !== this.generation) return;
+        return read({action: 'begin', token: this.token, offset: 0});
+      };
+      try {
+        let data;
+        try { data = await begin(); }
+        catch (error) {
+          if (!current() || error.message !== 'detail_expired') throw error;
+          this.token = null; this.exporter?.close();
+          data = await begin();
         }
-        let data = await this.api('/api/detail', {action: 'begin', token: this.token, offset: 0});
-        if (!this.attached || generation !== this.generation) return;
+        if (!current()) return;
         if (data.values_invalidated) {
           this.invalidateValues(); this.sourceStatus(data); return;
         }
         if (data.result && this.values.scope && data.value_authority?.scope !== this.values.scope)
           this.invalidateValues();
+        this.syncLiveActivity(data, this.data?.activity?.scope);
         this.exporter?.update(this.token, data.export_available === true, data.export_name);
         if (!data.result) {
           this.readFailures = 0;
@@ -298,8 +323,8 @@ const SessionDetail = (() => {
         this.showActivityFeedback(data.activity_refresh || (materialTransfer ? 'pending' : null));
         this.historyProgress(rows.length, data.total);
         while (rows.length < data.total) {
-          const chunk = await this.api('/api/detail', {action: 'chunk', token: this.token,
-            offset: rows.length, revision: data.revision});
+          const chunk = await read({action: 'chunk', token: this.token,
+            offset: rows.length, revision: data.revision, ...(data.cache_first ? {size: 200} : {})});
           if (!this.attached || generation !== this.generation) return;
           const next = chunk.result?.view?.prompt_blocks?.[0]?.rows;
           if (chunk.revision !== data.revision || chunk.total !== data.total || chunk.offset !== rows.length ||
@@ -315,10 +340,14 @@ const SessionDetail = (() => {
         }
         if (!this.attached || generation !== this.generation) return;
         data.result.view.prompt_blocks[0].rows = rows;
+        this.update({...data, activity: data.activity && {...data.activity, failures: [...data.activity.failures]}});
+        this.readFailures = 0;
+        this.showActivityFeedback(data.activity_refresh);
+        this.sourceStatus(data);
         const failureIds = new Set((data.activity?.failures || []).map(call => call.identity));
         while (data.activity && data.activity.failures.length < Math.min(this.activityLimit, data.activity.total)) {
           const offset = data.activity.failures.length;
-          const page = await this.api('/api/detail', {action: 'activity', token: this.token,
+          const page = await read({action: 'activity', token: this.token,
             revision: data.revision, offset});
           if (!this.attached || generation !== this.generation) return;
           if (page.revision !== data.revision || page.offset !== offset || page.total !== data.activity.total ||
@@ -330,23 +359,23 @@ const SessionDetail = (() => {
           }
           data.activity.failures.push(...page.failures);
         }
-        this.loading('Preparing session…');
-        this.update(data);
-        this.readFailures = 0;
-        this.showActivityFeedback(data.activity_refresh);
-        this.sourceStatus(data);
+        if (data.activity?.failures.length !== this.data.activity?.failures.length) {
+          this.data.activity = data.activity;
+          this.activity.update(data.activity, data.result.view.timezone_id);
+        }
       } catch (error) {
         if (this.attached && generation === this.generation) this.readFailed(error);
-      } finally { this.busy = false; this.activity.more.disabled = false; }
+      } finally {
+        if (this.flight === flight) {
+          this.flight = null; this.busy = false; this.activity.more.disabled = false;
+        }
+      }
     }
     readFailed(error) {
-      if (error.message === 'detail_expired') {
-        this.token = null; this.exporter?.close(); this.activity.update(null);
-        if (this.data) this.data.activity = null;
-      }
+      if (error.message === 'detail_expired') { this.token = null; this.exporter?.close(); }
       if (invalidatingFailures.has(error.message)) {
         this.invalidateValues(); this.detach();
-      } else if (!this.data && (error.retryable === true || restartableReads.has(error.message)) &&
+      } else if ((restartableReads.has(error.message) || !this.data && error.retryable === true) &&
                  ++this.readFailures <= initialReadRetries) {
         this.initialFailed = false; this.waiting = true; this.retry.hidden = true;
         this.loading('Loading session…');
@@ -439,6 +468,7 @@ const SessionDetail = (() => {
       this.body.replaceChildren(); this.footer.replaceChildren(); this.footerBlock = null;
       this.context.contextObservation = null; this.context.update(null); this.activity.update(null);
       this.invocations.update(null);
+      this.syncLiveActivity({});
       this.exporter?.close(); this.freshness();
       this.quotaUsage?.update(null);
     }
@@ -474,6 +504,7 @@ const SessionDetail = (() => {
       block.rows.forEach((value, index) => {
         value = this.costs.select(value, source && [...source, value.id]);
         const row = old.get(value.id) || el('tr'); row.dataset.id = value.id;
+        row.detailValue = value;
         row.className = value.in_progress ? 'session-running' : value.has_error || value.aborted ? 'error' : '';
         const signature = JSON.stringify(value);
         const withdrawn = ['invalidated', 'unavailable'].includes(data.value_authority?.rows?.[value.event_id]);
@@ -513,7 +544,31 @@ const SessionDetail = (() => {
       }
       if (!this.data) this.loader.update({percent: 100, stage: 'Session ready', stageLabel: 'Session ready'});
       this.data = data; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
+      this.syncLiveActivity(data);
       this.freshness();
+    }
+    syncLiveActivity(data, rowScope = data.activity?.scope) {
+      const proof = data.live_activity;
+      const running = new Set(proof?.running);
+      const ended = new Set(proof?.ended);
+      for (const row of this.body.children) {
+        const value = row.detailValue;
+        if (!value) continue;
+        const observedRunning = rowScope === proof?.scope && running.delete(value.event_id);
+        const observedEnded = rowScope === proof?.scope && ended.has(value.event_id);
+        const uncertain = !observedRunning && !observedEnded && value.in_progress &&
+          (proof && rowScope === proof.scope || data.running_unverified);
+        if (!value.in_progress && !observedRunning && !row.activityOverlaid) continue;
+        row.activityOverlaid = observedRunning;
+        const display = {...value, in_progress: observedRunning || value.in_progress && !observedEnded && !uncertain,
+          execution_unverified: !observedRunning && !observedEnded && (value.execution_unverified || !!uncertain)};
+        row.classList.toggle('session-running', !!display.in_progress);
+        const label = row.querySelector('.session-prompt-state');
+        if (label) ReportView.text(label, promptLabel(display));
+      }
+      const message = running.size ? 'A prompt is running. Its detail is not available yet.' : '';
+      ReportView.text(this.liveActivityStatus, message);
+      this.liveActivityStatus.hidden = !message;
     }
     updateFooter(block) {
       this.footerBlock = block;

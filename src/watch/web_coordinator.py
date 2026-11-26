@@ -200,9 +200,8 @@ class WebWatchCoordinator(WatchCoordinator):
             except Exception:
                 details.failed('detail_worker_failed')
             self.detail_job = None
-        with details.lock:
-            if not details.leases:
-                return
+        if not details.has_leases():
+            return
         self.detail_job = self.detail_pool.submit(self._detail_capture, details, unavailable, int(self.clock_ms()))
 
     def _detail_capture(self, details, unavailable, now_ms):
