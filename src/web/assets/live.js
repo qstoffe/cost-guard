@@ -108,9 +108,9 @@ const LiveConnection = (() => {
         catch (_) { sync(); }
         return; // A received terminal notice must stop retry even across a replay gap.
       }
-      if (number !== sequence + 1) { sync(); return; }
+      if (number !== sequence + 1) { recoveringHost = true; sync(); return; }
       try { values[kind] = JSON.parse(event.data); }
-      catch (_) { sync(); return; }
+      catch (_) { recoveringHost = true; sync(); return; }
       sequence = number; publish(kind === 'live');
     }
     function openStream() {
@@ -120,7 +120,9 @@ const LiveConnection = (() => {
       const current = () => !stopped && source === opened;
       for (const kind of ['live', 'progress', 'watch_history', 'history', 'sessions_cache', 'report_cache', 'terminal'])
         opened.addEventListener(kind, e => { if (current()) accept(kind, e); });
-      opened.addEventListener('resync', () => { if (current()) sync(); });
+      opened.addEventListener('resync', () => {
+        if (current()) { recoveringHost = true; sync(); }
+      });
       opened.addEventListener('authorization_required', () => {
         if (!current()) return;
         // A concurrent initial handoff may have replaced this stream's cookie.
@@ -142,7 +144,7 @@ const LiveConnection = (() => {
     function revalidate(afterNetworkChange = false) {
       if (stopped) return;
       if (afterNetworkChange) recoveringHost = true;
-      if (!streamOpen || authenticatedAt == null || clock.now() - authenticatedAt >= 15000)
+      if (!streamOpen)
         report('reconnecting', 'RECONNECTING — revalidating after idle; last observation retained, not live.');
       sync();
     }

@@ -326,11 +326,22 @@ const AccountTimelineView = (() => {
       if (this.visible && !this.pending) this.timer = setTimeout(() => this.refresh(), delay);
     }
 
-    wake(hint, reconnected) {
-      if (!this.cacheEvents || hint === this.cacheHint && !reconnected) return;
+  wake(hint, reconnected) {
+      if (!this.cacheEvents || !this.visible || hint === this.cacheHint && !reconnected) return;
       this.cacheHint = hint;
       if (this.pending) this.cachePending = true;
       else this.schedule(0);
+    }
+
+    catchUp() {
+      if (!this.visible) return;
+      if (this.selectionRead) {
+        this.cachePending = true;
+        this.schedule(0);
+        return;
+      }
+      this.retireRead();
+      this.refresh();
     }
 
     async refresh() {
@@ -364,7 +375,7 @@ const AccountTimelineView = (() => {
           if (working || this.readFailed && selection) this.draw();
           return;
         }
-        if (generation !== this.generation) return;
+        if (this.pending !== request || request.signal.aborted || generation !== this.generation) return;
         const terminalChanged = this.terminal !== (value.terminal === true);
         this.terminal = value.terminal === true;
         if (value.scope !== this.scope) {

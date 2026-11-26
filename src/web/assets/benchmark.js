@@ -85,7 +85,8 @@ const BenchmarkView = (() => {
       } finally { this.controls(this.writable); if (!this.manual) this.restoreFocus?.(); }
     }
     async load(api, force = false) {
-      if (this.loading || !force && Date.now() - this.checked < 5000) return;
+      if (this.loading) { if (force) this.pending = true; return; }
+      if (!force && Date.now() - this.checked < 5000) return;
       this.loading = true; this.checked = Date.now();
       this.controls(this.writable, api);
       try {
@@ -107,6 +108,7 @@ const BenchmarkView = (() => {
       } finally {
         this.loading = false; this.controls(this.writable);
         if (!this.manual) { this.restoreFocus?.(); this.restoreFocus = null; }
+        if (this.pending) { this.pending = false; this.load(api, true); }
       }
     }
     efforts() {

@@ -13,11 +13,12 @@ REFERENCE_FIELDS = ('publisher', 'model', 'release_date', 'selectable', 'superse
 
 
 class ModelSnapshots:
-    def __init__(self, archive):
+    def __init__(self, archive, *, notify=None):
         self.archive = archive
         self.run = uuid4().hex
         self.committed = None
         self.observed = 0
+        self.notify = notify
         # One known request; coalesce bursts without making cache readers
         # acquire a dispatcher or worker lock.
         self.demand = deque(maxlen=1)
@@ -48,6 +49,9 @@ class ModelSnapshots:
             return  # Retry from the writer; do not expose an uncommitted replacement.
         if saved:
             self.committed, self.observed = value, observed
+            if self.notify and any(prior.get('frame', {}).get(key) != frame.get(key)
+                                   for key in ('result_id', 'source_identity', 'terminal', 'stale')):
+                self.notify(('models',), ('all',))
 
     def _read(self):
         try:

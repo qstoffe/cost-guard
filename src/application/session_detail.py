@@ -15,6 +15,7 @@ from src.pricing.base import PricingUnavailableError
 from src.sources.errors import SourceError, SessionExportError
 
 from .detail_archive import DOMAIN as ARCHIVE_DOMAIN, archived_page, detail_projection, detail_revision, save_detail
+from .detail_live_activity import current_activity, detail_activity, fresh_activity
 from .detail_snapshots import DetailSnapshots
 from .projection import identity, project
 from .session_activity import ActivityHistory, activity_page, activity_summary
@@ -25,6 +26,7 @@ from .session_quota import session_quota_evidence, session_quota_usage
 
 LOG = logging.getLogger(__name__)
 ADMISSION_STALL_SECONDS = 120
+PINNED_READS = 4
 RECOVERABLE = frozenset({
     'detail_not_admitted', 'detail_no_progress', 'detail_worker_failed', 'detail_internal_error',
     'source_unavailable', 'concurrent_source_change', 'connection_timeout', 'connection_reset',
@@ -42,10 +44,12 @@ def prompt_activity(rows):
 
 
 class SessionDetails:
-    def __init__(self, *, clock=time.monotonic, archive=None):
+    def __init__(self, *, clock=time.monotonic, clock_ms=lambda: time.time_ns() // 1_000_000, archive=None):
         self.clock = clock
+        self.clock_ms = clock_ms
         self.last_owner_tick = None
         self.lock = Lock()
+        self.lease_lock = Lock()
         self.histories = OrderedDict()
         self.leases = OrderedDict()
         self.quota_context = None
@@ -53,11 +57,14 @@ class SessionDetails:
         self.archive = archive
         self.partition = None
         self.archive_target = None
+        self.live_activity = {}
+        self.read_epoch = 0
         self.snapshots = DetailSnapshots(archive, clock) if archive else None
 
     def bind_archive(self, partition, target):
         with self.lock:
             if self.archive_target is not None and target != self.archive_target:
+                self.live_activity = {}
                 for entry in self.histories.values():
                     # Keep archived reads and transport leases across source changes.
                     entry.update(history=ActivityHistory(), result=None, revision=None, due=0,
@@ -65,12 +72,14 @@ class SessionDetails:
                                  source_signal=None, activity_signal=None, quota_evidence=None,
                                  export_identity=None, saved_revision=None, source_unavailable=True)
                     entry['acquisition'].update(phase='queued', reason=None, attempts=0, changed_at=self.clock())
-                for lease in self.leases.values():
-                    lease.pop('reading', None)
-                    lease.pop('committed_reading', None)
-                    if (fixed := lease.get('committed_frozen')) is not None and fixed.runtime:
-                        lease.pop('committed_frozen', None)
-                    lease['frozen'] = None
+                with self.lease_lock:
+                    self.read_epoch += 1
+                    for lease in self.leases.values():
+                        lease.pop('reading', None)
+                        lease.pop('committed_reading', None)
+                        if (fixed := lease.get('committed_frozen')) is not None and fixed.runtime:
+                            lease.pop('committed_frozen', None)
+                        lease['frozen'] = None
                 self.quota_context = None
                 self.quota_capacities.clear()
                 if self.snapshots is not None:
@@ -91,6 +100,13 @@ class SessionDetails:
         """Reuse selected-root revisions and proven Watch rows; no source reads."""
         with self.lock:
             self.last_owner_tick = self.clock()
+            self._admit_leases()
+            # Observe already acquired activity even for dormant Detail routes;
+            # this neither renews their lease nor admits source work for them.
+            if self.snapshots is not None:
+                self.live_activity = {key: proof for key in self.histories
+                    if not unavailable and observation is not None and cards is not None
+                    and (proof := detail_activity(observation, key, cards.get(key))) is not None}
             for key, entry in self.histories.items():
                 if not self._active(key):
                     continue
@@ -159,6 +175,12 @@ class SessionDetails:
         entry['due'] = min(entry['due'], self.clock())
 
     def wake(self, token):
+        if self.snapshots is not None:
+            with self.lease_lock:
+                lease = self._touch_lease(token)
+                if lease['mode'] == 'live':
+                    lease['requested'] = True
+            return
         with self.lock:
             lease = self.leases.get(token)
             if lease is None:
@@ -173,7 +195,8 @@ class SessionDetails:
     def live_hints(self):
         with self.lock:
             return [dict(session_id=key, hint=identity((entry.get('source_signal'), entry['generation'],
-                entry.get('activity_signal'), entry.get('source_unavailable'))))
+                entry.get('activity_signal'), entry.get('source_unavailable'),
+                (proof['scope'], proof['running'], proof['ended']) if (proof := self._live_proof(key)) else None)))
                 for key, entry in self.histories.items() if self._active(key)]
 
     def archive_hints(self):
@@ -188,42 +211,70 @@ class SessionDetails:
         return [{**item, 'hint': identity((item['hint'], changes.get(item['session_id'], 0)))} for item in hints]
 
     def open(self, session_id, mode):
+        if self.snapshots is not None and mode == 'live':
+            with self.lease_lock:
+                # Reading an already committed projection does not require a
+                # mutable acquisition entry. The existing owner admits it later.
+                return self._open_lease(session_id, mode, after=-1)
         with self.lock:
-            # Reclaim abandoned transport handles, not observed history/rows.
-            for token, lease in tuple(self.leases.items()):
-                if self.clock() - lease["touched"] > 300:
-                    del self.leases[token]
-            if session_id not in self.histories:
-                leased = {lease['session_id'] for lease in self.leases.values()}
-                while len(self.histories) >= 16:
-                    victim = next((key for key in self.histories if key not in leased), None)
+            with self.lease_lock:
+                entry = self.histories.get(session_id)
+                generation = entry['generation'] if entry else 0
+                validated = entry and entry.get('validated')
+                after = generation - 1 if validated is not None and 0 <= self.clock() - validated <= 3600 else generation
+                token = self._open_lease(session_id, mode, after)
+            self._admit_leases()
+            return token
+
+    def _open_lease(self, key, mode, after):
+        now = self.clock()
+        for token, lease in tuple(self.leases.items()):
+            if now - lease['touched'] > 300:
+                del self.leases[token]
+        keys = {lease['session_id'] for lease in self.leases.values()}
+        if len(self.leases) >= 32 or (key not in keys and len(keys) >= 16):
+            raise RuntimeError('detail_busy')
+        token = uuid4().hex
+        self.leases[token] = dict(session_id=key, mode=mode, frozen=None, after=after,
+                                  touched=now, opened=now, requested=True)
+        return token
+
+    def _admit_leases(self):
+        # Called on the acquisition lane. No cache IO while holding the lease lock.
+        with self.lease_lock:
+            now = self.clock()
+            leases = [lease for lease in self.leases.values() if now - lease['touched'] <= 300]
+            keys = {lease['session_id'] for lease in leases}
+            requested = tuple(dict.fromkeys(lease['session_id'] for lease in leases if lease.pop('requested', False)))
+        for key in requested:
+            if key not in self.histories:
+                if len(self.histories) >= 16:
+                    victim = next((key for key in self.histories if key not in keys), None)
                     if victim is None:
-                        break
+                        continue  # All current entries belong to transport handles.
                     del self.histories[victim]
                     if self.snapshots is not None:
                         self.snapshots.discard(victim)
-            if len(self.leases) >= 32 or (session_id not in self.histories and len(self.histories) >= 16):
-                raise RuntimeError("detail_busy")
-            entry = self.histories.setdefault(session_id, dict(history=ActivityHistory(), result=None, activity=None,
-                revision=None, due=0, state="loading", observed_at_ms=None, generation=0, timezone_id="UTC",
-                value_authority=None, quota_evidence=None,
-                row_observations={}, omitted_ids=frozenset(), ccost_display_unit="credits",
-                 acquisition=dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
-                    queued_at=self.clock(), changed_at=self.clock(), started_at=None), attempt=None,
-                retry_windows=0, retry_at=None, attempt_leases=()))
-            if entry['acquisition']['phase'] not in {'failed', 'retrying'}:
-                entry["due"] = 0
-            token = uuid4().hex
-            now = self.clock()
-            self.leases[token] = dict(session_id=session_id, mode=mode, frozen=None,
-                 after=entry['generation'] - 1 if entry.get('validated') is not None and
-                      0 <= now - entry['validated'] <= 3600 else entry['generation'], touched=now, opened=now)
-            return token
+                self.histories[key] = dict(history=ActivityHistory(), result=None, activity=None, revision=None,
+                    due=0, state='loading', observed_at_ms=None, generation=0, timezone_id='UTC',
+                    value_authority=None, quota_evidence=None, row_observations={}, omitted_ids=frozenset(),
+                    ccost_display_unit='credits', acquisition=dict(phase='queued', reason=None, attempts=0,
+                        completed=0, percent=0, queued_at=now, changed_at=now, started_at=None), attempt=None,
+                    retry_windows=0, retry_at=None, attempt_leases=())
+            entry = self.histories[key]
+            status = entry['acquisition']
+            if (status['phase'] == 'queued' and entry['attempt'] is None
+                    and now - status['changed_at'] >= ADMISSION_STALL_SECONDS):
+                # A dormant route did not wait for the owner while it had no lease.
+                status.update(queued_at=now, changed_at=now)
+            self._wake(entry)
 
     def invalidate(self):
         with self.lock:
-            self.leases.clear()
+            with self.lease_lock:
+                self.leases.clear()
             self.histories.clear()
+            self.live_activity = {}
             self.quota_context = None
             self.quota_capacities.clear()
             if self.snapshots is not None:
@@ -249,15 +300,20 @@ class SessionDetails:
             lease["frozen"] = self._capture(entry)
 
     def close(self, token):
-        with self.lock:
+        with (self.lease_lock if self.snapshots is not None else self.lock):
             self.leases.pop(token, None)
+
+    def has_leases(self):
+        with self.lease_lock:
+            now = self.clock()
+            return any(now - lease['touched'] <= 300 for lease in self.leases.values())
 
     def retry(self, token):
         """Explicit intent resets only the failure budget, never a valid snapshot."""
         with self.lock:
-            lease = self.leases.get(token)
-            if lease is None:
-                raise KeyError('detail_expired')
+            with self.lease_lock:
+                lease = self._touch_lease(token)
+            self._admit_leases()
             entry = self.histories[lease['session_id']]
             entry['attempt'] = None
             entry['retry_windows'] = 0
@@ -265,18 +321,19 @@ class SessionDetails:
             entry['due'] = 0
             entry['acquisition'] = dict(phase='queued', reason=None, attempts=0, completed=0, percent=0,
                 queued_at=self.clock(), changed_at=self.clock(), started_at=None)
-            lease['touched'] = self.clock()
             self._publish_snapshot(lease['session_id'], entry)
 
     def _active(self, key):
-        return any(lease['session_id'] == key and self.clock() - lease['touched'] <= 300
-                   and (lease['mode'] == 'live' or
-                        (lease['frozen'] is None and 'committed_frozen' not in lease))
-                   for lease in self.leases.values())
+        with self.lease_lock:
+            return any(lease['session_id'] == key and self.clock() - lease['touched'] <= 300
+                       and (lease['mode'] == 'live' or
+                            (lease['frozen'] is None and 'committed_frozen' not in lease))
+                       for lease in self.leases.values())
 
     def _attempt_active(self, key, entry):
-        return any(token in self.leases and self.clock() - self.leases[token]['touched'] <= 300
-                   for token in entry['attempt_leases'])
+        with self.lease_lock:
+            return any(token in self.leases and self.clock() - self.leases[token]['touched'] <= 300
+                       for token in entry['attempt_leases'])
 
     def _schedule(self, entry):
         status = entry['acquisition']
@@ -293,6 +350,7 @@ class SessionDetails:
     def claim(self, *, unavailable=False):
         with self.lock:
             self.last_owner_tick = self.clock()
+            self._admit_leases()
             # Re-arm only on the existing owner lane, after cooldown and while a
             # live lease still wants this source. HTTP reads cannot reset budgets.
             for key, entry in self.histories.items():
@@ -314,8 +372,9 @@ class SessionDetails:
             entry['attempt_signal'] = entry.get('source_signal')
             entry['attempt_partition'] = self.partition
             entry['wake'] = False
-            entry['attempt_leases'] = tuple(token for token, lease in self.leases.items()
-                if lease['session_id'] == key and self.clock() - lease['touched'] <= 300)
+            with self.lease_lock:
+                entry['attempt_leases'] = tuple(token for token, lease in self.leases.items()
+                    if lease['session_id'] == key and self.clock() - lease['touched'] <= 300)
             entry['acquisition'] = dict(phase='selecting', reason=None, percent=3, attempt_id=attempt,
                  attempts=entry['acquisition']['attempts'] + 1, completed=0,
                  queued_at=self.clock(), changed_at=self.clock(), started_at=self.clock())
@@ -364,11 +423,12 @@ class SessionDetails:
             if reason:
                 if reason in {"source_identity_changed", "session_missing"}:
                     entry["activity"] = None
-                    for lease in self.leases.values():
-                        if lease["session_id"] == key:
-                            for name in ("reading", "frozen"):
-                                if lease.get(name) is not None:
-                                    lease[name] = {**lease[name], "activity": None}
+                    with self.lease_lock:
+                        for lease in self.leases.values():
+                            if lease["session_id"] == key:
+                                for name in ("reading", "frozen"):
+                                    if lease.get(name) is not None:
+                                        lease[name] = {**lease[name], "activity": None}
                 status['reason'] = reason
                 status['recoverable'] = outcome.get('recoverable', False)
                 status['phase'] = 'failed' if outcome.get('terminal') or status['attempts'] >= 3 else 'retrying'
@@ -453,12 +513,14 @@ class SessionDetails:
             accounts, source, now, stale = self.quota_context
             quota = session_quota_usage(entry.get('quota_evidence'), accounts, source, now,
                 stale=stale or status['phase'] == 'failed', capacity_cache=self.quota_capacities)
+        running_ids = sorted(key for key, value in entry.get('prompt_activity', {}).items() if value[0] and not value[1])
         frame = dict(revision=entry['revision'], generation=entry['generation'], observed=entry['observed_at_ms'],
             partition=self.partition, state=entry['state'], validated=entry.get('validated'),
             unavailable=unavailable, acquisition=status, quota_usage=quota,
             export_available=not unavailable and bool(entry.get('export_identity')),
             activity_revision=entry.get('activity_revision'),
-            running=any(value[0] for value in entry.get('prompt_activity', {}).values()),
+             running=bool(running_ids), running_ids=running_ids,
+             execution_scope=(entry.get('activity') or {}).get('scope'),
             activity_refresh=(('unavailable' if unavailable or reason else 'pending')
                               if entry.get('activity_signal') else None))
         if projection is not None:
@@ -477,10 +539,13 @@ class SessionDetails:
     def export_identity(self, token):
         """Only a freshly observed canonical selection may authorize transfer."""
         with self.lock:
-            lease = self.leases.get(token)
-            if lease is None or self.clock() - lease['touched'] > 300:
-                raise KeyError('detail_expired')
-            entry = self.histories[lease['session_id']]
+            with self.lease_lock:
+                lease = self.leases.get(token)
+                if lease is None or self.clock() - lease['touched'] > 300:
+                    raise KeyError('detail_expired')
+            entry = self.histories.get(lease['session_id'])
+            if entry is None:
+                return None
             validated = entry.get('validated')
             if entry.get('source_unavailable') or validated is None or self.clock() - validated > 3600:
                 return None
@@ -513,8 +578,9 @@ class SessionDetails:
 
     def activity_page(self, token, revision, offset):
         if self.snapshots is not None:
-            lease = self._committed_lease(token)
-            read = lease.get('committed_reading') or lease.get('committed_frozen')
+            with self.lease_lock:
+                lease = self._touch_lease(token)
+                read = lease.get('committed_reading', {}).get(revision) or lease.get('committed_frozen')
             if read is None or read.fact is None or revision != detail_revision(
                     read.fact, read.frame if read.runtime else None):
                 raise KeyError('detail_read_stale')
@@ -535,6 +601,10 @@ class SessionDetails:
     def _committed_lease(self, token):
         # Token lookup and touch are transport bookkeeping. The report reader
         # never takes the acquisition lock, which protects mutable source proof.
+        with self.lease_lock:
+            return self._touch_lease(token)
+
+    def _touch_lease(self, token):
         lease = self.leases.get(token)
         now = self.clock()
         if lease is None or now - lease['touched'] > 300:
@@ -542,38 +612,57 @@ class SessionDetails:
         lease['touched'] = now
         return lease
 
-    def _committed_page(self, token, offset, revision, anchor, *, begin, chunk):
-        lease = self._committed_lease(token)
-        key, mode = lease['session_id'], lease['mode']
-        read = lease.get('committed_reading') if chunk else lease.get('committed_frozen')
+    def _live_proof(self, key):
+        return fresh_activity(self.live_activity.get(key), self.clock_ms())
+
+    def _committed_page(self, token, offset, revision, anchor, *, begin, chunk, size):
+        with self.lease_lock:
+            lease = self._touch_lease(token)
+            key, mode = lease['session_id'], lease['mode']
+            epoch = self.read_epoch
+            read = lease.get('committed_reading', {}).get(revision) if chunk else lease.get('committed_frozen')
+        proof = self._live_proof(key) if begin and mode == 'live' else None
         if read is None:
             if chunk:
                 raise KeyError('detail_read_stale')
-            read = self.snapshots.read(key, lease['after'])
-        if begin:
-            lease['committed_reading'] = read
-        if mode == 'snapshot' and read.fact is not None:
-            lease['committed_frozen'] = read
+            read = self.snapshots.read(key, lease['after'], proof=proof)
+        with self.lease_lock:
+            if self.leases.get(token) is not lease or epoch != self.read_epoch:
+                raise KeyError('detail_read_stale')
+            if begin and read.fact is not None:
+                pinned = lease.setdefault('committed_reading', OrderedDict())
+                key_revision = detail_revision(read.fact, read.frame if read.runtime else None)
+                pinned[key_revision] = read
+                pinned.move_to_end(key_revision)
+                while len(pinned) > PINNED_READS:
+                    pinned.popitem(last=False)
+            if mode == 'snapshot' and read.fact is not None:
+                lease['committed_frozen'] = read
         if read.fact is None:
             status = read.acquisition
             if status is None and self.clock() - lease['opened'] >= ADMISSION_STALL_SECONDS:
                 status = dict(phase='failed', reason='detail_not_admitted', retry_available=True)
             return dict(state=read.frame.get('state', 'loading'), pending=True, result=None, acquisition=status,
-                        values_invalidated=bool(status and status['reason'] in INVALID_REASONS),
-                        activity_refresh=read.frame.get('activity_refresh'))
+                         values_invalidated=bool(status and status['reason'] in INVALID_REASONS),
+                         activity_refresh=read.frame.get('activity_refresh'),
+                         live_activity=proof)
         status = read.acquisition
         runtime = read.frame if read.runtime else None
         response = archived_page(read.fact, revision, offset, anchor, mode=mode, begin=begin, chunk=chunk,
-                                 acquisition=status if status and status['phase'] == 'failed' else None,
-                                 runtime=runtime)
+                                  acquisition=status if status and status['phase'] == 'failed' else None,
+                                  runtime=runtime, size=size)
+        if begin and mode == 'live':
+            response['live_activity'] = current_activity(read.fact, proof)
+            response['running_unverified'] = bool(runtime and runtime['running'] and
+                self.clock() - runtime['validated'] > 300 and not response['live_activity'])
         if response['export_available']:
             block, = response['result']['view']['prompt_blocks']
             response['export_name'] = analysis_filename(block.get('title'), key)
         return response
 
-    def page(self, token, offset, revision=None, anchor=None, *, begin=False, chunk=False):
+    def page(self, token, offset, revision=None, anchor=None, *, begin=False, chunk=False, size=None):
         if self.snapshots is not None:
-            return self._committed_page(token, offset, revision, anchor, begin=begin, chunk=chunk)
+            return self._committed_page(token, offset, revision, anchor, begin=begin, chunk=chunk, size=size)
         with self.lock:
             lease = self.leases.get(token)
             if lease is None:

@@ -530,14 +530,16 @@ class RequestHandler(BaseHTTPRequestHandler):
                     else:
                         owner.close(value["token"])
                     result = {"state": action}
-                elif action in ("page", "begin", "chunk") and set(value) <= {"action", "token", "offset", "revision", "anchor"}:
+                elif action in ("page", "begin", "chunk") and set(value) <= {"action", "token", "offset", "revision", "anchor", "size"}:
                     offset = value.get("offset", 0)
+                    size = value.get("size")
                     if (type(offset) is not int or offset < 0 or offset > 2**53 or
+                            "size" in value and (action != "chunk" or type(size) is not int or not 1 <= size <= 200) or
                             any(value.get(k) is not None and (not isinstance(value[k], str) or len(value[k]) > 64)
                                 for k in ("revision", "anchor"))):
                         raise ValueError()
                     result = owner.page(value["token"], offset, value.get("revision"), value.get("anchor"),
-                                        begin=action == "begin", chunk=action == "chunk")
+                                         begin=action == "begin", chunk=action == "chunk", size=size)
                 else:
                     raise ValueError()
             else:
