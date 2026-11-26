@@ -1,10 +1,27 @@
 // Canonical fixture exports through actual Full/Mini PiP, Sessions and detail DOM.
 const assert = require('node:assert/strict');
 module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
+  async function heading(id, selector, label, scope) {
+    await command('Page.bringToFront',{},id);
+    await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},id);
+    const target = `document.querySelector(${JSON.stringify(selector)})`;
+    assert.equal(await evaluate(id, `${target}?.textContent.trim()`), label, selector);
+    await evaluate(id, `${target}.focus()`);
+    await until(id, `${target}.getAttribute('aria-describedby')?.includes('context-help') &&
+      document.querySelector('#context-help')?.matches(':popover-open')`);
+    require('../fixtures/ccost_definition.cjs')(await evaluate(id, `document.querySelector('#context-help').textContent`), scope);
+    await evaluate(id, `${target}.blur()`);
+  }
+  await heading(owner,'.watch-daily strong','CCost Today',/local calendar day/);
+  await heading(owner,'.watch-active th:nth-child(6) button','CCost',/this prompt.*linked subagent/);
+  await heading(owner,'.watch-active .watch-session-summary > div:last-child > span:first-child','Total CCost:',/entire session.*linked subagent/);
+  await heading(mini,'.mini-daily > span:first-child > span','CCost Today',/local calendar day/);
+  await heading(mini,'.mini-prompts th:nth-child(3) button','CCost',/latest represented prompt/);
+  await heading(mini,'.mini-prompts th:nth-child(4) button','Total',/entire session/);
   const full = '.watch-active tbody td:nth-child(6) .help-value';
   const prompt = '.mini-prompts tbody td:nth-child(3) .mini-cost-value';
   const total = '.mini-prompts tbody td:nth-child(4) .mini-cost-value';
-  await require('./probe_tiny_ccost.cjs')({command,evaluate,until,owner,mini,checks,layouts,full,prompt,total});
+  await require('./probe_tiny_ccost.cjs')({command,evaluate,until,owner,mini,checks,layouts,full,prompt,total,heading});
   for (const unit of ['credits','usd']) {
     for (const mode of ['mixed','zero','absent','mixed']) {
       await evaluate(owner,`(() => {
@@ -128,6 +145,11 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
       if(mode==='absent')
         assert.equal(await evaluate(owner,`numericSessions.root.querySelector('tbody td:nth-child(4) .metric-spinner')?.getAttribute('aria-label')`),'Loading CCost');
       layouts.push({unit,mode,surface:'Sessions/detail/footer',cells});
+      if (unit === 'credits' && mode === 'zero') {
+        await heading(owner,'.sessions-catalog th:nth-child(4) button','CCost',/entire session.*linked subagent/);
+        for (const [col,label,scope] of [[4,'CCost',/this prompt/],[8,'Ictx CCost',/first request/],[9,'Extra CCost',/output.*later requests/]])
+          await heading(owner,`.session-detail th:nth-child(${col}) button`,label,scope);
+      }
     }
   }
   checks.push('Both units: canonical partial, unavailable, zero and refresh-back values in Full Watch, Mini/PiP, Sessions, detail/footer and cost-help amounts; no numeric prefix or replacement decoration');
@@ -147,8 +169,15 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
       numericStatsState={period:'today',result:{source:{identity:'stats-${unit}',generation:'v2'},view:{
         kind:'ai-stats',timezone_id:'UTC',ai_stats_policy:'fun-5-buckets',ai_stats_work:{scopes:{today:{ready:true}}},
         ai_stats:[{period:'today',start_ms:1000,metrics}]}}};
-      numericStats.update(numericStatsState);
-    })()`);
+       numericStats.update(numericStatsState);
+     })()`);
+    if (unit === 'credits') {
+      for (const [metric,label,scope] of [
+        ['hourly-rate','AI Hourly Rate',/Fixture rates/],['total-cost','Total AI Cost',/selected period/],
+        ['subagent-cost','Subagent Cost',/subagent work/],['average-cost','Average Cost per Session',/per session/],
+        ['expensive-session','Most Expensive Session',/highest reference cost/]])
+        await heading(owner,`[data-metric="${metric}"] h4 button`,label,scope);
+    }
     for(const [raw,complete,expected] of [['0',false,125],['100',true,100],['0',true,0]]) {
       await evaluate(owner,`(() => {
         const metric=numericStatsState.result.view.ai_stats[0].metrics.find(m=>m.metric==='total-cost');
@@ -175,4 +204,6 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
     assert.equal(await evaluate(owner,pending),true,'recovering acquisition restores pending values');
   }
   checks.push('AI Stats DOM: stable field-named spinners, blocked/recovering states, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation');
+  checks.push('Exact first line and scope in focused Full/Mini, Accounts card, Sessions/Detail and AI Stats heading popovers');
+  await require('./probe_ccost_reports.cjs')({evaluate,owner,heading,checks});
 };

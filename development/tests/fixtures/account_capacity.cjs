@@ -38,7 +38,7 @@ module.exports=(vm,context,sample,helpText)=>{
       assert.equal(target.events.focus,undefined);
       assert.notEqual(target.tabIndex,0,'no inert summary or period-cost focus stop');
     }
-    assert.equal(helpText(card.children[1].children[0]),"This account's reference cost for the local calendar day.");
+    assert.equal(helpText(card.children[1].children.at(-1)),"This account's reference cost for the local calendar day.");
     assert.equal(card.querySelectorAll('progress')[0].attributes['aria-label'],'Weekly Mixed CASE remaining');
     assert.match(secondary.children[1].textContent,/^5-hour/);
     assert.equal(secondary.children[0].className,'watch-quota-divider');

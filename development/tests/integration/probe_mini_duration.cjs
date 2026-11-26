@@ -115,7 +115,7 @@ module.exports = async ({evaluate,until,command,pip,ownerSession,checks,input='m
           error.observation={method,theme,scheme,unit,...(trace?await evaluate('durationInputTrace.read()'):{})};
           throw error;
         });
-        assert.equal(await evaluate(`${panel}.textContent`),'The entire session’s reference cost, including attributed linked subagents.');
+        require('../fixtures/ccost_definition.cjs')(await evaluate(`${panel}.textContent`), /entire session.*linked subagent/);
       }
       if(input!=='touch') {
       await key('Escape');await key('Tab');

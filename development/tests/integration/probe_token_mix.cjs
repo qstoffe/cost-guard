@@ -128,6 +128,13 @@ async function main() {
       }
     }
     checks.push('all 19 headings sort both directions by exact independent expectations; other table/total untouched');
+    const definition = require('../fixtures/ccost_definition.cjs');
+    for (const table of [0,1]) {
+      const button = `document.querySelectorAll('.token-mix-table')[${table}].querySelector('th:last-child button')`;
+      await evaluate(`${button}.focus()`);
+      await until(`${button}.getAttribute('aria-describedby')?.includes('context-help')`);
+      definition(await evaluate(`document.querySelector('#context-help').textContent`), /model and price tier.*not billing/);
+    }
     await evaluate(`document.querySelectorAll('.token-mix-table th button')[2].focus()`);
     await until(`document.getElementById('context-help')?.hidden===false`);
     assert.equal(await evaluate(`document.querySelectorAll('.token-mix-table [title]').length`),0);
@@ -138,6 +145,23 @@ async function main() {
     assert.equal(await evaluate(`document.querySelectorAll('tbody')[1].textContent===${JSON.stringify(publishers)}`),false);
     await evaluate(`ReportView.setUnit('credits',current.tokenMix.root); location.hash='#/settings'`);
     await until(`current.section==='settings'`);
+    const unit = `document.querySelector('#ccost-unit')`, label = `document.querySelector('label[for="ccost-unit"]')`;
+    await until(`${unit} && !${unit}.disabled`);
+    const originalUnit = await evaluate(`${unit}.value`);
+    for (const choice of ['credits','usd','default']) {
+      await evaluate(`${unit}.value='${choice}';${unit}.dispatchEvent(new Event('change'))`);
+      await until(`!${unit}.disabled && ${unit}.value==='${choice}'`);
+      await evaluate(`${label}.focus()`);
+      await until(`${label}.getAttribute('aria-describedby')?.includes('context-help')`);
+      definition(await evaluate(`document.querySelector('#context-help').textContent`), /same comparative cost in Credits or USD/);
+      await evaluate(`${unit}.focus()`);
+      await until(`${unit}.getAttribute('aria-describedby')?.includes('context-help')`);
+      const help = await evaluate(`document.querySelector('#context-help').textContent`);
+      assert.match(help, {credits:/Credits/,usd:/US dollars/,default:/default/i}[choice]);
+    }
+    await evaluate(`${unit}.value=${JSON.stringify(originalUnit)};${unit}.dispatchEvent(new Event('change'))`);
+    await until(`!${unit}.disabled && ${unit}.value===${JSON.stringify(originalUnit)}`);
+    checks.push('Both Total CCost headings and Settings label show the exact definition; Credits, USD and inherited choice keep their distinct help.');
     await evaluate(`location.hash='#/token-mix'`);
     await until(`current.section==='token-mix'`);
     assert.equal(await evaluate(`current.result.sequence`),1,'return reuses captured data without another job');

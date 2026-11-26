@@ -37,7 +37,7 @@ for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', 
     assert.equal(button['aria-describedby'], 'context-help');
     assert.equal(button.title, undefined, 'no overlapping native title');
     assert.ok(button.events.focus && button.events.click && button.events.pointerenter);
-    assert.equal(explanation,'Reference cost of this prompt, including attributed linked subagent calls.');
+    require('../fixtures/ccost_definition.cjs')(explanation, /this prompt.*linked subagent/);
     assert.doesNotMatch(explanation, /displayed zero|N\/A|not zero|cannot be priced|Input token share/);
     for (const [index, row] of card.body.children.entries()) {
       assert.equal(row.children.length, 10);

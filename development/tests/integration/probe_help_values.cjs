@@ -45,7 +45,7 @@ module.exports = async function values({command,evaluate,until,owner,mini,checks
       '\\)\\n\\nSub Agents:\\n• fixture/child-model — Low — \\('+(unit==='credits'?'8 Credits':'\\$0.08')+
       '\\)(?:\\n\\nDuration: .+)?$'));
     assert.doesNotMatch(compact,/• Input:|• Cached input:|• Cache write:/,'Mini uses compact help, not the full category essay');
-    for(const [id,selector] of [[owner,'.watch-active .watch-session-summary > div:nth-child(2) .help-value'],
+    for(const [id,selector] of [[owner,'.watch-active .watch-session-summary > div:nth-child(2) .help-value:nth-of-type(2)'],
         [mini,'.mini-prompts tr[data-id="root"] td:nth-child(4) .help-value']]) {
       await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9},id);
       await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).focus()`);

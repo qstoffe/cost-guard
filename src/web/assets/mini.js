@@ -370,6 +370,7 @@ const MiniWatch = (() => {
       this.summary.append(el('span', 'Cost Guard · Watch', 'mini-brand'));
       this.daily = el('p', undefined, 'mini-daily'); this.dailyText = el('span');
       this.dailyLead = el('span'); this.dailyAmount = el('span');
+      ContextHelp.value(this.dailyLead, ReportView.headerHelp.todayCost);
       this.dailyTail = el('span'); this.dailyText.append(this.dailyLead, this.dailyAmount, this.dailyTail);
       this.daily.append(this.dailyText);
       this.dailyNote = el('span', '', 'mini-daily-note'); this.daily.append(this.dailyNote);
@@ -397,7 +398,7 @@ const MiniWatch = (() => {
       for (const name of ['Activity', 'Session', 'CCost', 'Total', 'Ctx']) {
         const cell = this.el('th'); cell.scope = 'col';
         const explanation = {Activity: 'Sessions are sorted by activity, oldest at the top and newest at the bottom.\n• Running prompts show their start time.\n• Other rows show the prompt’s finish or last known start, or a newer session activity time when available.', Session: 'The name of the session.',
-          CCost: "Reference cost of this session's latest represented prompt, including attributed linked subagent calls.",
+          CCost: ReportView.ccostHelp("Reference cost of this session's latest represented prompt, including attributed linked subagent calls."),
           Total: ReportView.headerHelp.sessionCost,
           Ctx: ReportView.headerHelp.context}[name];
         const button = ContextHelp.button(name, explanation, this.doc);

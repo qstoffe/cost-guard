@@ -28,11 +28,12 @@ async function main() {
   const help = new Map();
   const context = vm.createContext({document: documentState, ContextHelp: {
     value(target, text) { help.set(target, text); }, attach(target, text) { help.set(target, text); }, dismiss() {}
-  }, ReportView: {
+   }, viewDoubles: {
    element(tag, text, className) { const node = new Node(tag); node.textContent = text; node.className = className; return node; },
     setUnit(unit) { documentState.unit = unit; },
     setQuotaMode(mode) { documentState.quotaMode = mode; }
   }});
+  vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8') + ';Object.assign(ReportView,viewDoubles)', context);
   vm.runInContext(fs.readFileSync('src/web/assets/settings.js', 'utf8'), context);
   const Settings = vm.runInContext('WebSettings', context);
    const defaults = {theme: 'classic', ccostDisplayUnit: 'usd', miniWatchPlacement: 'remember-last', miniWatchSize: 'fit-on-open', miniWatchRows: 5, quotaDisplayMode: 'used'};

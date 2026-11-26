@@ -18,7 +18,7 @@ const WebSettings = (() => {
       help: {classic: 'Use the dark, CLI-inspired palette, independent of system appearance.',
         web: 'Follow your system’s light or dark appearance.'}},
     {key: 'ccostDisplayUnit', id: 'ccost-unit', label: 'CCost display', endpoint: 'ccost', choices: [['credits', 'Credits'], ['usd', 'USD']],
-      explanation: 'Reference-cost units in Web and Mini Watch.',
+      explanation: () => ReportView.ccostHelp('Show the same comparative cost in Credits or USD.'),
       help: {credits: 'Show estimated reference cost in Credits; the underlying cost is unchanged.',
          usd: 'Show the same reference cost in US dollars.'}},
     {key: 'miniWatchPlacement', id: 'mini-placement', label: 'Mini Watch position', endpoint: 'mini-placement',
@@ -118,7 +118,8 @@ const WebSettings = (() => {
           select.addEventListener('focusin', event => { previewChoice(select, event.target.closest('option')); });
         }
         const label = e('label', field.label); label.htmlFor = select.id;
-        ContextHelp.value(label, field.explanation + ' Changes save immediately and apply only to Web.');
+        const explanation = typeof field.explanation === 'function' ? field.explanation() : field.explanation;
+        ContextHelp.value(label, explanation + ' Changes save immediately and apply only to Web.');
         ContextHelp.attach(select, () => choiceHelp(field, this.confirmed[field.key], this.defaults));
         const cell = e('div', undefined, 'settings-value'); cell.append(select);
         const reference = e('dl', undefined, 'settings-choice-reference');
