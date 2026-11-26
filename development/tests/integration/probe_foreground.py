@@ -15,6 +15,7 @@ from development.tests.fixtures.compact_reports import ROOT, report_service
 from development.tests.fixtures.model_views import model_report
 from development.tests.fixtures.synthetic_month import SyntheticMonthSource
 from development.tests.fixtures.watch_summary import summary_watch
+from development.tests.integration.foreground_period_frames import PeriodFrames
 from development.tests.integration.serve_data_dispatch import DispatchJobs
 from src.application.detail_archive import DOMAIN, acquired_detail
 from src.application.live_projection import project_live
@@ -25,9 +26,10 @@ from src.application.session_epoch_page import sort_value
 from src.cache.session_projection import SESSIONS_DOMAIN, SORT_COLUMNS
 from src.cache.web_archive import ArchiveFact, WebArchive, source_partition
 from src.benchmarks import parse_pages
-from src.reports.models import SessionUsageRow
+from src.reports.models import ReportKind, SessionUsageRow
 from src.reports.session_summary import encode_summary
 from src.reports.watch_capture import capture_rows
+from src.watch.models import WatchCard, WatchRow
 from src.watch.observers import observe_catalog
 from src.web.dispatch import DataDispatcher
 from src.web.host import WebHost
@@ -270,6 +272,46 @@ class ForegroundTests(unittest.TestCase):
         self.within('Models')
         self.assertEqual(jobs, len(self.jobs.jobs))
 
+    def period_frames(self):
+        frames = PeriodFrames(self.host, self.archive, self.now)
+        self.addCleanup(frames.close)
+        return frames
+
+    def check_period_return(self, kind, original, latest):
+        frames = self.period_frames()
+        frames.publish_report(kind, 1)
+        self.open_view('#/' + kind.value)
+        self.page.get_by_role('button', name='7 days', exact=True).click()
+        before = self.page.get_by_text(original, exact=True).first
+        expect(before).to_be_visible()
+        self.blur(hidden=True)
+        frames.publish_report(kind, 2)
+        expect(before).to_be_visible()
+        self.activate()
+        expect(self.page.get_by_text(latest, exact=True).first).to_be_visible(timeout=2000)
+        self.within(kind.value + ' (7 days)')
+
+    def test_selected_stats_record_updates_on_return(self):
+        self.check_period_return(ReportKind.AI_STATS, 'Session 1 in 7-days', 'Session 2 in 7-days')
+
+    def test_selected_token_mix_updates_on_return(self):
+        self.check_period_return(ReportKind.TOKEN_MIX, 'Model 0, revision 1', 'Model 0, revision 2')
+
+    def test_account_chart_applies_latest_committed_total_for_selected_period(self):
+        frames = self.period_frames()
+        frames.publish_chart(1)
+        self.open_view('#/accounts')
+        self.page.get_by_role('button', name='7 days', exact=True).click()
+        total = self.page.locator('.account-timeline-legend-value')
+        expect(total).to_have_text('$0.10')
+        self.blur(hidden=True)
+        frames.publish_chart(2)
+        expect(total).to_have_text('$0.10')
+        self.activate()
+        expect(total).to_have_text('$0.20', timeout=2000)
+        expect(total).to_be_visible()
+        self.within('Accounts CCost (7 days)')
+
     def test_benchmark_reconciles_committed_scores_despite_an_older_lookup(self):
         lane = self.host.benchmark
         def publish(score):
@@ -304,14 +346,31 @@ class ForegroundTests(unittest.TestCase):
             self.source.snapshots[key] = snap
             return snap
 
-        snapshot(30, True)
+        def publish_running(snap, capture):
+            prompt = next(row for row in capture.rows if row.in_progress)
+            card = WatchCard(key, snap.root.title, prompt.event_id, (WatchRow(key, snap.root.title, prompt),),
+                state='observed', observed_at_ms=capture.observed_at_ms)
+            frame = replace(summary_watch(), now_ms=capture.observed_at_ms, active_cards=(card,))
+            self.host.events.publish('live', dict(state='running', view=project_live(frame, 'UTC').to_json(),
+                source_observed_at_ms=capture.observed_at_ms, detail_hints=self.details.archive_hints()))
+
+        first = snapshot(30, True)
         token = self.details.open(key, 'live')
         self.details.tick(self.service)
         self.details.close(token)
-        self.open_view('#/sessions/' + key)
+        self.open_view('#/watch')
+        publish_running(first, capture_rows(self.service, first.root, fresh=first)[0])
+        expect(self.page.get_by_text(first.root.title, exact=True).first).to_be_visible()
+        with self.page.context.expect_page() as window:
+            self.page.locator('#mini-watch-toggle').click()
+        mini = window.value
+        mini_row = mini.get_by_text(first.root.title, exact=True)
+        expect(mini_row).to_be_visible()
+        self.page.evaluate("key => location.hash = '#/sessions/' + key", key)
         states = self.page.locator('.session-prompt-state')
         expect(states.filter(has_text='[RUNNING]')).to_have_text('[RUNNING] #30')
         self.blur(hidden=True)
+        self.page.evaluate('window.missEvents = false')  # Mini still receives Live; Detail is hidden.
         self.seconds += 1800
         self.assertFalse(self.details.has_leases())
         for count in (31, 32, 33):
@@ -327,6 +386,9 @@ class ForegroundTests(unittest.TestCase):
         card = SimpleNamespace(snapshot=snap, capture=capture, generation=1, verified_generation=1,
             source_status=SimpleNamespace(failed_at=None))
         self.details.observe_source(observe_catalog(self.source), {key: card})
+        publish_running(snap, capture)
+        mini_row.hover()
+        expect(mini.get_by_text('Prompt #34', exact=False).first).to_be_visible()
         expect(states.filter(has_text='[RUNNING]')).to_have_text('[RUNNING] #30')
         loads = self.source.load_count
         self.activate()
@@ -337,9 +399,8 @@ class ForegroundTests(unittest.TestCase):
         self.assertEqual(loads, self.source.load_count)
         expect(self.page.get_by_text('Could not update session activity', exact=False)).not_to_be_visible()
 
-        self.page.evaluate('window.missEvents = false')
         self.details.tick(self.service)
-        self.publish_watch('Detail ready')
+        publish_running(snap, capture)
         expect(states.filter(has_text='[RUNNING]')).to_have_text('[RUNNING] #34')
         expect(states).to_have_count(34)
         expect(pending).not_to_be_visible()

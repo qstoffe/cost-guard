@@ -92,7 +92,7 @@ async function main() {
   const context = vm.createContext({LiveConnection: transport, performance, AbortController, clearTimeout, document: {documentElement: new Node('html'), body: new Node('body'), querySelector: () => toolbar, createElement: tag => new Node(tag),
     getElementById: id => ids[id], querySelectorAll: () => nav, addEventListener: (key, fn) => { handlers['document:' + key] = fn; }}, window: {scrollTo(){},addEventListener: (key, fn) => { handlers[key] = fn; },
       matchMedia: () => ({addEventListener() {}, removeEventListener() {}})},
-    location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date, console});
+    location, history, URLSearchParams, fetch: wire, setTimeout: vmTimeout, queueMicrotask, Date, console});
   context.document.createElementNS = (_, tag) => new Node(tag);
   // Allowlisted synthetic state only: never cookie, CSRF or bootstrap values.
    diagnostics = () => ({requests, ...vm.runInContext(`({route: current?.section,
@@ -461,7 +461,7 @@ async function main() {
   // Reload with an ordinary deep link must not erase it or require the bootstrap again.
   location.hash = '#/sessions/root-0000';
   const reloaded = vm.createContext({LiveConnection: transport, performance, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
-     URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
+     URLSearchParams, fetch: wire, setTimeout: vmTimeout, queueMicrotask, Date: FixtureDate, console});
   require('../fixtures/web_help_vm.cjs')(vm, reloaded);
     for (const file of ['/render.js', '/report-loading.js', '/cached-reports.js', '/account-cards.js', '/watch.js', '/session.js', '/sessions.js']) vm.runInContext(await (await fetch(input.origin + file)).text(), reloaded);
   vm.runInContext(await (await fetch(input.origin + '/reports.js')).text(), reloaded);
@@ -477,7 +477,7 @@ async function main() {
   assert.equal(ids.refresh.disabled, true);
   location.hash = '#/live';
   const watchReload = vm.createContext({LiveConnection: transport, performance, AbortController, clearTimeout, document: context.document, window: context.window, location, history,
-    URLSearchParams, fetch: wire, setTimeout: vmTimeout, Date: FixtureDate, console});
+    URLSearchParams, fetch: wire, setTimeout: vmTimeout, queueMicrotask, Date: FixtureDate, console});
   require('../fixtures/web_help_vm.cjs')(vm, watchReload);
    for (const script of ['/render.js', '/report-loading.js', '/cached-reports.js', '/reports.js', '/settings.js', '/app.js']) {
     vm.runInContext(await (await fetch(input.origin + script)).text(), watchReload);

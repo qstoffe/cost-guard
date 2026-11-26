@@ -10,7 +10,7 @@ async function main() {
   let next = 0;
   let snapshot = {instance_id: 'first', sequence: 1, values: {
     live: {state: 'running', source_observed_at_ms: 900, view: {retained: 'not zero'}}}};
-  const context = vm.createContext({Date, api: async () => {
+  const context = vm.createContext({Date, AbortController, api: async () => {
     calls++; inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
     try {
       if (held) await new Promise(resolve => { releaseApi = resolve; });

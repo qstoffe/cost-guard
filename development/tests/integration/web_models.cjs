@@ -17,7 +17,7 @@ const all = (n, tag) => [...(n.tag === tag ? [n] : []), ...n.children.flatMap(c 
 const {view, fallback, benchmark, reviewed} = JSON.parse(fs.readFileSync(0, 'utf8'));
 const output = new Node('main'), controls = new Node('div');
 const state = {pages: {}, section: 'models'};
-const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, controls,
+const context = vm.createContext({document: {createElement: tag => new Node(tag)}, output, controls, AbortController,
   state, result: {view, observed_at_ms: 1, source: {status: 'acquired'}}, URLSearchParams});
 const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 vm.runInContext(fs.readFileSync('src/web/assets/render.js', 'utf8'), context);

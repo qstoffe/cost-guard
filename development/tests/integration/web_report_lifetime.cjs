@@ -15,7 +15,7 @@ const document = {hidden:false, body:node(), getElementById:id=>ids[id] || null,
   querySelector:selector=>selector==='.toolbar'?ids.toolbar:null, querySelectorAll:()=>[], addEventListener:(key,fn)=>{handlers[key]=fn;}};
 const location = {hash:'#/watch'}, history = {replaceState(){}};
 class Clock extends Date {static now(){return now;}}
-const context = vm.createContext({document, location, history, URLSearchParams, AbortController, Date:Clock,
+const context = vm.createContext({document, location, history, URLSearchParams, AbortController, queueMicrotask, Date:Clock,
   performance:{now:()=>now},
   setTimeout(fn,ms){const id=++sequence;timers.set(id,{fn,ms});return id;}, clearTimeout:id=>timers.delete(id),
   window:{addEventListener:(key,fn)=>{handlers[key]=fn;},scrollTo(){}},console,
