@@ -81,6 +81,40 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         active, history, _ = self.cards.project(now)
         return (active or history)[0].rows[-1].prompt
 
+    def test_owned_first_fire_timer_keeps_idle_card_without_billing_dormant_time(self):
+        sid = self.root.session_id
+        self.native.version = "2.4.2"
+        registration = json.loads(self.registration.read_text(encoding="utf-8"))
+        self.registration.write_text(json.dumps({**registration, "version": "2.4.2"}), encoding="utf-8")
+        timer = {"id": "timer", "sessionID": sid, "action": {"type": "prompt", "to": {"session": sid}},
+                 "status": "active", "runCount": 0, "time": {"created": 3800}, "trigger": {"type": "at"},
+                 "nextDueAt": 120_000}
+        self.native.automation_response = {"data": [timer]}
+        self.capture(10_000)
+        active, _, _ = self.cards.project(10_000)
+        card, = active
+        self.assertEqual(("waiting", 120_000), (card.ongoing.phase, card.ongoing.wake_at_ms))
+        self.assertIsNone(card.terminal_status)
+        prompt = card.rows[-1].prompt
+        self.assertFalse(prompt.in_progress)
+        self.assertEqual(1000, prompt.duration_ms)
+        self.capture(60_000)
+        later = self.row(60_000)
+        self.assertEqual((prompt.duration_ms, prompt.ccost, prompt.calls),
+                         (later.duration_ms, later.ccost, later.calls))
+        self.assertIn("/api/experimental/automation", [path for path, _ in self.native.requests])
+
+        timer.update(status="done", runCount=1, lastRunAt=120_000, lastOutcome="fired")
+        with patch("src.sources.opencode_v2_continuation.time.time_ns", return_value=120_001_000_000):
+            self.capture(120_001)
+        bridge, = self.cards.project(120_001)[0]
+        self.assertEqual(("waiting", None), (bridge.ongoing.phase, bridge.ongoing.wake_at_ms))
+        with patch("src.sources.opencode_v2_continuation.time.time_ns", return_value=136_000_000_000):
+            self.capture(136_000)
+        terminal, = self.cards.project(136_000)[0]
+        self.assertEqual(("completed", 166_000), (terminal.terminal_status, terminal.terminal_until_ms))
+        self.assertFalse(self.cards.project(166_000)[0])
+
     def test_qualified_concurrent_shells_publish_at_call_age_not_execution_age(self):
         # Both shells have just begun executing. Only the first has had a visible
         # Running call for ten seconds; the second crosses that threshold on a tick.

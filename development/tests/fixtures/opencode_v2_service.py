@@ -211,6 +211,8 @@ class CurrentV2Service:
             },
         ]
         self.active = {}
+        self.version = "2.1.0"
+        self.automation_response = None  # None leaves the route unavailable.
         self.events = []  # current event stream: objects or JSON-encoded event strings
         self.shells = None  # running-job registry; None answers 404 (unobservable)
         self.messages = {
@@ -271,7 +273,10 @@ class CurrentV2Service:
                 parsed = urlsplit(self.path)
                 query = parse_qs(parsed.query)
                 if parsed.path == "/api/info":
-                    self._json({"version": "2.1.0"})
+                    self._json({"version": owner.version})
+                    return
+                if parsed.path == "/api/experimental/automation" and owner.automation_response is not None:
+                    self._json(owner.automation_response)
                     return
                 if parsed.path == '/openapi.json' and owner.scoped_snapshots:
                     self._json({'openapi':'3.1.0', 'paths': {
