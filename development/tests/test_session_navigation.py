@@ -221,7 +221,7 @@ class SessionNavigationTests(unittest.TestCase):
                 self.catalog.valid[key] = revision, self.clock
                 self.catalog.activity_valid[key] = revision
                 if index < running_count:
-                    self.catalog._record_summary_prompt(key, self.catalog.rows[key], self.now)
+                    self.catalog._record_summary_prompt(key, self.catalog.rows[key], self.now, ended_prompts={})
             running_ids = [f"root-{index:04d}" for index in
                            sorted(range(running_count), key=lambda index: (-(index // 2), index))]
             for sort in ('activity', 'name', 'model', 'ccost', 'prompts', 'duration', 'ctx'):
@@ -264,7 +264,7 @@ class SessionNavigationTests(unittest.TestCase):
             self.catalog.valid[key] = revision, self.clock
             self.catalog.activity_valid[key] = revision
             if index < 51:
-                self.catalog._record_summary_prompt(key, self.catalog.rows[key], self.now)
+                self.catalog._record_summary_prompt(key, self.catalog.rows[key], self.now, ended_prompts={})
         first = self.request(navigation=1)
         old_pages = [self.request(first, offset=offset, epoch=first['epoch'])
                      for offset in (25, 50, 75)]
@@ -274,7 +274,7 @@ class SessionNavigationTests(unittest.TestCase):
         self.catalog.rows['root-0150'] = replace(self.catalog.rows['root-0150'], running=True,
             activity_prompt_id='new', prompt_started_ms=self.now, last_activity_ms=self.now)
         for key in ('root-0050', 'root-0150'):
-            self.catalog._record_summary_prompt(key, self.catalog.rows[key], self.now)
+            self.catalog._record_summary_prompt(key, self.catalog.rows[key], self.now, ended_prompts={})
         latest = self.request(first, applied=1)
         self.assertNotEqual(latest['epoch'], first['epoch'])
         self.assertEqual(latest['view']['session_usage'][0]['session_id'], 'root-0150')

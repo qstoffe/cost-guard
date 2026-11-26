@@ -552,9 +552,17 @@ const SessionsCatalog = (() => {
         value: label === 'N/A' ? null : label + (help ? '*' : ''), help,
         reason: value.metric_absences?.activity, onHelpLost: row.metricHelpLost
       });
-      row.className = value.running ? 'session-running' : '';
-      ReportView.text(row.runningMarker, value.running ? '[RUNNING] ' :
+      const status = value.running ? 'running' : value.terminal_status;
+      row.className = status ? `session-${status}` : '';
+      ReportView.text(row.statusMarker, status ? `[${status.toUpperCase()}] ` :
         value.activity_state === 'unverified' ? '[UNVERIFIED] ' : value.new_arrival ? '[NEW · Loading] ' : '');
+      const finalizing = value.finalization_status === 'pending';
+      const unavailable = value.finalization_status === 'unavailable';
+      ReportView.text(row.finalizationMarker, finalizing ? ' *' : unavailable ? ' !' : '');
+      if (finalizing || unavailable) {
+        const hint = finalizing ? 'Final session history is still being prepared.' : 'Final session history is unavailable.';
+        ContextHelp.value(row.finalizationMarker, hint);
+      } else ContextHelp.clearValue(row.finalizationMarker);
     }
     rows(values) {
       this.costs ||= new ReportView.CostDisplay();
@@ -573,8 +581,9 @@ const SessionsCatalog = (() => {
         row.value = value;
         if (!row.name) {
           row.activity = el('span'); row.name = el('a', undefined, 'session-name');
-          row.runningMarker = el('span'); row.titleNode = el('span');
-          row.name.append(row.runningMarker, row.titleNode);
+          row.statusMarker = el('span'); row.titleNode = el('span');
+          row.finalizationMarker = el('span');
+          row.name.append(row.statusMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
           ContextHelp.value(row.name, () => row.value.title);
           row.metricHelpLost = () => {
@@ -584,6 +593,7 @@ const SessionsCatalog = (() => {
           row.metrics = Array.from({length: 5}, () => el('span'));
           const cells = [row.activity, row.name, ...row.metrics];
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
+          row.activity.after(row.finalizationMarker);
         }
         this.activity(row);
         ReportView.text(row.titleNode, value.title);

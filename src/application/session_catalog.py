@@ -5,7 +5,7 @@ every period-eligible root; an unindexed root is not a canonically unknown metri
 """
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from heapq import nsmallest
 from threading import Event, Lock
 import time
@@ -28,6 +28,7 @@ from .session_archive import SessionArchive, cached_page, retain_pending_metrics
 from .session_archive_maintenance import advance_archive_maintenance
 from .session_epoch_page import ARRIVAL_SECONDS, epoch_page, recent_live_roots, sort_value
 from .session_previews import archived_previews, live_previews
+from .session_prompt_lifecycle import PROMPT_FRESHNESS_MS, PromptEvidence, observe_prompt_ends, record_prompt
 from .session_quota import source_scope
 from .session_report_runtime import publish_report_runtime
 from .session_catalog_scope import (
@@ -40,27 +41,14 @@ PASSIVE_ATTEMPTS = 4
 ARCHIVE_QUALIFICATION_ATTEMPTS = 3
 INTERACTIVE_ATTEMPTS = 12
 INTERACTIVE_ADMISSION_SECONDS = 0.35
-PROMPT_FRESHNESS_MS = 15_000
 UNCHANGED_ACTIVE_READ_SECONDS = 15
 FINISH_PLACEMENT_MS = 120_000
 
 
-@dataclass(frozen=True, slots=True)
-class PromptEvidence:
-    observed_ms: int
-    prompt_id: str
-    start_ms: int
-    running: bool
-    finish_ms: int | None
-    ended: bool = False
-    revision: str | None = None
-
-    @property
-    def identity(self):
-        return self.start_ms, self.prompt_id
-
-
 class SessionCatalog:
+    _record_prompt = record_prompt
+    observe_prompt_ends = observe_prompt_ends
+
     def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000),
                  timezone_id="UTC", archive=None):
         self.clock = clock
@@ -87,6 +75,7 @@ class SessionCatalog:
         self.running_roots = set()
         self.active_snapshots = ActiveSnapshotOffers()
         self.recent_finishes = {}
+        self.terminal_handoffs = {}
         self.interrupted = False
         self.lifecycle_cutoff_ms = 0
         self.leases = OrderedDict()
@@ -150,6 +139,7 @@ class SessionCatalog:
                 self.history_pending.clear()
                 self.history_queue.clear()
                 self.finalize_roots.clear()
+                self.terminal_handoffs.clear()
                 self.live_owned.clear()
                 self.continuous_since_ms = None
                 self.report_live_costs.clear()
@@ -307,6 +297,8 @@ class SessionCatalog:
                     self.interrupted = True
                     self.lifecycle_cutoff_ms = self.clock_ms()
                     self.recent_finishes.clear()
+                    self.terminal_handoffs.clear()
+                    self.finalize_roots.clear()
                     self.live_owned.clear()
                     self.continuous_since_ms = None
                     self.report_live_costs.clear()
@@ -321,7 +313,7 @@ class SessionCatalog:
             if source_changed:
                 self._invalidate_navigation()
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
-                             'failure_reasons', 'prompt_activity', 'running_roots', 'recent_finishes',
+                             'failure_reasons', 'prompt_activity', 'running_roots', 'recent_finishes', 'terminal_handoffs',
                               'model_dependencies', 'orders',
                               'archive_rejections', 'active_snapshots', 'finalize_roots', 'report_live_costs'):
                     getattr(self, name).clear()
@@ -418,6 +410,8 @@ class SessionCatalog:
             self.finalize_roots.intersection_update(self.prompt_activity)
             self.recent_finishes = {key: at for key, at in self.recent_finishes.items()
                                     if key in self.prompt_activity}
+            self.terminal_handoffs = {key: value for key, value in self.terminal_handoffs.items()
+                                      if key in self.prompt_activity}
             self.failures = {key: failure for key, failure in self.failures.items()
                              if key in self.roots and previous_roots[key].provenance == self.roots[key].provenance
                               and failure[0] == self.revisions.get(key)}
@@ -555,25 +549,6 @@ class SessionCatalog:
             if self.archive is not None and changed:
                 self._publish_report_runtime(changed)
 
-    def observe_prompt_ends(self, observations):
-        """A current Watch capture can stop the accepted prompt, not pick its finish clock."""
-        with self.lock:
-            if self.state != "observed":
-                return
-            now = self.clock_ms()
-            changed = set()
-            for root, revision, at, ended in observations:
-                key = root.session_id
-                if (key in self.running_roots and root.provenance == self.roots[key].provenance
-                        and revision == self.revisions.get(key) and 0 <= now - at <= PROMPT_FRESHNESS_MS):
-                    previous = self.prompt_activity[key]
-                    if previous.identity in ended:
-                        self._record_prompt(key, PromptEvidence(at, previous.prompt_id, previous.start_ms,
-                            False, None, ended=True, revision=revision), wake=True)
-                        changed.add(key)
-            if self.archive is not None and changed:
-                self._publish_report_runtime(changed)
-
     def offer_active_snapshots(self, epoch, snapshots):
         """Replace Watch's offers; a missing, failed, or changed capture cannot be replayed."""
         with self.lock:
@@ -612,68 +587,6 @@ class SessionCatalog:
             self.wake_revision += 1
             if self.archive is not None:
                 self._publish_report_runtime(finished)
-
-    def _record_prompt(self, key, evidence, *, wake=False):
-        now = self.clock_ms()
-        if (self.roots[key].archived_at_ms is not None or not isinstance(evidence.prompt_id, str)
-                or not self.lifecycle_cutoff_ms < evidence.observed_ms <= now
-                or not evidence.prompt_id or type(evidence.start_ms) is not int
-                or not 0 < evidence.start_ms <= now
-                or evidence.finish_ms is not None and not evidence.start_ms <= evidence.finish_ms <= now):
-            return
-        previous = self.prompt_activity.get(key)
-        was_running = self._running(key)
-        if evidence.finish_ms is not None:
-            evidence = replace(evidence, ended=True)
-        if not evidence.running and not evidence.ended:
-            return
-        if previous is None:
-            if not evidence.running:
-                return  # Ordinary history belongs to the scalar index.
-        else:
-            # An older prompt can still own active background work. Only a
-            # newer qualified positive can move the focal identity backward.
-            if (evidence.observed_ms < previous.observed_ms
-                    or evidence.identity < previous.identity
-                    and (not evidence.running or evidence.observed_ms == previous.observed_ms)):
-                return
-            if evidence.prompt_id == previous.prompt_id:
-                if (evidence.start_ms != previous.start_ms or (evidence.running and previous.finish_ms is not None
-                        and (evidence.revision == previous.revision or not wake))
-                        or evidence.observed_ms == previous.observed_ms and evidence.running):
-                    return
-                if evidence.ended and evidence.finish_ms is None and previous.finish_ms is not None:
-                    evidence = replace(evidence, finish_ms=previous.finish_ms, revision=previous.revision)
-        previous_finish = self.recent_finishes.get(key)
-        if evidence.running or evidence.finish_ms is not None:
-            self.recent_finishes.pop(key, None)
-        elif was_running:
-            # Sort/membership hint only, never a displayed or durable finish.
-            self.recent_finishes[key] = evidence.observed_ms
-        elif previous is not None and previous.identity != evidence.identity:
-            self.recent_finishes.pop(key, None)
-        self.prompt_activity[key] = evidence
-        if evidence.running:
-            self.running_roots.add(key)
-            if self.archive is not None:
-                self.live_owned.add(key)
-            self.history_queue.remove(key)
-            if wake and (not was_running or previous is not None and previous.identity != evidence.identity):
-                self.urgent_takeover.add(key)
-        else:
-            self.running_roots.discard(key)
-            self.urgent_takeover.discard(key)
-            if self.archive is not None and was_running and evidence.ended:
-                self.finalize_roots.add(key)
-                self.history_queue.remove(key)
-                if wake:
-                    self.urgent_takeover.add(key)
-        if self.archive is not None and (was_running != evidence.running
-                or previous_finish != self.recent_finishes.get(key)):
-            self.generation += 1
-        if wake and (previous is None or was_running != evidence.running or previous.identity != evidence.identity
-                     or previous.finish_ms != evidence.finish_ms):
-            self.wake_revision += 1
 
     def _running(self, key):
         # A quiet but qualified Live card may not change for minutes. Clock
@@ -896,6 +809,8 @@ class SessionCatalog:
                 if partition is not None and scope_partition(scope) != partition:
                     return
                 finalizing = self.archive is not None and key in self.finalize_roots and not self._running(key)
+                handoff = self.terminal_handoffs.get(key)
+                transition = handoff.transition if handoff is not None else None
                 active = (key in self.active or key in self.running_roots if self.archive is None
                           else self._archive_live_candidate(key) and not finalizing)
                 captured_at = self.clock_ms()
@@ -914,12 +829,12 @@ class SessionCatalog:
             try:
                 identity_values = []
                 evidence = []
-                ended_prompts = set()
+                ended_prompts = {}
                 row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
                      fresh_snapshot=fresh_snapshots or finalizing, active_snapshot=active_snapshot,
                     on_stage=lambda stage: self._stage(stage, retrying),
                     on_dependencies=identity_values.extend,
-                    on_prompt_ends=ended_prompts.update if active else None,
+                    on_prompt_ends=ended_prompts.update if active or finalizing else None,
                      on_evidence=evidence.append if partition else None,
                     activity_end_ms=min((window.end_ms for window in windows), default=None),
                     on_activity=lambda values, complete: memberships.update(
@@ -930,7 +845,8 @@ class SessionCatalog:
                 unqualified = bool(partition and not active and not row.running and actual == revision)
                 if (unqualified and evidence and isinstance(actual, str) and row.activity_qualified
                         and row.context_qualified and row.effort_qualified and not row.effort_pending
-                        and not row.model_pending):
+                        and not row.model_pending and (not finalizing or handoff is None
+                                                       or handoff.identity in ended_prompts)):
                     item, = evidence
                     usage = web_history_evidence.acquired_usage(service, item)
                     detail = acquired_detail(service, item) if usage is not None else None
@@ -951,7 +867,8 @@ class SessionCatalog:
                                         and not self._running(key)
                                         and (not self._archive_live_candidate(key)
                                              or finalizing and key in self.finalize_roots))
-                            if current:
+                            current_handoff = self.terminal_handoffs.get(key)
+                            if current and (current_handoff.transition if current_handoff else None) == transition:
                                 saved = self.archive.save(partition, key, actual, row, captured_at,
                                                            dependencies, identity_values, usage, detail)
             except Exception as error:
@@ -980,7 +897,7 @@ class SessionCatalog:
                             previous_row = self.rows.get(key)
                             previous_display = previous_row
                             if previous_display is None and self.archive is not None:
-                                previous_display = self.archive.rows.get(key)
+                                previous_display = self.archive.compatible_row(key)
                             self.rows[key] = retain_pending_metrics(row, previous_display)
                             if self.archive is not None:
                                 self.rows[key] = retain_readable_fields(self.rows[key], previous_display)
@@ -1012,13 +929,16 @@ class SessionCatalog:
                                 if self.rows[key] != previous_row:
                                     self.wake_revision += 1
                                 if saved:
-                                    self.archive.rows[key] = retain_readable_fields(row, self.archive.rows.get(key))
+                                    self.archive.rows[key] = (row if handoff is not None else
+                                        retain_readable_fields(row, self.archive.rows.get(key)))
                                     self.archive.authorities[key] = actual, dependencies, identity_values, partition, captured_at
                                     self.archive.effort_backfill.discard(key)
                                     self.archive.effort_refresh.discard(key)
                                     self.report_pending.pop(key, None)  # Removed in the same ready-row commit.
                                     self.archive_rejections.pop(key, None)
-                                    self.finalize_roots.discard(key)
+                                    current_handoff = self.terminal_handoffs.get(key)
+                                    if (current_handoff.transition if current_handoff else None) == transition:
+                                        self.finalize_roots.discard(key)
                                 elif unqualified:
                                     self._record_archive_rejection(key)
                                 if not self._archive_needs_capture(key):
@@ -1065,7 +985,7 @@ class SessionCatalog:
             self.work_sequence += 1
             self.work = dict(stage=stage, retrying=retrying, active=True, sequence=self.work_sequence)
 
-    def _record_summary_prompt(self, key, row, captured_at, *, historical=False, ended_prompts=()):
+    def _record_summary_prompt(self, key, row, captured_at, *, historical=False, ended_prompts):
         # A history job started without live context cannot overrule the
         # independent Watch lane. The latter can publish before this job ends.
         revision = self.revisions.get(key)
@@ -1078,9 +998,9 @@ class SessionCatalog:
                 if previous.identity not in ended_prompts:
                     return
                 self._record_prompt(key, PromptEvidence(captured_at, previous.prompt_id, previous.start_ms,
-                    False, None, ended=True, revision=revision))
+                    False, None, ended=True, revision=revision, outcome=ended_prompts[previous.identity]))
             self._record_prompt(key, PromptEvidence(captured_at, prompt[1], prompt[0], False, row.last_activity_ms,
-                ended=prompt in ended_prompts, revision=revision))
+                ended=prompt in ended_prompts, revision=revision, outcome=ended_prompts.get(prompt)))
 
     def _with_lifecycle(self, rows, lifecycle=None):
         if lifecycle is None:
@@ -1089,12 +1009,14 @@ class SessionCatalog:
             for name in ('running', 'last_activity_ms', 'prompt_started_ms', 'activity_prompt_id')})
             if row.running or row.session_id in self.prompt_activity else row for row in rows)
 
-    def _rows(self, keys):
+    def _rows(self, keys, *, compatible_archive=False):
         rows = []
         now = self.clock_ms()
         for key in keys:
             root = self.roots[key]
-            retained = self.archive.rows.get(key) if self.archive is not None else None
+            retained = None
+            if self.archive is not None:
+                retained = self.archive.compatible_row(key) if compatible_archive else self.archive.rows.get(key)
             value = self.rows.get(key) or retained or SessionUsageRow(key, root.title or "Untitled session", "N/A", False,
                                                         None, None, complete=False, activity_qualified=False)
             activity = value.last_activity_ms
@@ -1137,7 +1059,7 @@ class SessionCatalog:
         if self.archive is not None:
             return cached_page(self.archive, token=token, offset=offset, sort=sort, direction=direction,
                                period=period, navigation=navigation, now=self.clock_ms(), zone=self.timezone_id,
-                               unit=self.unit, finish_grace=FINISH_PLACEMENT_MS)
+                               unit=self.unit)
         with self.lock:
             self._expire_recent_finishes()
             return epoch_page(self, token=token, offset=offset, sort=sort, direction=direction,

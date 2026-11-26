@@ -15,6 +15,7 @@ SORT_COLUMNS = {
     'ctx': 'context_tokens',
 }
 SESSIONS_DOMAIN = 'sessions/1'
+TERMINAL_HIGHLIGHT_MS = 30_000
 
 
 def create_schema(db):
@@ -66,8 +67,13 @@ def create_runtime_schema(db):
         last_activity_ms INTEGER,
         latest_activity_ms INTEGER,
         payload TEXT NOT NULL,
+        finalizing INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY(run, item)
     ) WITHOUT ROWID''')
+
+
+def upgrade_runtime_schema(db):
+    db.execute('ALTER TABLE session_live ADD COLUMN finalizing INTEGER NOT NULL DEFAULT 0')
 
 
 def _decimal_key(amount):
@@ -90,7 +96,7 @@ def save_ready(db, item, partition, algorithm, revision, observed_ms, keys, last
     values = (item, partition, algorithm, revision, observed_ms, keys['activity'], last_at, latest_at,
               keys['name'], keys['model'], f'{effort[0]:02d}:{effort[1]}' if effort is not None else None,
               _decimal_key(keys['ccost']), keys['prompts'], keys['duration'], keys['ctx'])
-    db.execute('''INSERT INTO ready_sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    cursor = db.execute('''INSERT INTO ready_sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(item) DO UPDATE SET
             partition=excluded.partition, algorithm=excluded.algorithm, revision=excluded.revision,
             observed_ms=excluded.observed_ms, activity_ms=excluded.activity_ms,
@@ -100,18 +106,7 @@ def save_ready(db, item, partition, algorithm, revision, observed_ms, keys, last
             duration_ms=excluded.duration_ms, context_tokens=excluded.context_tokens
         WHERE (excluded.observed_ms, excluded.partition, excluded.revision) >=
                (ready_sessions.observed_ms, ready_sessions.partition, ready_sessions.revision)''', values)
-
-
-def _overlay_window(start_ms, end_ms, finish_cutoff):
-    running = '(start_ms IS NOT NULL AND start_ms<?)'
-    if start_ms is None:
-        return f'({running} OR (finish_ms>=? AND finish_ms<?))', (end_ms, finish_cutoff, end_ms)
-    lower = max(1, start_ms)
-    return (f'''({running} OR (finish_ms>=? AND (
-            (finish_ms>=? AND finish_ms<?) OR
-            (last_activity_ms>=? AND last_activity_ms<?) OR
-            (latest_activity_ms>=? AND latest_activity_ms<?))))''',
-            (end_ms, finish_cutoff, *((lower, end_ms) * 3)))
+    return bool(cursor.rowcount)
 
 
 def _ready_window(start_ms, end_ms):
@@ -158,7 +153,6 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
     """Read coverage, counts and the visible slice in one SQLite result row."""
     column = SORT_COLUMNS[sort]
     order = 'DESC' if direction == -1 else 'ASC'
-    live_window, live_bounds = _overlay_window(start_ms, end_ms, finish_cutoff)
     ready_window, ready_bounds = _ready_window(start_ms, end_ms)
     # The same eligible live set shadows history for both count and page.
     history = f'{ready_window} AND item NOT IN (SELECT item FROM live)'
@@ -175,7 +169,9 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
             SELECT item, start_ms, finish_ms, EXISTS (
                 SELECT 1 FROM ready_sessions WHERE ready_sessions.item=session_live.item
             ) AS saved
-            FROM session_live WHERE run=(SELECT run FROM args) AND {live_window}
+            FROM session_live WHERE run=(SELECT run FROM args)
+              -- Like Running, unfinished handoffs span local calendar boundaries.
+              AND (start_ms < ? OR (finish_ms < ? AND (finalizing OR finish_ms >= ?)))
         ),
         counts AS (
             SELECT count(*) AS live_count, coalesce(sum(saved), 0) AS saved_count,
@@ -216,7 +212,7 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
              WHERE page.ordinal > position.offset AND page.ordinal <= position.offset + position.size)
         FROM position CROSS JOIN args
         LEFT JOIN session_runtime AS runtime ON runtime.run=args.run''',
-        (run, offset, size, *live_bounds, *ready_bounds, *ready_bounds,
+        (run, offset, size, end_ms, end_ms, finish_cutoff, *ready_bounds, *ready_bounds,
           *pending_bounds, *pending_bounds, SESSIONS_DOMAIN))) as cursor:
         row = cursor.fetchone()
     total, offset, cached, state, terminal, complete, unavailable, historical, live = row
@@ -241,10 +237,11 @@ def update_runtime(db, run, *, state, terminal, reset_pending, pending, live):
         if value is None:
             db.execute('DELETE FROM session_live WHERE run=? AND item=?', (run, key))
         else:
-            db.execute('''INSERT INTO session_live VALUES (?, ?, ?, ?, ?, ?, ?)
+            db.execute('''INSERT INTO session_live (run, item, start_ms, finish_ms, last_activity_ms,
+                                                     latest_activity_ms, payload, finalizing) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run, item) DO UPDATE SET start_ms=excluded.start_ms, finish_ms=excluded.finish_ms,
                     last_activity_ms=excluded.last_activity_ms, latest_activity_ms=excluded.latest_activity_ms,
-                    payload=excluded.payload''', (run, key, *value))
+                    payload=excluded.payload, finalizing=excluded.finalizing''', (run, key, *value))
 
 
 def close_runtime(db, run):

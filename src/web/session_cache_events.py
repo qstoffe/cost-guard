@@ -24,6 +24,17 @@ class SessionCacheEvents:
     def committed(self, times=None):
         self._notify(committed=True, times=times)
 
+    def schedule_expiries(self, times):
+        now = time_ns() // 1_000_000
+        with self.lock:
+            self._schedule_future(times, now)
+
+    def _schedule_future(self, times, now):
+        for at in times:
+            if at > now and at not in self.future_times:
+                self.future_times.add(at)
+                heappush(self.future, at)
+
     def roll_calendar(self, *, storage_ready=False):
         self.stored_ready = storage_ready
         self._notify(committed=False, times=())
@@ -48,10 +59,7 @@ class SessionCacheEvents:
                 self.future_times.remove(at)
                 due.append(at)
             if times is not None:
-                for at in times:
-                    if at > now and at not in self.future_times:
-                        self.future_times.add(at)
-                        heappush(self.future, at)
+                self._schedule_future(times, now)
                 due.extend(at for at in times if at <= now)
             if committed:
                 if times is None:

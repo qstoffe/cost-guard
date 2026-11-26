@@ -47,6 +47,13 @@ def _observed_ends(snapshot, children, events, attempts, owners, unsettled, ende
             yield event.created_at_ms, event.event_id
 
 
+def _terminal_outcomes(prompts, root_id):
+    return {(record.prompt_time_ms, record.prompt_id):
+            ('aborted' if record.aborted else 'completed' if record.completed_successfully else None)
+            for record in prompts if record.session_id == root_id and not record.execution_unverified
+            and not record.in_progress}
+
+
 def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
     """Focal root prompt start while running, explicit causal end when finished.
 
@@ -131,7 +138,9 @@ def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
                 live = event
                 break
     if on_prompt_ends is not None and snapshot.complete and live is None:
-        on_prompt_ends(_observed_ends(snapshot, children, root_events, attempts, owners, unsettled, ended_attempts))
+        outcomes = _terminal_outcomes(item.bundle.prompts, snapshot.root.session_id)
+        on_prompt_ends({key: outcomes.get(key) for key in
+                        _observed_ends(snapshot, children, root_events, attempts, owners, unsettled, ended_attempts)})
     focal = live or (root_events[0] if root_events else None)
     start = focal.created_at_ms if focal is not None else None
     if type(start) is not int or start <= 0:

@@ -13,7 +13,7 @@ from .signature import dependency_signature
 
 
 APPLICATION_ID = 0x43475231  # CGR1
-SCHEMA = 4
+SCHEMA = 5
 EVIDENCE_ENVELOPE = 'web-fact-envelope/1'
 REPORT_CHECKPOINTS = 'shared-history'
 WEB_ARCHIVE_FILENAME = 'cost-guard-report-v1.sqlite3'
@@ -50,7 +50,7 @@ class ArchiveFact:
 
 class WebArchive:
     def __init__(self, directory, *, previous_directory=None, retire_previous=False, notify_sessions=None,
-                 retain_writer=False, retain_session_readers=False):
+                 schedule_session_expiries=None, retain_writer=False, retain_session_readers=False):
         self.path = (directory / WEB_ARCHIVE_FILENAME).absolute()
         self._uri = self.path.as_uri()
         self._lock = Lock()
@@ -62,6 +62,7 @@ class WebArchive:
             lambda: self._open(write=False, check_same_thread=False, snapshot=False)) if retain_session_readers else None
         self._runtime_owner = None
         self.notify_sessions = notify_sessions
+        self.schedule_session_expiries = schedule_session_expiries
         self._retire_paths = {}
         if retire_previous:
             self._retire_paths[self.path.with_name(PREVIOUS_ARCHIVE_FILENAME)] = dict(
@@ -178,7 +179,7 @@ class WebArchive:
                 if db.execute('PRAGMA journal_mode').fetchone()[0] != 'wal':
                     raise sqlite3.DatabaseError('report cache requires WAL')
                 return
-            if current_id == APPLICATION_ID and current_version in (1, 2, 3):
+            if current_id == APPLICATION_ID and current_version in (1, 2, 3, 4):
                 db.execute('BEGIN IMMEDIATE')
                 current_version = db.execute('PRAGMA user_version').fetchone()[0]
                 if current_version == 1:
@@ -187,6 +188,9 @@ class WebArchive:
                     self._create_detail_runtime(db)
                 if current_version in (1, 2, 3):
                     prompt_range.create_schema(db, upgrade=True)
+                if current_version in (2, 3, 4):
+                    session_projection.upgrade_runtime_schema(db)
+                if current_version < SCHEMA:
                     db.execute(f'PRAGMA user_version={SCHEMA}')
                 return
             if current_id or current_version or db.execute('SELECT 1 FROM sqlite_schema LIMIT 1').fetchone():
@@ -436,6 +440,10 @@ class WebArchive:
                     times = self._pending_times(db, run, pending)
             session_projection.update_runtime(db, run, state=state, terminal=terminal, reset_pending=reset_pending,
                                               pending=pending, live=live)
+        if self.schedule_session_expiries is not None and live:
+            self.schedule_session_expiries(
+                value[1] + session_projection.TERMINAL_HIGHLIGHT_MS
+                for value in live.values() if value is not None and value[1] is not None)
         self.note_publication((session_projection.SESSIONS_DOMAIN,), session_times=times)
 
     @staticmethod
@@ -462,6 +470,7 @@ class WebArchive:
                    for domain, facts in domains.items() for key, fact in facts.items()]
         changed = set()
         session_times = None
+        ready = ready_session is None
         with self._connect(write=True) as db:
             db.execute('BEGIN IMMEDIATE')
             admitted = []
@@ -503,9 +512,9 @@ class WebArchive:
                                 session_times = (*pending, *(at for at in
                                     (*previous, last_at, latest_at) if at is not None)) if previous else (
                                     *pending, *(at for at in (last_at, latest_at) if at is not None))
-                        session_projection.save_ready(db, item, partition, value[3], value[4], value[5],
-                                                      keys, last_at, latest_at)
-                        if run is not None:
+                        ready = session_projection.save_ready(db, item, partition, value[3], value[4], value[5],
+                                                              keys, last_at, latest_at)
+                        if run is not None and ready:
                             removed = db.execute('DELETE FROM session_pending WHERE run=? AND item=?', (run, item))
                             if removed.rowcount:
                                 changed.add(session_projection.SESSIONS_DOMAIN)
@@ -515,4 +524,4 @@ class WebArchive:
             committed.update((key, fact) for key, fact in self._historical_facts(
                 (key, revision, observed, raw, partition)
                 for partition, _, key, _, revision, observed, raw in admitted))
-        return True
+        return ready

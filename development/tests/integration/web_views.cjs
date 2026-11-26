@@ -18,6 +18,7 @@ class Node {
   get firstChild() { return this.children[0] || null; }
   append(...children) { for (const child of children) { if (child.parentNode) child.parentNode.children = child.parentNode.children.filter(node => node !== child); child.parentNode = this; this.children.push(child); } }
   insertBefore(child, before) { this.append(child); this.children = this.children.filter(node => node !== child); const index = this.children.indexOf(before); this.children.splice(index < 0 ? this.children.length : index, 0, child); }
+  after(child) { const parent = this.parentNode; if (parent) parent.insertBefore(child, parent.children[parent.children.indexOf(this) + 1]); }
   querySelector(selector) { return all(this, selector.startsWith('.') ? null : selector).find(node => selector.startsWith('.') ? (node.className || '').split(' ').includes(selector.slice(1)) : node.tag === selector) || null; }
   replaceChildren(...children) { for (const child of this.children) child.parentNode = null; this.children = []; this.text = ''; this.append(...children); }
   setAttribute(key, value) { this.attrs[key] = value; }

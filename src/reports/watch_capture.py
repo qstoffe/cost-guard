@@ -4,7 +4,7 @@ One isolated service reads/analyzes a root once, preserving causal and context
 evidence for the focal row. Fresh source evidence is handed off for independent
 incremental session-cost work; no aggregate blocks this row publication.
 """
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from src.analysis.session_activity import activity_fields
 from src.domain import EventKind
@@ -31,7 +31,7 @@ class WatchCapture:
     duration_intervals: tuple = ()
     context_comparable_ids: frozenset = frozenset()
     catalog_prompt: tuple | None = None
-    catalog_prompt_ends: frozenset = frozenset()
+    catalog_prompt_ends: dict = field(default_factory=dict)
     source_epoch: str | None = None
 
     @property
@@ -143,7 +143,7 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
         for record in bundle.prompts) + tuple((record.created_at_ms, record.duration_ms, False)
                  for record in bundle.compactions)) if fresh.complete else ()
     catalog_prompt = None
-    ended = set()
+    ended = {}
     if fresh.complete:
         # The display may retain old rows, but only the fresh tree can bind
         # current execution. analyze_observed already requalifies the records.
@@ -156,4 +156,4 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
         frozenset(event.event_id for event in fresh.events),
         context, fresh.complete, fresh,
         mini_context_handoffs(projector, rows) if fresh.complete and not retained else (),
-        intervals, frozenset(comparable_ids), catalog_prompt, frozenset(ended), source_epoch), item
+        intervals, frozenset(comparable_ids), catalog_prompt, ended, source_epoch), item

@@ -1,6 +1,8 @@
 """Build writer-side Sessions coverage and Live deltas from the catalog."""
 from dataclasses import replace
 
+from src.cache.session_projection import TERMINAL_HIGHLIGHT_MS
+
 
 def _pending_value(catalog, key, live_roots):
     if key not in catalog.roots:
@@ -21,15 +23,29 @@ def _live_value(catalog, key):
         catalog.report_live_costs.pop(key, None)
         return None
     if catalog._running(key):
-        row, = catalog._rows((key,))
+        row, = catalog._rows((key,), compatible_archive=True)
         row = _with_live_cost(row, catalog.report_live_costs.get(key), catalog.revisions.get(key))
         return (row, row.prompt_started_ms, None) if row.prompt_started_ms is not None else None
-    catalog.report_live_costs.pop(key, None)
-    finish = catalog.recent_finishes.get(key)
-    if finish is not None and key in catalog.archive.rows:
-        row, = catalog._rows((key,))
-        return row, None, finish
-    return None
+    handoff = catalog.terminal_handoffs.get(key)
+    if handoff is None:
+        catalog.report_live_costs.pop(key, None)
+        return None
+    if key not in catalog.finalize_roots:
+        catalog.report_live_costs.pop(key, None)
+        if catalog.clock_ms() >= handoff.observed_ms + TERMINAL_HIGHLIGHT_MS:
+            catalog.terminal_handoffs.pop(key, None)
+            return None
+        if handoff.outcome is None:
+            return None
+        return catalog.archive.rows[key], None, (handoff.observed_ms, handoff.outcome, None)
+    row, = catalog._rows((key,), compatible_archive=True)
+    row = _with_live_cost(row, catalog.report_live_costs.get(key), catalog.revisions.get(key))
+    start, prompt_id = handoff.identity
+    finish = row.last_activity_ms if (row.prompt_started_ms, row.activity_prompt_id) == handoff.identity else None
+    row = replace(row, running=False, prompt_started_ms=start, activity_prompt_id=prompt_id, last_activity_ms=finish,
+                  complete=False, ccost_complete=False, ccost_retained=row.ccost is not None)
+    state = 'unavailable' if catalog._archive_unavailable(key) else 'pending'
+    return row, None, (handoff.observed_ms, handoff.outcome, state)
 
 
 def _with_live_cost(row, offer, revision):
@@ -54,7 +70,7 @@ def publish_report_runtime(catalog, keys=None):
         return
     state = 'observed' if catalog.history_observed() else catalog.state
     status = state, catalog.index_terminal
-    live_roots = catalog.running_roots | catalog.recent_finishes.keys()
+    live_roots = catalog.running_roots | catalog.terminal_handoffs.keys()
     live_keys = live_roots | catalog.report_live.keys() if keys is None else keys
     live = {}
     for key in live_keys:
