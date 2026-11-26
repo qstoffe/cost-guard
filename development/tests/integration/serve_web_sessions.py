@@ -132,16 +132,17 @@ class FixtureRuntime:
             from datetime import datetime
             from src.watch.invocation import invocation_scope
             from src.watch.models import ShellTiming, ToolInvocation, ToolObservation
-            zone, elapsed = self.date_shell
+            zone, elapsed, stage = self.date_shell
             start = int(datetime.fromisoformat('2026-03-29T00:45:20.123Z').timestamp() * 1000)
             identity = invocation_scope(self.service.source.snapshots['root-0000'].root.provenance)
             call = ToolInvocation('fixture-call', 'fixture-observation', 'command:\npython fixture_task.py',
                 'Sensitive argument/value redacted.', 'shell', start,
                 shell_timing=ShellTiming('execution', 3_220_000, 1_200_000, 2))
-            tool = ToolObservation(running_tool='shell', running_ms=elapsed, running_invocations=(call,),
-                running_invocation_count=1)
+            tool = ToolObservation(running_tool='shell', running_ms=elapsed,
+                running_invocations=(call,) if stage == 'ready' else (), running_invocation_count=1,
+                detail_state='pending' if stage == 'pending' else 'observed')
             base = frame.active_cards[0]
-            card = replace(base, session_id='root-0000', invocation_verified=True, activity_scope=identity,
+            card = replace(base, session_id='root-0000', invocation_verified=stage != 'pending', activity_scope=identity,
                 rows=(replace(base.rows[0], session_id='root-0000', tool=tool),),
                 focal_id=base.rows[0].prompt.event_id)
             frame = replace(frame, now_ms=start + elapsed, active_cards=(card,))
@@ -200,9 +201,11 @@ def main():
             if command == "arrive":
                 source.snapshots["root-0120"] = replace(make_root_snapshot(120, 1, month_start_ms=1000), complete=True)
             elif command.startswith("date-shell-"):
-                cases = {"date-shell-open": ("Europe/Stockholm", 60_000),
-                         "date-shell-tick": ("Europe/Stockholm", 61_000),
-                         "date-shell-zone": ("America/New_York", 62_000),
+                cases = {"date-shell-pending": ("Europe/Stockholm", 59_000, "pending"),
+                         "date-shell-open": ("Europe/Stockholm", 60_000, "ready"),
+                         "date-shell-tick": ("Europe/Stockholm", 61_000, "ready"),
+                         "date-shell-zone": ("America/New_York", 62_000, "ready"),
+                         "date-shell-absent": ("America/New_York", 63_000, "absent"),
                          "date-shell-clear": None}
                 with host.live.observation_lock:
                     host.live.date_shell = cases[command]

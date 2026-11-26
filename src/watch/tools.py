@@ -25,7 +25,8 @@ def without_live_activity(tool: ToolObservation) -> ToolObservation:
     return replace(tool, running_tool="", running_ms=0, todo_completed=0, todo_total=0,
         active_todo="", background_kinds=(), background_ms=0,
         running_invocation=None, background_invocation=None, running_invocations=(),
-        background_invocations=(), running_invocation_count=0, background_invocation_count=0)
+        background_invocations=(), running_invocation_count=0, background_invocation_count=0,
+        running_starts=())
 
 
 def _parent_ids(snapshot: SessionSnapshot, event_id: str, *, is_compaction: bool) -> set[str]:
@@ -258,6 +259,7 @@ def observe_tools(
         background_invocation=background_details[0] if background_count == 1 and background_details[0].text else None,
         running_invocations=running_details, background_invocations=background_details,
         running_invocation_count=len(running_parts) if include_invocations else 0,
+        running_starts=tuple(map(_part_start, running_parts)) if include_invocations else (),
         background_invocation_count=background_count,
         failed_invocations=failed_invocations(failed_parts, snapshot.root.provenance, budget=budget),
         skills=tuple(SkillObservation(skill, skill_failures.get(skill, 0))

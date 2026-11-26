@@ -48,13 +48,14 @@ module.exports = async (evaluate, command, session) => {
     target.node.open=true; tool.running_invocation.revision='corrected'; tool.running_invocation.text='command:\\ngit log';
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
     const corrected=target.node.open && target.list.querySelector('pre').textContent==='command:\\ngit log';
-    INPUT.view.active_cards[0].state='unavailable'; ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const unavailable=target.node.open && !target.list.textContent.includes('git log') &&
-      /waiting.*verified/i.test(target.note.innerText);
+    INPUT.view.active_cards[0].state='partial'; tool.detail_state='pending';
+    ReportView.renderLive(document.getElementById('result'), INPUT, state);
+    const pending=target.node.open && !target.list.textContent.includes('git log') &&
+      !!target.note.querySelector('.metric-spinner[aria-label="Loading tool call details"]')?.checkVisibility();
     INPUT.view.active_cards[0].state='observed'; Object.assign(tool,saved);
     document.activeElement?.blur(); ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    return {changed,corrected,unavailable}; })()`);
-  assert.deepEqual(reset, {changed:true,corrected:true,unavailable:true});
+    return {changed,corrected,pending}; })()`);
+  assert.deepEqual(reset, {changed:true,corrected:true,pending:true});
   // Click the actual background summary while only its Running label is supported.
   // Keep the label through the missing → verified → missing sequence.
   const backgroundPoint = await evaluate(`(() => {
@@ -72,7 +73,8 @@ module.exports = async (evaluate, command, session) => {
     const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root'), target=card.backgroundDetail;
     const tool=INPUT.view.active_cards[0].rows[0].tool;
     const render=()=>ReportView.renderLive(document.getElementById('result'), INPUT, state);
-    const missing=()=>target.node.open && /original call details.*not available/i.test(target.node.innerText)
+    const missing=()=>target.node.open && /no source-qualified call details/i.test(target.note.innerText)
+      && !target.note.querySelector('.metric-spinner')
       && !target.node.textContent.includes('tokenizer.py');
     const clicked=missing();
     tool.background_invocation=linkedBackground; render();

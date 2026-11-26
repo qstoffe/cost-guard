@@ -21,7 +21,7 @@ module.exports = (card, helpText, document, select) => {
   assert.equal(card.tools.list.querySelectorAll('img').length, 0, 'tool names stay literal text');
   assert.equal(card.running.className, 'watch-running-tool');
   assert.equal(card.runningDetail.summary.textContent, 'Running: execute 12s');
-  assert.match(card.runningDetail.note.textContent, /waiting.*verified.*source/i);
+  require('./pending_value.cjs')(card.runningDetail.note, 'tool call details');
   assert.equal(card.running.hidden, false);
   // Two shells still run, but the capture can link only one command per frame.
   const shells = {...tool, background_kinds:['shell','shell'], background_invocation_count:2};

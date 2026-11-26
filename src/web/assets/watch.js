@@ -242,15 +242,16 @@ const WatchView = (() => {
     });
     target.node.hidden = !label;
     if (!label) {
-      text(target.summary, ''); text(target.note, '');
+      text(target.summary, ''); ReportView.valueSlot(target.note, '');
       reconcile(target.list, []); return;
     }
     if (!protectedNode(target.summary)) text(target.summary, label);
     const omitted = Math.max(0, total - rows.length);
-    const reason = observed ? 'Running activity is visible, but the original call details are not available.' :
-      'Waiting for verified details from the live source.';
-    text(target.note, rows.length ? (omitted ? `+${omitted} more running ${mode} items` : '') : reason);
-    target.note.hidden = !target.note.textContent;
+    const pending = state === 'pending';
+    const note = pending ? '' : rows.length ? (omitted ? `+${omitted} more running ${mode} items` : '') :
+      'No source-qualified call details.';
+    ReportView.valueSlot(target.note, note, {pending, field: 'tool call details'});
+    target.note.hidden = !pending && !note;
     reconcile(target.list, [...wanted, ...withheld, target.note]);
   }
   function fragments(target, parts) {
@@ -395,16 +396,22 @@ const WatchView = (() => {
       this.update(null);
     }
     update(result, id, scope) {
-      // Only the source-qualified Watch focal for this exact Detail source and
-      // session may supply live inputs. Never infer execution from history.
+      // Match the Live source, session and running focal before consuming its
+      // detail state. Pending cards offer status but never private input.
       const view = result?.view;
-      const card = scope && result?.state === 'running' ? view?.active_cards?.find(card =>
-        card.session_id === id && card.activity_scope === scope && card.invocation_verified === true) : null;
-      const row = card?.rows.find(row => row.prompt.event_id === card.focal_id &&
-        row.prompt.in_progress && !row.prompt.execution_unverified);
-      const tool = row?.tool;
+      const matches = scope && result?.state === 'running' ?
+        (view?.active_cards || []).filter(card => card.session_id === id && card.activity_scope === scope &&
+          card.rows.some(row => row.prompt.event_id === card.focal_id &&
+            row.prompt.in_progress && !row.prompt.execution_unverified)) : [];
+      const card = matches.find(card => card.focal_id === this.focalId) || matches[0];
+      const tool = card?.rows.find(row => row.prompt.event_id === card.focal_id)?.tool;
+      if (this.scope !== scope || this.sessionId !== id || this.focalId !== card?.focal_id)
+        drawRunningActivity(this.running, this.background, null, false, 'invalidated');
+      this.scope = scope; this.sessionId = id; this.focalId = card?.focal_id;
       if (!tool && this.root.hidden) return;
-      drawRunningActivity(this.running, this.background, tool, !!row, tool?.detail_state,
+      drawRunningActivity(this.running, this.background, tool, card?.invocation_verified === true,
+        tool?.detail_state === 'pending' ? 'pending' :
+          card?.invocation_verified === true ? tool?.detail_state : 'invalidated',
         {now: view?.now_ms, zone: view?.timezone_id});
       this.root.hidden = this.running.node.hidden && this.background.node.hidden;
     }
@@ -669,8 +676,10 @@ const WatchView = (() => {
       drawTools(this.tools, toolParts, groups, outcomes, state === 'observed' ? tool?.failed_invocations || [] : [],
         unidentified, state, clock?.zone);
       drawDisclosure(this.skills, summary, skills.map(skillParts), 'No confirmed custom skills');
-      // A transport retry withholds call details without invalidating the job.
-      drawRunningActivity(this.runningDetail, this.backgroundDetail, tool, verified, tool?.detail_state, clock);
+      // Browser transport retry withholds text without resetting disclosure.
+      const runningState = tool?.detail_state === 'invalidated' ? 'invalidated' :
+        !verified || tool?.detail_state === 'pending' ? 'pending' : 'observed';
+      drawRunningActivity(this.runningDetail, this.backgroundDetail, tool, verified, runningState, clock);
     }
   }
   class View {

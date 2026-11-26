@@ -81,6 +81,55 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         active, history, _ = self.cards.project(now)
         return (active or history)[0].rows[-1].prompt
 
+    def test_qualified_concurrent_shells_publish_at_call_age_not_execution_age(self):
+        # Both shells have just begun executing. Only the first has had a visible
+        # Running call for ten seconds; the second crosses that threshold on a tick.
+        assistant = self.unfinished()
+        assistant["content"] = [
+            {"id": key, "callID": key, "type": "tool", "name": "shell",
+             "time": {"created": created},
+             "state": {"status": "running", "time": {"start": ran}, "input": {"command": "python " + key + ".py"}}}
+            for key, created, ran in [("first", 8000, 19000), ("second", 11000, 19500)]]
+        current = observe_catalog(self.source)
+        sid = self.root.session_id
+        earlier = replace(current, revisions={**current.revisions, sid: "previous"})
+
+        def published(cards, now):
+            active, _, state = cards.project(now)
+            frame = WatchProjection("Watch", "fixture", (), active_cards=active, cards_state=state, now_ms=now)
+            live = project_live(frame).to_json()
+            card = next(card for card in live["active_cards"] if card["session_id"] == sid)
+            return card["rows"][0]["tool"]
+
+        for catalog_first in (True, False):
+            with self.subTest(catalog_first=catalog_first):
+                cards = WatchCards(self.workers)
+                cards.catalog(earlier)
+                cards.tick(20000)
+                self.workers.jobs[sid].result(timeout=5)
+                results = self.workers.drain()
+                if catalog_first:
+                    cards.catalog(current)
+                for result in results:
+                    if result.phase != "timing":
+                        cards.accept(result, 20000)
+                if not catalog_first:
+                    pending = published(cards, 20000)
+                    self.assertEqual("pending", pending["detail_state"])
+                    self.assertNotIn("first.py", json.dumps(pending))
+                    cards.catalog(current)
+
+                first = published(cards, 20000)
+                self.assertEqual(1, first["running_invocation_count"])
+                self.assertEqual(["command:\npython first.py"], [d["text"] for d in first["running_invocations"]])
+                both = published(cards, 21000)
+                self.assertEqual(2, both["running_invocation_count"])
+                self.assertEqual([("command:\npython first.py", 19000), ("command:\npython second.py", 19500)],
+                                 [(d["text"], d["started_at_ms"]) for d in both["running_invocations"]])
+                self.assertNotEqual(*[d["identity"] for d in both["running_invocations"]])
+                cards.catalog(replace(current, revisions={**current.revisions, sid: "another-revision"}))
+                self.assertNotIn(".py", json.dumps(published(cards, 21000)))
+
     def test_persisted_quota_closes_retained_active_child_and_preserves_final_usage(self):
         assistant = self.unfinished()
         assistant["content"] = [{"id": "task", "type": "tool", "name": "task",
