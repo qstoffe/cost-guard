@@ -80,7 +80,7 @@ class SessionContextContinuityTests(unittest.TestCase):
             snapshot = handoff_snapshot(phase)
             capture = handoff_capture(snapshot)
             cards.catalog(CatalogObservation((snapshot.root,), (snapshot.root,), {'root': 'root'},
-                {'root': snapshot.source_revision}, frozenset({'root'})))
+                {'root': snapshot.source_revision}, frozenset({'root'}), source_epoch='mini-fixture'))
             entry = cards.sessions['root']
             cards.accept(CardResult('root', entry.generation, 'rows', (capture, (), snapshot)), 2500)
             self.assertEqual(235000 if phase == 'fresh' else 230000, entry.capture.context.tokens)

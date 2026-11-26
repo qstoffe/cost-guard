@@ -215,22 +215,23 @@ class WatchCardTests(unittest.TestCase):
     def test_invocation_clears_during_source_revision_reverification(self):
         root = self.roots[0]
         row = replace(self.capture.rows[-1], in_progress=True, background_kinds=('shell', 'shell'))
-        capture = replace(self.capture, rows=(row,), observed_ids=frozenset({row.event_id}), observed_at_ms=1000)
+        capture = replace(self.capture, rows=(row,), observed_ids=frozenset({row.event_id}), observed_at_ms=21000)
         cards = WatchCards(ManualWorkers())
         cards.catalog(self.catalog((root,), active=(root.session_id,)))
-        self.publish(cards, root, capture)
+        self.publish(cards, root, capture, now=21000)
         entry = cards.sessions[root.session_id]
-        detail = ToolInvocation("physical", "revision", 'command:\npython tokenizer.py --mode=fast\n\ntimeout:\n120000 ms (2 min)', '')
+        detail = ToolInvocation("physical", "revision", 'command:\npython tokenizer.py --mode=fast\n\ntimeout:\n120000 ms (2 min)', '', started_at_ms=1000)
         entry.tools[row.event_id] = ToolObservation(running_tool="shell", running_ms=30_000,
             running_invocation=detail, background_invocation=detail,
-            running_invocations=(detail,), background_invocations=(detail, replace(detail, identity='second')),
+            running_invocations=(detail,), running_invocation_count=1,
+            background_invocations=(detail, replace(detail, identity='second')),
             failed_invocations=(ToolFailure("shell", detail),))
 
-        first_card = cards.project(2000)[0][0]
+        first_card = cards.project(21000)[0][0]
         first = first_card.rows[0].tool
-        self.assertEqual(detail, cards.project(2001)[0][0].rows[0].tool.running_invocation)
+        self.assertEqual(detail, cards.project(21001)[0][0].rows[0].tool.running_invocation)
         cards.catalog(self.catalog((root,), active=(root.session_id,), revision="changed"))
-        verifying = cards.project(2001)[0][0].rows[0].tool
+        verifying = cards.project(21001)[0][0].rows[0].tool
 
         self.assertEqual(detail, first.running_invocation)
         self.assertIsNone(verifying.running_invocation)
@@ -244,17 +245,17 @@ class WatchCardTests(unittest.TestCase):
         self.assertEqual("observed", first.detail_state)
         self.assertEqual("pending", verifying.detail_state)
         wire = project_live(WatchProjection("Watch", "fixture", (),
-            active_cards=cards.project(2001)[0])).to_json()["active_cards"][0]
+            active_cards=cards.project(21001)[0])).to_json()["active_cards"][0]
         self.assertEqual("pending", wire["rows"][0]["tool"]["detail_state"],
                          "card state may still be observed while its revision awaits verification")
-        self.assertEqual(cards.project(2001)[0][0].activity_scope, wire["activity_scope"])
+        self.assertEqual(cards.project(21001)[0][0].activity_scope, wire["activity_scope"])
         self.assertEqual(64, len(wire["activity_scope"]))
         self.assertEqual(first_card.activity_scope, wire["activity_scope"],
                          "ordinary revisions must not become new disclosure scopes")
         replacement = replace(root, provenance=replace(root.provenance, source_instance="replacement"))
         cards.catalog(self.catalog((replacement,), active=(replacement.session_id,)))
-        self.publish(cards, replacement, capture)
-        self.assertNotEqual(first_card.activity_scope, cards.project(2001)[0][0].activity_scope)
+        self.publish(cards, replacement, capture, now=21001)
+        self.assertNotEqual(first_card.activity_scope, cards.project(21001)[0][0].activity_scope)
 
     def test_one_hundred_concurrent_cards_each_have_only_their_focal_row(self):
         root = self.roots[0]

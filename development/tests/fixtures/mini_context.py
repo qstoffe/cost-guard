@@ -61,7 +61,7 @@ def handoff_frame(frame, phase):
     cards = WatchCards(SimpleNamespace())
     root = snapshot.root
     cards.catalog(CatalogObservation((root,), (root,), {'root': 'root'},
-        {'root': snapshot.source_revision}, frozenset({'root'})))
+        {'root': snapshot.source_revision}, frozenset({'root'}), source_epoch='mini-fixture'))
     cards.accept(CardResult('root', cards.sessions['root'].generation, 'rows', (capture, (), snapshot)), 2300)
     if phase == 'prior':
         cards.sessions['root'].terminals['u'] = 2300
