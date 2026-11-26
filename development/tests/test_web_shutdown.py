@@ -1,6 +1,7 @@
 """Causal cancellation at the Web owner's real source-read boundary."""
 import http.client
 import json
+import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import tempfile
@@ -44,6 +45,39 @@ class PendingSource(MutableSource):
 
 
 class WebShutdownTests(unittest.TestCase):
+    def test_host_reclaims_a_session_reader_returned_during_http_shutdown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            host = WebHost(root, archive_directory=root / 'cache')
+            archive = host.history_reports.archive
+            archive.initialize()
+            draining = Event()
+
+            def read_until_draining():
+                with archive._session_readers.borrow() as reader:
+                    host.stop()
+                    self.assertTrue(draining.wait(3))
+                    self.assertEqual((1,), reader.execute('SELECT 1').fetchone())
+                return reader
+
+            close_server = LoopbackServer.server_close
+            def drain(server):
+                draining.set()
+                close_server(server)
+
+            # Use the host's actual HTTP executor and SQLite pool; no external
+            # source is required to verify a request that outlives the listener.
+            with patch.object(host.live, 'start'), patch.object(LoopbackServer, 'server_close', drain):
+                try:
+                    host.start()
+                    job = host.server._pool.submit(read_until_draining)
+                    reader = job.result(timeout=5)
+                finally:
+                    host.close()
+            self.assertIsNone(host.failure)
+            with self.assertRaises(sqlite3.ProgrammingError):
+                reader.execute('SELECT 1')
+
     def test_invalid_ipc_cleanup_failure_reaches_host_and_main_owner_retries_retained_child(self):
         child = ReportProcess(messages=[('unexpected', None)])
         jobs = ReportJobs(context=child.context)
