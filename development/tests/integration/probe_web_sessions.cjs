@@ -117,6 +117,54 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
       await command('Page.navigate',{url:launch.url},sessionId);
             await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
+             if (mode === '--search-toolbar') {
+               // This source-only fixture has no report archive. Select the searchable
+               // renderer for these geometry checks, not as evidence of backend filtering.
+               await evaluate("archiveHistory=true; location.hash='#/sessions'");
+               await until('current.catalog?.search?.isConnected');
+               for (const width of [1366, 360]) {
+                 await command('Emulation.setDeviceMetricsOverride', {width, height:900, deviceScaleFactor:1, mobile:false}, sessionId);
+                 const boxes = await evaluate(`(() => {
+                   const {root, periods, search} = current.catalog;
+                   const rect = node => node.getBoundingClientRect().toJSON();
+                   return {buttons:[...periods.querySelectorAll('button')].map(rect), input:rect(search),
+                     catalog:rect(root), overflow:document.documentElement.scrollWidth-innerWidth,
+                     name:search.getAttribute('aria-label') || search.labels[0]?.textContent.trim(),
+                     hint:search.placeholder || search.labels[0]?.innerText.trim()};
+                 })()`);
+                 const {buttons, input, catalog} = boxes;
+                 assert.equal(buttons.length, 5);
+                 assert.equal(boxes.name, 'Search sessions');
+                 assert.equal(boxes.hint, 'Search sessions');
+                 assert.ok(input.width > 0 && input.height > 0 && boxes.overflow <= 1);
+                 for (const b of buttons) {
+                   assert.ok(b.width > 0 && b.height > 0 && b.left >= catalog.left-1 && b.right <= catalog.right+1);
+                   if (width === 1366) {
+                     assert.ok(Math.abs(input.top-b.top) <= 1 && Math.abs(input.height-b.height) <= 1);
+                     assert.ok(input.left >= b.right && Math.abs(input.right-catalog.right) <= 1);
+                   } else {
+                     assert.ok(input.bottom <= b.top || input.top >= b.bottom || input.left >= b.right || input.right <= b.left);
+                     assert.ok(input.left >= catalog.left-1 && input.right <= catalog.right+1);
+                   }
+                 }
+                 layouts.push({width, ...boxes});
+               }
+               await command('Emulation.setDeviceMetricsOverride', {width:1366, height:900, deviceScaleFactor:1, mobile:false}, sessionId);
+               await evaluate("archiveHistory=true; location.hash='#/sessions/root-0000'");
+               await until('document.querySelector(".session-workspace-panel input[type=search]")');
+               const sidebar = await evaluate(`(() => {
+                 const panel=document.querySelector('.session-workspace-panel'), input=panel.querySelector('input[type=search]');
+                 const label=input.labels[0], range=document.createRange();
+                 range.selectNodeContents(label.firstChild);
+                 const text=range.getBoundingClientRect(), field=input.getBoundingClientRect();
+                 return {name:range.toString().trim(), stacked:text.height > 0 && text.bottom <= field.top,
+                   beforePeriods:field.height > 0 && field.bottom <= panel.querySelector('[aria-label="Sessions period"]').getBoundingClientRect().top};
+               })()`);
+               assert.deepEqual(sidebar, {name:'Search sessions', stacked:true, beforePeriods:true});
+               assert.deepEqual(errors, []);
+               evidence = {outcome:'PASS', browser:version.product, layouts, sidebar};
+               return;
+             }
              if (mode === '--running-pager') {
                await evaluate(`location.hash='#/sessions'`);
                await until('current.catalog?.data?.total===120 && !current.catalog.busy');

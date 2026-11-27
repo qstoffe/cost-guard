@@ -78,8 +78,6 @@ const SessionsCatalog = (() => {
       if (archive) {
         this.search = el('input');
         this.search.type = 'search'; this.search.maxLength = 200;
-        const label = el('label', 'Search sessions', 'sessions-catalog-search');
-        label.append(this.search); this.root.append(label);
         this.search.addEventListener('input', () => {
           clearTimeout(this.searchTimer);
           this.searchTimer = setTimeout(() => {
@@ -89,7 +87,20 @@ const SessionsCatalog = (() => {
           }, 250);
         });
       }
-      this.root.append(this.periods, this.status, pan, pager);
+      if (compact && this.search) {
+        const label = el('label', 'Search sessions', 'sessions-catalog-search');
+        label.append(this.search);
+        this.root.append(label, this.periods);
+      } else if (this.search) {
+        const toolbar = el('div', undefined, 'sessions-catalog-toolbar');
+        this.search.placeholder = 'Search sessions';
+        this.search.setAttribute('aria-label', 'Search sessions');
+        toolbar.append(this.periods, this.search);
+        this.root.append(toolbar);
+      } else {
+        this.root.append(this.periods);
+      }
+      this.root.append(this.status, pan, pager);
     }
     pageButton(label) {
       const button = el('button', label); button.type = 'button';
