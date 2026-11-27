@@ -16,6 +16,10 @@ SORT_COLUMNS = {
 }
 SESSIONS_DOMAIN = 'sessions/1'
 TERMINAL_HIGHLIGHT_MS = 30_000
+HISTORICAL_QUALIFIERS = {
+    'activity_qualified': True, 'context_qualified': True,
+    'model_pending': False, 'effort_qualified': True, 'effort_pending': False,
+}
 
 
 def create_schema(db):
@@ -79,6 +83,37 @@ def upgrade_runtime_schema(db):
 
 def add_runtime_activity_order(db):
     db.execute('ALTER TABLE session_live ADD COLUMN activity_order_ms INTEGER')
+
+
+def reconcile_ready_index(db):
+    """Remove unsupported pointers, keeping every durable history fact."""
+    # Require the committed revision and the evidence used by the writer's
+    # admission gate. An old display flag never revives Running in this index.
+    flags = ' AND '.join(f"json_type(f.value, '$.row.{name}') IS '{str(expected).lower()}'"
+                         for name, expected in HISTORICAL_QUALIFIERS.items())
+    db.execute(f'''DELETE FROM ready_sessions AS r WHERE NOT EXISTS (
+        SELECT 1 FROM facts AS f
+        WHERE f.partition=r.partition AND f.domain=? AND f.algorithm=r.algorithm
+          AND f.item=r.item AND f.revision=r.revision AND f.observed_ms=r.observed_ms
+          AND CASE WHEN json_valid(f.value) THEN
+            json_extract(f.value, '$.row.session_id') = r.item
+            AND json_type(f.value, '$.row.title') IS 'text' AND {flags} END
+        )''', (SESSIONS_DOMAIN,))
+    # A legacy projection with partial/absent valuation must sort with the
+    # unknowns even if its stored subtotal was encoded as zero.
+    db.execute('''UPDATE ready_sessions AS r SET cost_key=NULL WHERE cost_key IS NOT NULL
+        AND EXISTS (SELECT 1 FROM facts AS f WHERE f.partition=r.partition
+          AND f.domain=? AND f.algorithm=r.algorithm AND f.item=r.item
+          AND (json_type(f.value, '$.row.complete') IS NOT 'true'
+            OR json_extract(f.value, '$.row.ccost') IS NULL
+            OR json_extract(f.value, '$.row.ccost') IN ('None', '', 'N/A')))''', (SESSIONS_DOMAIN,))
+    for name in ('prompt_count', 'duration_ms', 'context_tokens'):
+        db.execute(f'''UPDATE ready_sessions AS r SET {name}=NULL WHERE {name} IS NOT NULL
+            AND EXISTS (SELECT 1 FROM facts AS f WHERE f.partition=r.partition
+                AND f.domain=? AND f.algorithm=r.algorithm AND f.item=r.item
+                AND (json_type(f.value, '$.row.{name}') IS NOT 'integer'
+                     OR json_extract(f.value, '$.row.{name}') NOT BETWEEN 0 AND 9007199254740991))''',
+            (SESSIONS_DOMAIN,))
 
 
 def _decimal_key(amount):

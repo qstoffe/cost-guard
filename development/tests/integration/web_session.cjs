@@ -385,7 +385,27 @@ async function main() {
      assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['','0.00','0','0s','']);
    selected=catalog.body.children[0].children[1];
    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
-    assert.equal(catalog.body.children[0].className,'');
+     assert.equal(catalog.body.children[0].className,'');
+     // Settled absence beside genuine numeric zeros on an ordinary historical row.
+     // No empty-history reason: even an empty context registry prevents that narrower proof.
+     const settled = {...known, session_id:'registry', title:'Registry only', running:false,
+       last_activity_ms:null, metric_authority:'settled_history',
+       metric_states:{activity:'unavailable', model:'unavailable', ccost:'ready', prompts:'ready',
+         duration:'ready', ctx:'unavailable'}, ccost:'0', complete:true, context_detail:'No supported context anchor.'};
+     const historicalCatalog = vm.runInContext('new SessionsCatalog.View(catalogApi)', context);
+     historicalCatalog.rows([settled]);
+     const history = historicalCatalog.body.children[0];
+     assert.deepEqual(history.children.map(cell=>cell.textContent), ['—','Registry only','—','0.00','0','0s','—']);
+     assert.ok(!history.querySelector('.metric-spinner'));
+     // A newly settled unresolved valuation must not paint the previous known zero.
+     historicalCatalog.rows([{...settled, prompt_count:2, complete:false,
+       metric_states:{...settled.metric_states,ccost:'unavailable'},
+       display:{...settled.display,ccost_unavailable_help:'Missing recorded usage for valuation.'}}]);
+     assert.equal(history.metrics[1].textContent,'—');
+     assert.ok(!history.querySelector('.metric-spinner'));
+     history.metrics[1].events.focus();
+     assert.match(document.body.children.at(-1).textContent,/Missing recorded usage for valuation/);
+     history.metrics[1].events.blur();
      // Age/background updates retain the grid; an explicit pending navigation has progress.
     const usable = {...catalogData,total:26,age_ms:7200000,view:{session_usage:cold.map((row, index) =>
       ({...known,session_id:row.session_id,title:'Loaded '+index}))}};

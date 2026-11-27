@@ -13,7 +13,7 @@ from .signature import dependency_signature
 
 
 APPLICATION_ID = 0x43475231  # CGR1
-SCHEMA = 6
+SCHEMA = 7
 EVIDENCE_ENVELOPE = 'web-fact-envelope/1'
 REPORT_CHECKPOINTS = 'shared-history'
 WEB_ARCHIVE_FILENAME = 'cost-guard-report-v1.sqlite3'
@@ -184,7 +184,7 @@ class WebArchive:
                 if db.execute('PRAGMA journal_mode').fetchone()[0] != 'wal':
                     raise sqlite3.DatabaseError('report cache requires WAL')
                 return
-            if current_id == APPLICATION_ID and current_version in (1, 2, 3, 4, 5):
+            if current_id == APPLICATION_ID and current_version in (1, 2, 3, 4, 5, 6):
                 db.execute('BEGIN IMMEDIATE')
                 current_version = db.execute('PRAGMA user_version').fetchone()[0]
                 if current_version == 1:
@@ -197,6 +197,8 @@ class WebArchive:
                     session_projection.upgrade_runtime_schema(db)
                 if current_version in (2, 3, 4, 5):
                     session_projection.add_runtime_activity_order(db)
+                if current_version < 7:
+                    session_projection.reconcile_ready_index(db)
                 if current_version < SCHEMA:
                     db.execute(f'PRAGMA user_version={SCHEMA}')
                 return
@@ -403,6 +405,39 @@ class WebArchive:
         if not partition:
             return False
         return self._publish_batch(partition, domains, ready_session=(item, keys, last_at, latest_at, run))
+
+    def unindexed_session_facts(self):
+        with self._connect() as db:
+            rows = db.execute('''SELECT item, revision, observed_ms, value, partition
+                FROM facts AS f WHERE domain=? AND algorithm=?
+                  AND NOT EXISTS (SELECT 1 FROM ready_sessions WHERE item=f.item)
+                ORDER BY observed_ms DESC, partition DESC, revision DESC''',
+                (session_projection.SESSIONS_DOMAIN, EVIDENCE_ENVELOPE))
+            yield from self._historical_facts(rows)
+
+    def restore_ready_session(self, key, fact, keys, last_at, latest_at, *, evidence_domains):
+        """Reindex retained, acquired history without replacing a concurrent publication."""
+        scope = fact.partition, key, EVIDENCE_ENVELOPE, fact.revision
+        with self._connect(write=True) as db:
+            db.execute('BEGIN IMMEDIATE')
+            if db.execute('SELECT 1 FROM ready_sessions WHERE item=?', (key,)).fetchone():
+                return True
+            domains = {row[0] for row in db.execute('''SELECT domain FROM facts
+                WHERE partition=? AND item=? AND algorithm=? AND revision=?
+                  AND (domain<>? OR observed_ms=?)''',
+                (*scope, session_projection.SESSIONS_DOMAIN, fact.observed_ms))}
+            if not domains.issuperset((*evidence_domains, session_projection.SESSIONS_DOMAIN)):
+                return False
+            updated = session_projection.save_ready(
+                db, key, fact.partition, EVIDENCE_ENVELOPE, fact.revision, fact.observed_ms, keys, last_at, latest_at)
+        if updated:
+            times = tuple(at for at in (last_at, latest_at) if at is not None)
+            self.note_publication((session_projection.SESSIONS_DOMAIN,), session_times=times or None)
+        return updated
+
+    def indexed_session_ids(self):
+        with self._connect() as db:
+            return {item for item, in db.execute('SELECT item FROM ready_sessions')}
 
     def rewrite_session_fact(self, key, before, value, *, times):
         """Replace an unchanged projection only; do not move its ready index."""
