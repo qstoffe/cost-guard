@@ -39,6 +39,10 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   // The total is announced with the first usable rows. A stale later chunk
   // must recover autonomously, without another click or a forced poll.
   await until('current.detail?.body.rows.length===1001 && !current.detail.busy');
+  const history = await evaluate(`(() => {const pan=current.detail.scroll;
+    return {top:pan.scrollTop, remaining:pan.scrollHeight-pan.clientHeight-pan.scrollTop};
+  })()`);
+  assert.ok(history.top > 0 && Math.abs(history.remaining) <= 1, 'after the recovered progressive read, newest prompts are visible');
   const trace=await evaluate('initialDOM.disconnect();window.fetch=normalFetch;initialRead');
   assert.deepEqual(trace.replies,[[410,'detail_expired'],[409,'detail_read_stale']]);
   assert.equal(trace.opens,2,'only the expired lease needs reopening');

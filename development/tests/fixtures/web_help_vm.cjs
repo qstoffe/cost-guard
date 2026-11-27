@@ -2,6 +2,8 @@
 const fs = require('node:fs');
 module.exports = function loadHelp(vm, context) {
   const doc = context.document, sample = doc.createElement('div'), proto = Object.getPrototypeOf(sample);
+  // VM nodes have no layout; a browser probe checks actual resize and scroll geometry.
+  context.ResizeObserver ||= class { observe() {} disconnect() {} };
   if (!('classList' in sample)) Object.defineProperty(proto, 'classList', {get() {
     const toggle = (name, enabled) => {
       const names = new Set((this.className || '').split(' ').filter(Boolean));
