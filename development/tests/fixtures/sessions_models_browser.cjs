@@ -1,5 +1,63 @@
 // Authenticated source -> summary -> DTO -> keyed table and shared help.
 const assert = require('node:assert/strict');
+
+async function checkCatalogWidths({evaluate, command}) {
+  // Use one controlled visible row: the expected track is the larger of
+  // the actual sort/help button and the rendered value, including cell insets.
+  const layouts = [];
+  for (const width of [1366, 1600, 360]) {
+    await command('Emulation.setDeviceMetricsOverride', {width, height:900, deviceScaleFactor:1, mobile:false});
+    const measured = await evaluate(`(() => {
+      const view = current.catalog, original = view.data.view.session_usage;
+      const title = 'Long session title '.repeat(60).trim();
+      view.rows([{...original[0], title, model:'Test model with a long qualified display name', running:true,
+        prompt_count:123456789012, prompt_started_ms:1700000000000}]);
+      try {
+        const row = view.body.rows[0], pan = view.pan, headers = view.headers.map(h => h.th);
+        const insets = cell => {
+          const css = getComputedStyle(cell);
+          return ['paddingLeft','paddingRight','borderLeftWidth','borderRightWidth'].reduce((n,k) => n + parseFloat(css[k]), 0);
+        };
+        const natural = headers.map((th,i) => {
+          if (i === 1) return null;
+          const cell = row.cells[i], range = document.createRange();
+          const value = [...cell.children].reduce((sum, part) => {
+            range.selectNodeContents(part);
+            return sum + range.getBoundingClientRect().width;
+          }, 0);
+          return Math.max(th.firstChild.getBoundingClientRect().width + insets(th), value + insets(cell));
+        });
+        row.name.focus({preventScroll:true});
+        const nameHelp = document.querySelector('#context-help');
+        pan.scrollLeft = pan.scrollWidth;
+        const last = row.cells[row.cells.length-1].getBoundingClientRect();
+        return {width:innerWidth, pan:pan.clientWidth, overflow:pan.scrollWidth-pan.clientWidth,
+          pageOverflow:document.documentElement.scrollWidth-innerWidth, scrolled:pan.scrollLeft,
+          endVisible:last.left >= pan.getBoundingClientRect().left && last.right <= pan.getBoundingClientRect().right+1,
+          titleTruncated:row.name.scrollWidth > row.name.clientWidth && getComputedStyle(row.name).textOverflow === 'ellipsis',
+          fullNameHelp:nameHelp.matches(':popover-open') && nameHelp.textContent.includes(title),
+          icon:row.statusIcon.getBoundingClientRect().width, natural, widths:headers.map(th=>th.getBoundingClientRect().width)};
+      } finally {
+        view.pan.scrollLeft = 0;
+        view.rows(original);
+      }
+    })()`);
+    for (const [i, expected] of measured.natural.entries()) {
+      if (expected !== null)
+        assert.ok(Math.abs(measured.widths[i]-expected) <= 1, `column ${i+1} at ${width}: ${measured.widths[i]}px; content needs ${expected}px`);
+    }
+    assert.ok(measured.titleTruncated && measured.fullNameHelp && measured.icon > 0);
+    assert.ok(measured.endVisible && measured.pageOverflow <= 1);
+    if (width === 360) assert.ok(measured.scrolled > 0, 'last column reachable by scrolling the table');
+    else assert.ok(measured.overflow <= 1, 'a long title alone must not force horizontal scrolling');
+    layouts.push(measured);
+  }
+  const [a,b] = layouts;
+  assert.ok(b.pan > a.pan && Math.abs((b.widths[1]-a.widths[1])-(b.pan-a.pan)) <= 1,
+    'only Session Name grows into the additional space');
+  return layouts;
+}
+
 module.exports = async ({evaluate, until, fixture, command}) => {
   const checks = [], layouts = [];
   await fixture('models-source');
@@ -77,9 +135,10 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   assert.equal(await evaluate(`current.catalog.body.rows[4].cells[2].querySelector('.metric-spinner')?.getAttribute('aria-label')`),
     'Loading model');
   assert.match(await evaluate('current.catalog.body.rows[4].value.display.model_help'),/No attributable executed main-thread model[\s\S]*Sub-agents/);
-  await evaluate("location.hash='#/sessions?period=today&sort=model&direction=-1'");
+  await evaluate("current.catalog.headers.find(h => h.key === 'model').th.firstChild.click()");
   await until('current.catalog.data.direction===-1 && !current.catalog.busy');
   assert.equal((await page())[0][1],'Model-29');
+  assert.equal(await evaluate('current.catalog.body.rows[0].cells[2].textContent'), 'Model-29*');
   for (const width of [360,1366]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
     const geometry = await evaluate('({width:innerWidth,page:document.documentElement.scrollWidth,columns:current.catalog.headers.length})');
@@ -128,5 +187,7 @@ module.exports = async ({evaluate, until, fixture, command}) => {
   checks.push('shared keyboard/Escape, hover/leave, touch, focused open-help source-revision refresh');
   checks.push('period-qualified Model asc/desc, unknown last, 25+5 paging, long name and 360/1366 seven-column layouts');
   checks.push('pending/final/known metric transitions, real zero and no layout changes at 360/1366 in Classic and Web Light/Dark, reduced motion');
+  layouts.push(...await checkCatalogWidths({evaluate, command}));
+  checks.push('all six non-name tracks fit their controls/values; only the name grows, truncates with full help, and permits narrow table scrolling');
   return {checks,layouts};
 };

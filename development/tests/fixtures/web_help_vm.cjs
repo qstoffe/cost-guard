@@ -3,10 +3,11 @@ const fs = require('node:fs');
 module.exports = function loadHelp(vm, context) {
   const doc = context.document, sample = doc.createElement('div'), proto = Object.getPrototypeOf(sample);
   if (!('classList' in sample)) Object.defineProperty(proto, 'classList', {get() {
-    return {toggle: (name, enabled) => {
+    const toggle = (name, enabled) => {
       const names = new Set((this.className || '').split(' ').filter(Boolean));
       if (enabled) names.add(name); else names.delete(name); this.className = [...names].join(' ');
-    }};
+    };
+    return {toggle, add: (...names) => names.forEach(name => toggle(name, true))};
   }});
   proto.getAttribute ||= function(name) { return this.attributes?.[name] ?? this[name] ?? null; };
   proto.removeAttribute ||= function(name) { if (this.attributes) delete this.attributes[name]; delete this[name]; };
