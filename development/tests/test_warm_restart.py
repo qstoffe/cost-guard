@@ -36,6 +36,7 @@ from src.watch.account_timeline import TimelineHistory
 from src.watch.observers import observe_catalog
 from src.watch.source_reads import SourceReads
 from src.web.composition import open_cache
+from src.web.history_process import ArchivedHistoryProcess
 from src.web.history_projection import HistoryProjection
 
 
@@ -490,7 +491,9 @@ class DisplayHistoryTests(unittest.TestCase):
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
         self.tick(catalog, source)
         service = report_service(source, self.cache, self.now, self.pricing)
-        reports = HistoryReports(ArchivedUsage(archive), lambda: self.pricing.catalog)
+        projector = ArchivedHistoryProcess(archive)
+        self.addCleanup(projector.close)
+        reports = HistoryReports(archive, lambda: self.pricing.catalog, projector)
         self.addCleanup(reports.close)
         config = service.config
         stamp = checkpoint_stamp(config, 'UTC', None, settings_signature(config))
@@ -505,13 +508,35 @@ class DisplayHistoryTests(unittest.TestCase):
             self.assertTrue(view['history_progress']['complete'])
             self.assertTrue(reports.lookup(stats, config)['result']['view']['history_progress']['all']['complete'])
 
-        reopened = HistoryReports(ArchivedUsage(WebArchive(self.directory)), lambda: self.pricing.catalog)
+        # A restart can serve qualified committed history before a projector is available.
+        reopened = HistoryReports(WebArchive(self.directory), lambda: self.pricing.catalog, projector=None)
         self.addCleanup(reopened.close)
         restored = reopened.lookup(mix, config)['result']['view']
         self.assertEqual(2, restored['token_mix']['request_count'])
         self.assertTrue(restored['history_progress']['restored'])
         self.assertFalse(restored['history_progress']['complete'])
         self.assertIsNone(reopened.lookup(mix, dict(config, ccostDisplayUnit='usd'))['result'])
+
+    def test_watch_projection_picks_up_committed_usage_without_claiming_a_complete_day(self):
+        from src.reports.web_history_evidence import DOMAIN
+
+        archive, catalog = self.restore('one')
+        projector = ArchivedHistoryProcess(archive)
+        self.addCleanup(projector.close)
+        day = self.now // DAY_MS * DAY_MS
+        source = self.source(2, 3, now_ms=self.now, today_roots=1)
+
+        (empty, _), _ = projector.watch(day, self.now, self.pricing.catalog, archive.generation(DOMAIN))
+        self.assertIsNone(empty)
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(catalog, source)
+        self.tick(catalog, source)
+
+        (daily, more), _ = projector.watch(day, self.now, self.pricing.catalog, archive.generation(DOMAIN))
+        self.assertFalse(more)
+        self.assertEqual((3, 3), (daily.total.observed_requests, daily.prompt_count))
+        self.assertFalse(daily.total.source_complete)
+        self.assertFalse(daily.prompt_count_complete)
 
     def test_running_and_today_precede_old_all_time_work_without_starvation(self):
         source = self.source(20, 1, today_roots=2, now_ms=NOV_5, running_roots=1)

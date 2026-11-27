@@ -23,7 +23,7 @@ class PeriodFrames:
         self.archive, self.now = archive, now
         self.config = {'timezone': 'UTC'}
         self.windows = dict(calendar_periods('UTC', now))
-        self.reports = HistoryReports(SimpleNamespace(archive=archive), lambda: None)
+        self.reports = HistoryReports(archive, lambda: None, projector=None)
         self.charts = AccountTimelineSnapshots(archive, None)
         # Give the real HTTP routes committed projection readers. Keep the
         # background fixture host separate: no owner tick may create new data.
