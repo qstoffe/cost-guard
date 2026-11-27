@@ -3,7 +3,7 @@
 const SessionDetail = (() => {
   const el = (...args) => ReportView.element(...args);
   const columns = [
-    ['Prompt', 'Local start time, prompt number and preview. [RUNNING] requires observed ongoing work.'],
+    ['Prompt', 'Local start time, prompt number and preview. [RUNNING] requires observed ongoing work. [ABORTED] means the prompt was aborted.'],
     ['Model', ReportView.headerHelp.model],
     ['Effort', 'Reasoning effort requested for the main prompt.'],
     ['CCost', ReportView.headerHelp.promptCost],
@@ -89,7 +89,11 @@ const SessionDetail = (() => {
     else node.removeAttribute('aria-label');
   }
   function promptLabel(value) {
-    return `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`;
+    let status = '';
+    if (value.execution_unverified) status = '[UNVERIFIED] ';
+    else if (value.in_progress) status = '[RUNNING] ';
+    else if (value.aborted) status = '[ABORTED] ';
+    return `${status}#${value.prompt_number ?? '—'}`;
   }
   function contextChangeHelp(data, index, running) {
     const block = data?.result.view.prompt_blocks[0];
