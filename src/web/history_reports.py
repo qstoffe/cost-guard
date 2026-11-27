@@ -15,9 +15,6 @@ from src.reports.projection_cadence import cpu_cooldown
 from src.reports.web_history_evidence import DOMAIN
 from src.version import VERSION
 
-from .history_projection import HistoryProjection
-
-
 LOG = logging.getLogger(__name__)
 KINDS = {ReportKind.AI_STATS, ReportKind.TOKEN_MIX}
 VIEWS = 'report-view/2'
@@ -38,11 +35,11 @@ def settings_signature(config):
 
 
 class HistoryReports:
-    def __init__(self, usage, cached_prices, *, notify=None):
-        self.archive = usage.archive
+    def __init__(self, archive, cached_prices, projector, *, notify=None):
+        self.archive = archive
         self.cached_prices = cached_prices
         self.notify = notify
-        self.projection = HistoryProjection(usage)
+        self.projector = projector
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-history-projection')
         self.publication = {}
         self._committed = {}
@@ -79,16 +76,15 @@ class HistoryReports:
 
     def _measure_render(self, inputs, stamp, previous):
         started = time.thread_time()
-        results, more = self._render(inputs, stamp, previous)
-        return results, more, time.thread_time() - started, self.projection.next_clock_change(inputs['now'])
+        results, more, child_cpu, clock_due = self._render(inputs, stamp, previous)
+        return results, more, child_cpu + (time.thread_time() - started), clock_due
 
     def _render(self, inputs, stamp, previous):
         period = inputs['only']
         reference = self.cached_prices() or PricingCatalog(())
         format_stamp = [*stamp, VERSION, reference.diagnostic_signature]
-        snapshot = self.projection.usage.snapshot()
-        results, more = self.projection.render(reference=reference, snapshot=snapshot,
-                                                defer_while_loading=previous, **inputs)
+        (results, more, cursor, clock_due), cpu = self.projector.reports(
+            inputs, reference, self.archive.generation(DOMAIN), previous=previous)
         if results and previous:
             # An older writer may have left usable report fields even when the
             # corresponding analysis codec no longer decodes. Do not replace
@@ -100,21 +96,21 @@ class HistoryReports:
                     results[key] = self._retain_readable(kind, period, current, retained)
         if results:
             now = inputs['now']
-            fact = ArchiveFact(str(now), now, dict(stamp=[*format_stamp, snapshot[0]], run=self.run,
+            fact = ArchiveFact(str(now), now, dict(stamp=[*format_stamp, cursor], run=self.run,
                 views={kind.value: results[kind.value, period] for kind in KINDS}))
             try:
                 committed = self.archive.publish_checkpoint(VIEWS, {period: fact})
                 if period not in committed:
-                    return {}, True
+                    return {}, True, cpu, clock_due
             except (OSError, sqlite3.Error, ValueError):
                 LOG.warning('history_projection_checkpoint_unavailable', exc_info=True)
-                return {}, True
+                return {}, True, cpu, clock_due
             # Event consumers must see the committed frame even before the host
             # tick collects this job. Do not share mutable projection results.
             self._committed = {**self._committed, period: committed[period].value}
             if self.notify is not None:
                 self.notify(('ai-stats', 'token-mix'), (period,))
-        return results, more
+        return results, more, cpu, clock_due
 
     @staticmethod
     def _retain_readable(kind, period, current, old):

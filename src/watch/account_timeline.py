@@ -383,8 +383,8 @@ class TimelineHistory:
 class AccountTimeline:
     """Live schedules at most one small slice; HTTP reads detached summaries only."""
 
-    def __init__(self, factory, reads, repository=None, *, archived_usage=None, notify=None):
-        self.archive = archived_usage.archive if archived_usage else None
+    def __init__(self, factory, reads, repository=None, *, archive=None, notify=None):
+        self.archive = archive
         self.history = (ArchivedAccountProjection(self.archive) if self.archive
                         else TimelineHistory(factory, reads, repository))
         self.snapshots = AccountTimelineSnapshots(self.archive, notify) if self.archive else None

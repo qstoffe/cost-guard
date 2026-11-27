@@ -24,10 +24,10 @@ BACKGROUND_CPU_SHARE = 0.02
 
 
 class WatchHistory:
-    def __init__(self, usage, prices, publish):
-        self.usage = usage
-        self.archive = usage.archive
+    def __init__(self, archive, prices, projector, publish):
+        self.archive = archive
         self.prices = prices
+        self.projector = projector
         self.publish = publish
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-watch-history')
         self.job = None
@@ -74,42 +74,12 @@ class WatchHistory:
         if (key != self.key or self.more) and (scope_changed or promoted or turn >= due):
             self.key = key
             self.last_started = turn
-            self.job = self.pool.submit(self._measure_render, catalog, zone, unit, day, now)
-
-    def _measure_render(self, *args):
-        started = thread_time()
-        result, more = self._render(*args)
-        return result, more, thread_time() - started
+            self.job = self.pool.submit(self._render, catalog, zone, unit, day, now)
 
     def _render(self, catalog, zone, unit, day, now):
-        _, facts, more = self.usage.snapshot()
+        started = thread_time()
         reference = self.prices() or PricingCatalog(())
-        entries, prompts, category = [], {}, {}
-        for root, fact in facts.items():
-            if not fact.report or fact.last_request_ms < day:
-                continue
-            _, usage, _ = fact.report
-            causal = fact.causal_prompts or {}
-            for entry, _, costs in usage:
-                if not day <= entry.completed_at_ms <= now:
-                    continue
-                entries.append(entry)
-                key = request_identity(entry)
-                if entry.invocation_id in causal:
-                    value = causal[entry.invocation_id]
-                    prompts[key] = (root, *value) if value else None
-                if costs is not None:
-                    category[entry.model, entry.tokens] = costs
-        def valuation(model, tokens):
-            return category.get((model, tokens)) or reference.reference_category_valuation(model, tokens)
-        def total_cost(model, tokens):
-            amounts = valuation(model, tokens)
-            return sum(amounts, Decimal(0)) if amounts is not None else None
-        daily = None
-        if entries:
-            daily = daily_usage(unique_usage(entries, shared_history=True), prompts,
-                                day_start_ms=day, now_ms=now, valuation=total_cost, category_valuation=valuation)
-            daily = replace(daily, total=replace(daily.total, source_complete=False), prompt_count_complete=False)
+        (daily, more), cpu = self.projector.watch(day, now, reference, self.archive.generation(USAGE))
         previews = catalog.archived_previews()
         projection = WatchProjection('Watch', 'OpenCode', (), earlier_previews=previews, now_ms=now,
                                     daily_usage=daily, daily_state='retained' if daily else 'loading')
@@ -131,7 +101,40 @@ class WatchHistory:
             cards.append(dict(session_id=preview.session_id, title=preview.title, focal_id=prompt['event_id'],
                               rows=[row], state='retained', invocation_verified=False,
                               observed_at_ms=saved.observed_ms, session_summary=None))
-        return dict(day=day, view={**view, 'history_cards': cards[-10:], 'history_epoch': 1}), more
+        view = {**view, 'history_cards': cards[-10:], 'history_epoch': 1}
+        return dict(day=day, view=view), more, cpu + (thread_time() - started)
 
     def close(self):
         self.pool.shutdown(wait=True, cancel_futures=True)
+
+
+def watch_daily_usage(facts, reference, day, now):
+    entries, prompts, category = [], {}, {}
+    for root, fact in facts.items():
+        if not fact.report or fact.last_request_ms < day:
+            continue
+        _, usage, _ = fact.report
+        causal = fact.causal_prompts or {}
+        for entry, _, costs in usage:
+            if not day <= entry.completed_at_ms <= now:
+                continue
+            entries.append(entry)
+            key = request_identity(entry)
+            if entry.invocation_id in causal:
+                value = causal[entry.invocation_id]
+                prompts[key] = (root, *value) if value else None
+            if costs is not None:
+                category[entry.model, entry.tokens] = costs
+    if not entries:
+        return None
+
+    def valuation(model, tokens):
+        return category.get((model, tokens)) or reference.reference_category_valuation(model, tokens)
+
+    def total_cost(model, tokens):
+        amounts = valuation(model, tokens)
+        return sum(amounts, Decimal(0)) if amounts is not None else None
+
+    result = daily_usage(unique_usage(entries, shared_history=True), prompts,
+                         day_start_ms=day, now_ms=now, valuation=total_cost, category_valuation=valuation)
+    return replace(result, total=replace(result.total, source_complete=False), prompt_count_complete=False)
