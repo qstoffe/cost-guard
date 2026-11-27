@@ -350,6 +350,52 @@ const AccountCards = (() => {
       for (const [key, line] of this.lines) if (!keep.has(line)) this.lines.delete(key);
     }
   }
+  const quotaTitle = label => label.replace(/(^|\s)(\p{Ll})/gu, (_, space, letter) => space + letter.toUpperCase());
+
+  class SessionBreakdown {
+    constructor() {
+      this.root = el('div', undefined, 'session-quota-breakdown');
+      const divider = el('div', undefined, 'watch-quota-divider');
+      divider.setAttribute('aria-hidden', 'true');
+      this.heading = el('h4');
+      this.list = el('div');
+      this.rows = new Map();
+      this.root.append(divider, this.heading, this.list);
+    }
+    update(value) {
+      const title = `${quotaTitle(value.label)} Usage by Session`;
+      ReportView.text(this.heading, title);
+      const wanted = new Set(value.rows.map(row => row.id));
+      for (const [id, node] of this.rows) {
+        if (wanted.has(id)) continue;
+        ContextHelp.clearValue(node);
+        node.remove();
+        this.rows.delete(id);
+      }
+      value.rows.forEach((row, index) => {
+        let node = this.rows.get(row.id);
+        if (!node) {
+          node = el('p', undefined, 'session-breakdown-row');
+          const label = el('span');
+          label.append(el('strong'), el('span', undefined, 'session-breakdown-title'));
+          node.append(label, el('span', undefined, 'metric-value'));
+          this.rows.set(row.id, node);
+        }
+        const [label, percent] = node.children;
+        const kind = row.main ? 'Main Session' : 'Sub Agent Session';
+        ReportView.text(label.children[0], kind);
+        ReportView.text(label.children[1], row.title);
+        ReportView.valueSlot(percent, row.percent, {pending: row.state === 'pending', field: `${title}: ${row.title}`});
+        const details = row.details.map(part =>
+          `• ${part.provider} · ${part.model} · ${part.effort} — ${part.percent} (CCost ${part.ccost})`);
+        if (details.length) ContextHelp.value(node, details.join('\n'));
+        else ContextHelp.clearValue(node);
+        if (this.list.children[index] !== node)
+          this.list.insertBefore(node, this.list.children[index] || null);
+      });
+    }
+  }
+
   // Detail-only, compact session equivalents. Never renders live account totals.
   class SessionUsage {
     constructor() {
@@ -389,7 +435,7 @@ const AccountCards = (() => {
           }
           const suffix = quota.scope === 'model' && quota.model_id &&
             !quota.label.toLowerCase().includes(quota.model_id.toLowerCase()) ? ` · ${quota.model_id}` : '';
-          const label = quota.label.replace(/(^|\s)(\p{Ll})/gu, (_, space, letter) => space + letter.toUpperCase());
+          const label = quotaTitle(quota.label);
           ReportView.text(line.children[0], `${label}${suffix}`);
           ReportView.valueSlot(line.children[1], quota.percent, {
             pending: quota.state === 'pending', field: `${label}${suffix} quota share`
@@ -399,6 +445,16 @@ const AccountCards = (() => {
           if (card.root.children[index + 1] !== line)
             card.root.insertBefore(line, card.root.children[index + 1] || null);
         });
+        if (item.session_breakdown) {
+          if (!card.breakdown) {
+            card.breakdown = new SessionBreakdown();
+            card.root.append(card.breakdown.root);
+          }
+          card.breakdown.update(item.session_breakdown);
+        } else if (card.breakdown) {
+          card.breakdown.root.remove();
+          card.breakdown = null;
+        }
         ReportView.syncUnits(card.heading);
       }
       for (const [key, card] of this.cards) if (!wanted.has(key)) { card.root.remove(); this.cards.delete(key); }
@@ -406,6 +462,7 @@ const AccountCards = (() => {
         const node = this.cards.get(JSON.stringify([item.observation.provider_id, item.observation.id])).root;
         if (this.grid.children[index] !== node) this.grid.insertBefore(node, this.grid.children[index] || null);
       });
+      ContextHelp.refresh(this.grid);
     }
   }
   return {View, CompactView, SessionUsage};

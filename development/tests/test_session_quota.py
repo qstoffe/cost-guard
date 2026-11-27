@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from development.tests.fixtures.session_snapshots import make_snapshot, one_request
+from development.tests.fixtures.session_snapshots import make_snapshot, one_request, prov
 from src.analysis.valuation import ComparisonCost
 from src.application.session_quota import session_quota_evidence, session_quota_usage, source_scope
 from src.domain import AccountRef, AccountSnapshot, CostKind, CostObservation, ModelRef, QuotaComponent, TokenUsage
@@ -24,7 +24,8 @@ class SessionQuotaTests(unittest.TestCase):
         self.ref = AccountRef("instance-v1", "github-copilot", "synthetic-account")
         self.source = SimpleNamespace(source_id="synthetic", source_instance="instance-v1", observation_epoch="epoch")
         self.valuation = Mock(side_effect=lambda model, tokens: D(tokens.input))
-        self.catalog = SimpleNamespace(diagnostic_signature="price-1", reference_valuation=self.valuation)
+        self.catalog = SimpleNamespace(diagnostic_signature="price-1", reference_valuation=self.valuation,
+                                       display_name=lambda model, provider, exact: "Executed " + model)
         self.service = SimpleNamespace(source=self.source, _load_comparison_catalog=lambda: self.catalog)
         self.monthly = QuotaComponent("Monthly", period="fixed", limit=D(70), used=D(7),
             remaining=D(63), unit="AI credits", reset_at_ms=200_000, status="available")
@@ -280,6 +281,63 @@ class SessionQuotaTests(unittest.TestCase):
         self.assertEqual(["10%", "~30%"], [item["quotas"][0]["percent"] for item in result["accounts"]])
         self.assertEqual(["verified", "estimated"], [item["quotas"][0]["state"] for item in result["accounts"]])
         self.assertEqual(["10%", "?"], [item["quotas"][0]["percent"] for item in degraded["accounts"]])
+
+    def test_executing_sessions_reconcile_on_the_named_primary_not_first_quota(self):
+        snapshot = make_snapshot()
+        root, child = snapshot.sessions
+        nested = replace(child, session_id="nested", parent_session_id="child", provenance=prov("nested"))
+        seed = snapshot.invocations[1]
+
+        def request(sid, key, tokens, effort):
+            return replace(seed, session_id=sid, invocation_id=key, provenance=prov(sid, key),
+                           message_id=key, variant=effort, cost=None, tokens=TokenUsage(input=tokens),
+                           account_ref=self.ref)
+
+        high = request("child", "high", 130, "high")
+        requests = (request("root", "main", 10, "low"), high, high, request("child", "again", 2, "high"),
+                    request("child", "low", 5, "low"), request("nested", "grandchild", 3, "low"))
+        evidence, _ = self.evidence(replace(snapshot, sessions=(root, child, nested), invocations=requests))
+        weekly = QuotaComponent("Weekly", period="rolling", duration_seconds=604800,
+                                reset_at_ms=200_000, reference_ccost_capacity=D(100), status="available")
+        accounts = self.accounts((self.monthly, weekly))
+        item, = accounts.accounts
+        item = replace(item, account=replace(item.account, primary_quota_label="Weekly"))
+
+        card, = self.usage(evidence, replace(accounts, accounts=(item,)))["accounts"]
+
+        self.assertEqual(["~214.3%", "~150%"], [q["percent"] for q in card["quotas"]])
+        split = card["session_breakdown"]
+        self.assertEqual("Weekly", split["label"])
+        main, *children = split["rows"]
+        self.assertEqual((True, "Root", "~10%"), (main["main"], main["title"], main["percent"]))
+        self.assertCountEqual([(False, "Child", "~137%"), (False, "Child", "~3%")],
+                              [(r["main"], r["title"], r["percent"]) for r in children])
+        self.assertNotEqual(children[0]["id"], children[1]["id"])
+        by_share = {row["percent"]: row for row in split["rows"]}
+        for share, expected in (("~10%", [("Low", "~10%", "10")]),
+                                ("~137%", [("High", "~132%", "132"), ("Low", "~5%", "5")]),
+                                ("~3%", [("Low", "~3%", "3")])):
+            self.assertCountEqual([("GitHub Copilot", "Executed gpt-test", *values) for values in expected],
+                                  [(p["provider"], p["model"], p["effort"], p["percent"], p["ccost"])
+                                   for p in by_share[share]["details"]])
+
+    def test_child_only_card_uses_native_debit_and_does_not_leak_unassigned_child_usage(self):
+        snapshot = make_snapshot()
+        child_only = replace(self.ref, account_id="child-only")
+        main = replace(snapshot.invocations[3], account_ref=self.ref, variant="high")
+        child = replace(snapshot.invocations[1], account_ref=child_only, variant="low",
+                        cost=CostObservation(D(14), "AI credits", CostKind.PROVIDER_REPORTED))
+        ambiguous = replace(child, invocation_id="ambiguous", variant="high", account_ref=None)
+        evidence, _ = self.evidence(replace(snapshot, invocations=(main, child, ambiguous)))
+        accounts = self.accounts(refs=(self.ref, child_only))
+
+        main_card, child_card = self.usage(evidence, accounts)["accounts"]
+
+        self.assertNotIn("session_breakdown", main_card)
+        row, = child_card["session_breakdown"]["rows"]
+        self.assertEqual((False, "Child", "~20%"), (row["main"], row["title"], row["percent"]))
+        part, = row["details"]
+        self.assertEqual(("Low", "20%", "20"), (part["effort"], part["percent"], part["ccost"]))
 
     @unittest.skipUnless(shutil.which("node"), "Node required")
     def test_shipped_navigation_memory_controller(self):

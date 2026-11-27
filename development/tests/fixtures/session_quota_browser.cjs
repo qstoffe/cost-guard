@@ -1,5 +1,55 @@
 'use strict';
 const assert = require('node:assert/strict');
+// Controlled publications to an independent instance of the shipped presenter.
+// The surrounding journey exercises actual Detail HTTP refresh and navigation.
+async function checkSessionBreakdown(evaluate, until, command) {
+  await command('Emulation.setDeviceMetricsOverride',{width:360,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate(`window.splitView=new AccountCards.SessionUsage();document.body.append(splitView.root);
+    window.splitCard=structuredClone([...current.detail.quotaUsage.cards.values()][0].value);
+    window.publishSplit=()=>splitView.update({scope:'split',accounts:[splitCard]});
+    publishSplit();window.cardRoot=splitView.grid.firstElementChild;
+    window.oldNodes=[...cardRoot.children];
+    window.mainDetail={provider:'OpenAI',model:'Sol',effort:'High',percent:'~15%',ccost:'3'};
+    window.childDetail={...mainDetail,effort:'Low',percent:'~5%',ccost:'1'};
+    window.longTitle='SyntheticWorker'.repeat(15);
+    splitCard.session_breakdown={label:'weekly',rows:[
+      {id:'root',main:true,title:'Project',percent:'~15%',details:[mainDetail]},
+      {id:'child',main:false,title:longTitle,percent:'~5%',details:[childDetail]}]};
+    publishSplit()`);
+  assert.deepEqual(await evaluate(`(()=>{
+    const section=cardRoot.lastElementChild;
+    const [main,child]=section.querySelectorAll('.session-breakdown-row');
+    window.childRow=child;
+    return [oldNodes.every((n,i)=>cardRoot.children[i]===n), section.firstChild.matches('.watch-quota-divider'),
+      section.querySelector('h4').textContent, main.textContent,child.textContent,
+      child.firstChild.getBoundingClientRect().right<=child.lastChild.getBoundingClientRect().left+1,
+      cardRoot.scrollWidth<=cardRoot.clientWidth+1];
+  })()`),[true,true,'Weekly Usage by Session','Main SessionProject~15%',
+    'Sub Agent Session'+'SyntheticWorker'.repeat(15)+'~5%',true,true]);
+
+  const tip = `document.getElementById(childRow.getAttribute('aria-describedby'))`;
+  const point = await evaluate(`(()=>{childRow.scrollIntoView({block:'center'});
+    const r=childRow.getBoundingClientRect();return {x:r.left+8,y:r.top+5}})()`);
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+  await until(`${tip}?.textContent==='• OpenAI · Sol · Low — ~5% (CCost 1)'`);
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1});
+  await evaluate(`childRow.previousElementSibling.focus()`);
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+  await until(`document.activeElement===childRow && ${tip}?.textContent==='• OpenAI · Sol · Low — ~5% (CCost 1)'`);
+  await evaluate(`childDetail.percent='~7.5%';childDetail.ccost='1.5';
+    splitCard.session_breakdown.rows[1].percent='~7.5%';publishSplit()`);
+  assert.equal(await evaluate(`document.activeElement===childRow && childRow.lastChild.textContent==='~7.5%' &&
+    ${tip}?.textContent==='• OpenAI · Sol · Low — ~7.5% (CCost 1.5)'`),true);
+  await evaluate(`splitCard.session_breakdown.rows[1].details=[];publishSplit()`);
+  assert.equal(await evaluate(`childRow.tabIndex<0 && !childRow.hasAttribute('aria-describedby') &&
+    childRow.textContent==='Sub Agent Session'+longTitle+'~7.5%'`),true);
+  await evaluate(`delete splitCard.session_breakdown;publishSplit()`);
+  assert.equal(await evaluate(`oldNodes.length===cardRoot.children.length &&
+    oldNodes.every((n,i)=>cardRoot.children[i]===n)`),true);
+  await evaluate(`splitView.root.remove()`);
+  await command('Emulation.clearDeviceMetricsOverride');
+}
 module.exports = async ({evaluate,until,fixture,command,browser,targetId,origin}) => {
   const checks=[],layouts=[];
   await fixture('quota-source');
@@ -8,6 +58,9 @@ module.exports = async ({evaluate,until,fixture,command,browser,targetId,origin}
   assert.deepEqual(await evaluate(`[...current.detail.quotaUsage.grid.querySelectorAll('.session-quota-row')].map(n=>n.textContent)`),
      ['Monthly10%','Weekly?']);
   assert.equal(await evaluate(`current.detail.quotaUsage.cards.size`),1);
+  assert.equal(await evaluate(`current.detail.quotaUsage.root.querySelector('.watch-quota-divider')===null`),true);
+  await checkSessionBreakdown(evaluate,until,command);
+  checks.push('Weekly breakdown after unchanged quota rows; narrow long title; scoped hover and real Tab help, refreshed in place; withdrawn detail removes the keyboard stop, withdrawn section leaves no gap');
   assert.equal(await evaluate(`current.detail.root.lastElementChild===current.detail.quotaUsage.root &&
     current.detail.quotaUsage.root.previousElementSibling===current.detail.activity.root`),true);
   await evaluate(`window.quotaNode=current.detail.quotaUsage.grid.firstChild;

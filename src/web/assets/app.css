@@ -460,6 +460,13 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-quota-row { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem 1.5rem;
   margin-block: .5rem; font-variant-numeric: tabular-nums; }
 .session-quota-row > :last-child { flex: none; min-inline-size: 6ch; text-align: end; }
+.session-quota-breakdown { margin-top: .65rem; }
+.session-quota-breakdown h4 { margin: .65rem 0 .35rem; }
+.session-breakdown-row { display: flex; align-items: baseline; justify-content: space-between;
+  gap: .5rem; margin-block: .45rem; }
+.session-breakdown-row > :first-child { min-inline-size: 0; overflow-wrap: anywhere; }
+.session-breakdown-row > :last-child { flex: none; text-align: end; font-variant-numeric: tabular-nums; }
+.session-breakdown-title { display: block; color: var(--muted); }
 .session-detail .pager input { width: 7rem; }
 .session-detail > p:empty, .session-detail .warning:empty { display: none; }
 .session-detail .table-scroll { overflow-anchor: auto; }
@@ -576,7 +583,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .live-account-cards .watch-account-footer, .live-account-cards .watch-account-details,
 .live-account-cards .watch-secondary-quota { display: contents; }
 .live-account-cards .watch-secondary-quota > *, .live-account-cards .watch-account-warnings { margin-inline: .9rem; min-width: 0; }
-.live-account-cards .watch-quota-divider { border-top: 1px solid var(--line); }
+.live-account-cards .watch-quota-divider, .session-quota-breakdown .watch-quota-divider { border-top: 1px solid var(--line); }
 .watch-subscription[data-exhausted="true"] > h4 { background: var(--watch-exhausted-bg); color: var(--error); border-color: var(--error); }
 .watch-subscription .watch-quota-exhausted { color: var(--error); }
 .watch-subscription .watch-quota-track progress { appearance: none; border: 0; border-radius: 2px; overflow: hidden;
