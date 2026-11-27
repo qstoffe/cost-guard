@@ -5,7 +5,7 @@ const AccountTimelineView = (() => {
   const e = (...args) => ReportView.element(...args);
   const ns = 'http://www.w3.org/2000/svg';
   const top = 27, bottom = 194, inset = 3, paletteSize = 12;
-  const labelBaseline = 214, highlightBottom = 221, shadeTop = 4;
+  const labelBaseline = 214, weekdayLineHeight = 14, shadeTop = 4;
   const {DATE, TIME} = ReportView.DateTimeMode;
   const shown = item => ReportView.display({
     display: {amount: item.display.credits},
@@ -41,7 +41,7 @@ const AccountTimelineView = (() => {
     return largest?.ticks || [];
   }
   function minimumWidth(view) {
-    const minimum = view.period === 'today' ? 33 : view.period === '7-days' ? 42 : 25;
+    const minimum = view.period === 'today' ? 33 : view.period === '7-days' ? 76 : 25;
     return 2 * inset + view.buckets.length * minimum;
   }
   function overlayWidth(base, rank, count) {
@@ -78,7 +78,17 @@ const AccountTimelineView = (() => {
     for (const repeated of hours.values())
       if (repeated.length > 1) repeated.forEach((slot, index) => { slot.occurrence = index + 1; });
     const years = new Set(months.map(({month}) => month.slice(0, 4)));
-    return {slots, width, group, hourly, shortDates, months, crossYear: years.size > 1};
+    const crossYear = years.size > 1;
+    const extraLabelSpace = shortDates ? weekdayLineHeight : 0;
+    const axis = {
+      monthBaseline: 236 + extraLabelSpace,
+      yearBaseline: 250 + extraLabelSpace,
+      dividerHeight: (crossYear ? 51 : 38) + extraLabelSpace,
+      highlightHeight: 221 - shadeTop + extraLabelSpace,
+      targetHeight: bottom + 25 + extraLabelSpace,
+      plotHeight: (hourly ? 230 : crossYear ? 258 : 244) + extraLabelSpace
+    };
+    return {slots, width, group, hourly, shortDates, months, crossYear, axis};
   }
   function equalSlots(a, b) {
     return a && b && a.period === b.period && a.timezone_id === b.timezone_id &&
@@ -97,11 +107,13 @@ const AccountTimelineView = (() => {
     return `${start} – ${end}`;
   }
   function axisLabels(layout, future, nonWorking) {
-    const {slots, hourly, shortDates, months, group, crossYear} = layout;
-    const labels = slots.map(slot => {
+    const {slots, hourly, shortDates, months, group, crossYear, axis} = layout;
+    const labels = [];
+    for (const slot of slots) {
       const tick = hourly ? slot.time?.slice(0, 2) : Number(slot.day.slice(8));
-      const node = svg('text', {x: slot.center, y: labelBaseline, class: 'account-timeline-slot-label',
-        'data-bucket': slot.index, 'data-future': future.has(slot.index), 'text-anchor': 'middle'},
+      const attrs = {x: slot.center, 'data-bucket': slot.index, 'data-future': future.has(slot.index),
+        'text-anchor': 'middle'};
+      const node = svg('text', {...attrs, y: labelBaseline, class: 'account-timeline-slot-label'},
         slot.day === 'N/A' ? '—' : undefined);
       if (slot.day !== 'N/A') {
         if (nonWorking.has(slot.index)) node.append(svg('tspan', {class: 'account-timeline-non-working'}, tick));
@@ -109,19 +121,23 @@ const AccountTimelineView = (() => {
         if (shortDates) node.append(`/${Number(slot.day.slice(5, 7))}`);
       }
       if (slot.occurrence) node.append(svg('tspan', {class: 'account-timeline-fold'}, slot.occurrence === 1 ? '¹' : '²'));
-      return node;
-    });
+      labels.push(node);
+      if (shortDates && slot.day !== 'N/A') {
+        labels.push(svg('text', {...attrs, y: labelBaseline + weekdayLineHeight, class: 'account-timeline-weekday'},
+          ReportView.calendarCaption(slot.day, 'weekday')));
+      }
+    }
     months.forEach(({month, x, count}, index) => {
       const width = group * count;
       const [year, number] = month.split('-').map(Number);
       if (!year || !number) return;
       const caption = ReportView.calendarCaption(`${month}-01`, width < 85 ? 'month-short' : 'month-long',
         document.documentElement.lang || 'en');
-      if (index) labels.push(svg('rect', {x: x - .5, y: bottom + 6, width: 1, height: crossYear ? 51 : 38,
+      if (index) labels.push(svg('rect', {x: x - .5, y: bottom + 6, width: 1, height: axis.dividerHeight,
         class: 'account-timeline-month-divider'}));
-      const attrs = {x: x + width / 2, y: 236, 'text-anchor': 'middle', class: 'account-timeline-month-label'};
-      labels.push(svg('text', attrs, caption));
-      if (crossYear) labels.push(svg('text', {...attrs, y: 250}, year));
+      const attrs = {x: x + width / 2, 'text-anchor': 'middle', class: 'account-timeline-month-label'};
+      labels.push(svg('text', {...attrs, y: axis.monthBaseline}, caption));
+      if (crossYear) labels.push(svg('text', {...attrs, y: axis.yearBaseline}, year));
     });
     return labels;
   }
@@ -172,7 +188,7 @@ const AccountTimelineView = (() => {
       this.plot = svg('svg', {role: 'group', 'aria-label': 'Usage by time. Use Left and Right arrows for bucket values.',
         tabindex: '0', class: 'account-timeline-plot', preserveAspectRatio: 'none'});
       this.shades = svg('g', {'aria-hidden': 'true'});
-      this.highlight = svg('rect', {class: 'account-timeline-highlight', y: shadeTop, height: highlightBottom - shadeTop,
+      this.highlight = svg('rect', {class: 'account-timeline-highlight', y: shadeTop,
         rx: 4, visibility: 'hidden', 'aria-hidden': 'true'});
       this.layers = svg('g', {'aria-hidden': 'true'});
       this.labels = svg('g', {'aria-hidden': 'true'});
@@ -569,16 +585,17 @@ const AccountTimelineView = (() => {
       this.savedView.hidden = !!unselected || !cached?.restored;
       ReportView.text(this.range, `Range: ${rangeLabel(view, layout)}`);
       if (!sameGeometry) {
-        const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
+        const {plotHeight, targetHeight, highlightHeight} = layout.axis;
         this.plot.style.setProperty('--timeline-min-width', `${minimum}px`);
         this.plot.setAttribute('viewBox', `0 0 ${layout.width} ${plotHeight}`);
         this.plot.setAttribute('height', plotHeight);
         // Native hit testing is already in actual SVG coordinates, including
         // scroll, CSS zoom and transforms. Bars cannot be hit targets.
         this.targets.replaceChildren(...slots.map(({index, x}) => svg('rect', {
-          class: 'account-timeline-target', x, y: 0, width: group, height: bottom + 25, 'data-slot': index
+          class: 'account-timeline-target', x, y: 0, width: group, height: targetHeight, 'data-slot': index
         })));
         this.highlight.setAttribute('width', group - 2);
+        this.highlight.setAttribute('height', highlightHeight);
       }
       if (!sameGeometry || previous.future_buckets?.length !== view.future_buckets?.length)
         this.labels.replaceChildren(...axisLabels(layout, this.future, this.nonWorking));

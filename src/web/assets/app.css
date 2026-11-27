@@ -280,7 +280,9 @@ section > label input { min-width: 0; }
 .account-timeline-plot .account-timeline-month-label {
   fill: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .015em;
 }
-.account-timeline-slot-label[data-future="true"], .account-timeline-fold { fill: var(--muted); }
+:is(.account-timeline-slot-label, .account-timeline-weekday)[data-future="true"], .account-timeline-fold {
+  fill: var(--muted);
+}
 .account-timeline-non-working { fill: var(--error); }
 .account-timeline-axis { position: relative; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; }
 .account-timeline-tick {
