@@ -126,6 +126,7 @@ def block(value, *, source_complete=True, details=False):
         ("has_error", value.watch_error),
         ("session_context", None if value.session_context is None else record(
             watch_next_context_tokens=value.session_context.tokens,
+            context_state=value.session_context.context_state,
             warning=fields(value.session_context, "owner_id text severity multiplier cached_ccost fresh_ccost"))),
         ("active_hour", hourly(active_hour("Complete session", None, None, value.total_ccost, value.duration_ms,
             complete=source_complete and value.comparison_cost_complete and value.rate_usage_complete,
