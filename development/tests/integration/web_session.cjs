@@ -125,13 +125,25 @@ async function main() {
   selected = null; await view.load();
   assert.equal(view.body.children.length, 100, 'same-revision retry removes the deferred obsolete row');
   assert.deepEqual(view.body.children.map(item => item.dataset.id), page.result.view.prompt_blocks[0].rows.map(item => item.id));
-  const latest = page.result.view.prompt_blocks[0].rows.at(-1); latest.in_progress = true; page.revision = 'running';
+  const promptRows = page.result.view.prompt_blocks[0].rows;
+  const latest = promptRows.at(-1);
+  promptRows.at(-2).has_error = true;
+  latest.in_progress = true; page.revision = 'running';
   await view.load();
-  assert.match(view.body.children.at(-1).textContent, /\[RUNNING\]/);
+  const state = offset => view.body.children.at(offset).querySelector('.session-prompt-state').textContent;
+  assert.equal(state(-1), `[RUNNING] #${latest.prompt_number}`);
   assert.equal(view.body.children.at(-1).className, 'session-running');
-  latest.in_progress = false; page.revision = 'ended'; await view.load();
-  assert.ok(!view.body.children.at(-1).textContent.includes('[RUNNING]'));
-  assert.equal(view.body.children.at(-1).className, '');
+  latest.in_progress = false; latest.aborted = true; page.revision = 'aborted';
+  for (let poll = 0; poll < 2; poll++) {
+    await view.load();
+    assert.equal(state(-1), `[ABORTED] #${latest.prompt_number}`);
+    assert.equal(view.body.children.at(-1).className, 'error');
+    assert.ok(view.body.children.at(-1).children[0].textContent.endsWith(latest.preview));
+    assert.equal(state(-2), `#${promptRows.at(-2).prompt_number}`, 'an ordinary red error is not an abort');
+    assert.equal(view.body.children.at(-2).className, 'error');
+    assert.equal(state(-3), `#${promptRows.at(-3).prompt_number}`);
+    assert.equal(view.body.children.at(-3).className, '');
+  }
   const retained = view.body.textContent; offline = true; await view.load();
    assert.equal(view.body.textContent, retained); assert.equal(view.status.textContent, '');
    assert.equal(view.retry.hidden, true);
