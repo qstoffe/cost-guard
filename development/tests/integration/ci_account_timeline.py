@@ -149,6 +149,54 @@ def assert_legend_geometry(selected, *, compact=False, wraps=False):
         assert layout['wrapped'], layout
 
 
+def check_week_rollover(page, chart, source):
+    from playwright.sync_api import expect
+
+    plot = chart.locator('.account-timeline-plot')
+    dates = plot.locator('.account-timeline-slot-label')
+    weekdays = plot.locator('.account-timeline-weekday')
+    week = ['Friday', 'Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']
+    # Chart reports in UTC. New York (the device zone) is still on Thursday
+    # when this same open chart moves into Friday and a new month/year.
+    source.clock_offset_ms = stamp('2026-12-31T23:50:00+00:00') - NOV_5
+    chart.get_by_role('button', name='7 days', exact=True).click()
+    expect(dates).to_have_text([f'{n}/12' for n in range(25, 32)], timeout=20_000)
+    expect(weekdays).to_have_text(week)
+    source.clock_offset_ms = stamp('2027-01-01T00:05:00+00:00') - NOV_5
+    expect(dates).to_have_text([f'{n}/12' for n in range(26, 32)] + ['1/1'], timeout=20_000)
+    expect(weekdays).to_have_text(week[1:] + ['Friday'])
+
+    for width in (360, 1280):
+        page.set_viewport_size({'width': width, 'height': 900})
+        page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+        expect(plot.locator('.account-timeline-month-label')).to_have_text(
+            ['December', '2026', re.compile(r'^Jan(?:uary)?$'), '2027'])
+        layout = plot.evaluate('''plot => {
+            const nodes = name => [...plot.querySelectorAll('.account-timeline-' + name)];
+            const cells = nodes('target'), dates = nodes('slot-label'), days = nodes('weekday');
+            const captions = nodes('month-label'), pen = document.createElement('canvas').getContext('2d');
+            // SVG text rectangles include unused font ascent/descent. Compare
+            // the actual glyphs vertically rather than requiring empty font boxes.
+            function ink(node) {
+                const style = getComputedStyle(node);
+                pen.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+                const bounds = pen.measureText(node.textContent), baseline = node.getStartPositionOfChar(0).y;
+                return {top: baseline - bounds.actualBoundingBoxAscent, bottom: baseline + bounds.actualBoundingBoxDescent};
+            }
+            function centered(node, cell) {
+                const text = node.getBoundingClientRect(), slot = cell.getBoundingClientRect();
+                return node.checkVisibility({visibilityProperty: true, opacityProperty: true}) && text.width > 0 &&
+                    text.left >= slot.left && text.right <= slot.right &&
+                    Math.abs((text.left + text.right - slot.left - slot.right) / 2) <= 1;
+            }
+            return {fits: cells.map((cell, i) => centered(dates[i], cell) && centered(days[i], cell) &&
+                    ink(dates[i]).bottom < ink(days[i]).top && ink(days[i]).bottom < ink(captions[0]).top),
+                captionsFit: captions.every(n => n.getBoundingClientRect().bottom <= plot.getBoundingClientRect().bottom),
+                scrolls: plot.parentElement.scrollWidth > plot.parentElement.clientWidth};
+        }''')
+        assert layout == dict(fits=[True] * 7, captionsFit=True, scrolls=width == 360), (width, layout)
+
+
 def assert_highlight(plot, index):
     bounds = plot.evaluate('''(plot, index) => {
         const band = plot.querySelector('.account-timeline-highlight').getBoundingClientRect();
@@ -680,6 +728,8 @@ def check(browser, root, screenshots=None):
             page.wait_for_function("(period) => current.accountTimeline.view?.period === period",
                                    arg=period, timeout=18_000)
             assert page.evaluate('current.accountTimeline.view.buckets.length') == count
+            if period != '7-days':
+                expect(plot.locator('.account-timeline-weekday')).to_have_count(0)
             expect(plot.locator('.account-timeline-partial')).to_have_count(0)
         plot.focus()
         page.keyboard.press('End')
@@ -790,6 +840,8 @@ def check_range_totals(browser, root):
             partial = any(p is None or p['display'][unit].startswith('~') for p in points)
             expect(total).to_have_text(('~' if partial else '') + bucket_sum)
         print('Accounts range totals PASS: four periods, units and independent card used/remaining')
+        check_week_rollover(page, chart, source)
+        print('Accounts 7 days axis PASS: configured-zone year-end live rollover, narrow and wide label geometry')
 
 
 def check_period_help(browser, root):
