@@ -317,12 +317,14 @@ async function checkPeriodLoading() {
 
 async function checkBucketAmounts() {
   const cases = [
+    ['Unavailable', null, '—', '—'],
     ['Exact', point, '100', '$1.00'],
+    ['Equal', point, '100', '$1.00'],
+    ['Rounds alike', {...point, amount: '100.004'}, '100', '$1.00'],
     ['Partial', {amount: '123', display: {credits: '~123', usd: '~$1.23'}}, '123', '$1.23'],
     ['Tiny', {amount: '0.01', display: {credits: '~<0.1', usd: '~<$0.01'}}, '<0.1', '<$0.01'],
     ['Zero', {amount: '0', display: {credits: '0', usd: '$0.00'}}, '0', '$0.00'],
     ['Negative', {amount: '-100', display: {credits: '≈-100', usd: '≈$-1.00'}}, '-100', '$-1.00'],
-    ['Unavailable', null, '—', '—'],
   ];
   const series = cases.map(([account, total], i) => ({
     ...first, id: i.toString(16).padStart(8, '0'), account, total, points: [total, null]
@@ -338,8 +340,11 @@ async function checkBucketAmounts() {
     unit = displayUnit;
     chart.draw();
     chart.choose(0);
-    assert.deepEqual(chart.selectedLegend.children.map(row => row.children.at(-1).textContent),
-      cases.map(([, total]) => total?.display[unit] ?? '—'));
+    const byRank = ['Partial', 'Rounds alike', 'Exact', 'Equal', 'Tiny', 'Zero', 'Negative', 'Unavailable'];
+    assert.deepEqual(chart.selectedLegend.children.map(legendRow), byRank.map(name => {
+      const [, total] = cases.find(([account]) => name === account);
+      return [name, total?.display[unit] ?? '—'];
+    }));
     assert.deepEqual(chart.tipValues.children.map(row => row.children[2].textContent), cases.map(row => row[column]));
     for (const row of cases) assert.ok(chart.announce.textContent.includes(`${row[0]}: ${row[column]}`));
   }

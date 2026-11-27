@@ -289,18 +289,23 @@ section > label input { min-width: 0; }
   position: relative; display: block; height: 0; line-height: 1rem; padding-inline: 0 .32rem;
   transform: translateY(-.5rem); text-align: end; white-space: nowrap;
 }
-.account-timeline-range, .account-timeline-saved, .account-timeline-selected {
+.account-timeline-range, .account-timeline-saved, .account-timeline-legend-table {
   grid-column: 2; margin: .4rem 0 0; font-size: .76rem; line-height: 1.35;
 }
 .account-timeline-range, .account-timeline-saved { color: var(--muted); font-variant-numeric: tabular-nums; }
-.account-timeline-selected {
-  display: grid; justify-self: start; gap: .3rem; padding: 0; list-style: none; min-width: 0;
-  width: min(100%, 27rem);
-}
-.account-timeline-selected > li {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .4rem; align-items: baseline;
+.account-timeline-legend-table {
+  display: grid; grid-template-columns: auto minmax(0, max-content) max-content;
+  justify-self: start; gap: .3rem .4rem; width: max-content; max-width: 100%;
   overflow-wrap: anywhere;
 }
+.account-timeline-legend-name-heading { grid-column: 2; }
+.account-timeline-legend-name-heading, .account-timeline-legend-cost-heading { font-weight: 650; }
+.account-timeline-legend-cost-heading { grid-column: 3; text-align: end; }
+.account-timeline-selected, .account-timeline-selected > li {
+  display: grid; grid-column: 1 / -1; grid-template-columns: subgrid;
+}
+.account-timeline-selected { gap: .3rem .4rem; margin: 0; padding: 0; list-style: none; }
+.account-timeline-selected > li { align-items: baseline; }
 .account-timeline-legend-value {
   color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: end;
 }

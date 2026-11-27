@@ -11,6 +11,11 @@ const AccountTimelineView = (() => {
     display: {amount: item.display.credits},
     display_units: {usd: {amount: item.display.usd}}
   }, 'amount');
+  function compareLegendTotals(a, b) {
+    if (!a.total) return b.total ? 1 : 0;
+    if (!b.total) return -1;
+    return ReportView.compare(b.total.amount, a.total.amount);
+  }
   function discrepancyHelp(item) {
     if (!item.discrepancy_comparable) return '';
     const provider = shown(item.month_total), observed = shown(item.observed_total);
@@ -197,9 +202,15 @@ const AccountTimelineView = (() => {
       this.scroller.append(this.plot);
       this.range = e('p', undefined, 'account-timeline-range');
       this.savedView = e('p', 'Saved view', 'account-timeline-saved');
+      this.legendTable = e('div', undefined, 'account-timeline-legend-table');
       this.selectedLegend = e('ul', undefined, 'account-timeline-selected');
       this.selectedLegend.setAttribute('role', 'list');
       this.selectedLegend.setAttribute('aria-label', 'Selected accounts');
+      this.legendTable.append(
+        e('span', 'Account Name', 'account-timeline-legend-name-heading'),
+        e('span', 'CCost', 'account-timeline-legend-cost-heading'),
+        this.selectedLegend
+      );
       this.empty = e('div', undefined, 'account-timeline-empty');
       this.message = e('span');
       this.initialRing = e('span', undefined, 'account-timeline-ring');
@@ -216,7 +227,7 @@ const AccountTimelineView = (() => {
       this.tooltip.append(tipHeader, this.tipValues);
       this.announce = e('span', '', 'sr-only');
       this.announce.setAttribute('role', 'status');
-      this.frame.append(this.axis, this.scroller, this.range, this.savedView, this.selectedLegend, this.tooltip);
+      this.frame.append(this.axis, this.scroller, this.range, this.savedView, this.legendTable, this.tooltip);
       graph.append(this.frame, this.empty, this.announce);
       this.chooser = e('button', undefined, 'account-timeline-chooser');
       this.chooser.type = 'button';
@@ -502,7 +513,8 @@ const AccountTimelineView = (() => {
         row.remove();
         this.legendEntries.delete(id);
       }
-      this.series.forEach((item, index) => {
+      // Keep chart order intact and retain roster order when totals tie.
+      [...this.series].sort(compareLegendTotals).forEach((item, index) => {
         let entry = this.legendEntries.get(item.id);
         if (!entry) {
           const row = e('li'), name = e('span');
@@ -520,8 +532,12 @@ const AccountTimelineView = (() => {
           else ContextHelp.clearValue(amount);
           entry.help = help;
         }
-        if (this.selectedLegend.children[index] !== row)
-          this.selectedLegend.insertBefore(row, this.selectedLegend.children[index] || null);
+        const next = this.selectedLegend.children[index] || null;
+        if (next === row) return;
+        if (row.parentNode === this.selectedLegend && this.selectedLegend.moveBefore)
+          this.selectedLegend.moveBefore(row, next);
+        else
+          this.selectedLegend.insertBefore(row, next);
       });
     }
 
@@ -539,7 +555,7 @@ const AccountTimelineView = (() => {
       this.legendFor(roster);
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];
-      this.selectedLegend.hidden = !view || !selectedSeries.length;
+      this.legendTable.hidden = !view || !selectedSeries.length;
       this.drawLegend();
       this.view = view;
       this.unread = new Set(view?.initial_pending_buckets);
