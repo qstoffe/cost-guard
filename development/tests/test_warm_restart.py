@@ -514,11 +514,86 @@ class DisplayHistoryTests(unittest.TestCase):
         # A restart can serve qualified committed history before a projector is available.
         reopened = HistoryReports(WebArchive(self.directory), lambda: self.pricing.catalog, projector=None)
         self.addCleanup(reopened.close)
-        restored = reopened.lookup(mix, config)['result']['view']
+        notified = []
+        def on_restore(kinds, periods):
+            # The first notified consumer must see both views without decoding
+            # the SQLite checkpoint again, even before the next scheduler turn.
+            with patch.object(reopened.archive, 'history_item', side_effect=AssertionError('checkpoint reread')):
+                for request in (stats, mix):
+                    result = reopened.lookup(request, config)['result']
+                    self.assertEqual('partial', result['source']['status'])
+                notified.append(reopened.lookup(mix, config)['result']['view'])
+
+        reopened.notify = on_restore
+        reopened._load_checkpoint('all', stamp)
+        restored, = notified
         self.assertEqual(2, restored['token_mix']['request_count'])
+        self.assertEqual('partial', restored['token_mix_period']['coverage'])
         self.assertTrue(restored['history_progress']['restored'])
         self.assertFalse(restored['history_progress']['complete'])
         self.assertIsNone(reopened.lookup(mix, dict(config, ccostDisplayUnit='usd'))['result'])
+
+    def test_month_retains_qualified_calls_until_a_revision_is_committed(self):
+        from src.analysis.timezones import calendar_periods
+        from src.web.history_reports import HistoryReports, checkpoint_stamp, settings_signature
+
+        source = self.source(1, 2, today_roots=1, now_ms=self.now)
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(catalog, source)
+        service = report_service(source, self.cache, self.now, self.pricing)
+        projector = ArchivedHistoryProcess(archive)
+        self.addCleanup(projector.close)
+        reports = HistoryReports(archive, lambda: self.pricing.catalog, projector)
+        self.addCleanup(reports.close)
+        request = ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope='month')
+        start = dict(calendar_periods('UTC', self.now))['month']
+        stamp = checkpoint_stamp(service.config, 'UTC', start, settings_signature(service.config))
+        previous = {}
+
+        def publish(**qualifications):
+            nonlocal previous
+            inputs = dict(identity='test', selection=service.selection, config=service.config, now=self.now,
+                          activity={'root-0000': self.now, 'live': self.now}, available=True, only='month',
+                          **qualifications)
+            previous, *_ = reports._render(inputs, stamp, previous)
+            self.assertTrue(previous, 'publication committed')
+            with patch('src.web.history_reports.time.time', return_value=self.now / 1000), \
+                 patch.object(archive, 'history_item', side_effect=AssertionError('warm checkpoint reread')):
+                return reports.lookup(request, service.config)['result']
+
+        def check(result, tokens, status):
+            view = result['view']
+            for mix in (view['token_mix'], view['model_token_mix'][0]['mix'], view['publisher_token_mix'][0]['mix']):
+                self.assertEqual((2, str(tokens)), (mix['request_count'], mix['observed_total_tokens']))
+            self.assertEqual(status, result['source']['status'])
+            self.assertEqual('partial' if status == 'partial' else None, view['token_mix_period'].get('coverage'))
+            return view['history_progress']
+
+        check(publish(revisions={}), 261, 'acquired')
+        old = source.snapshots['root-0000']
+        first, second = old.invocations
+        source.snapshots['root-0000'] = replace(old, source_revision='next',
+            invocations=(replace(first, tokens=replace(first.tokens, input=600)), second))
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        for key, ownership in [('live', dict(live_roots={'live'})),
+                               ('root-0000', dict(refresh_roots=catalog.history_refresh_roots()))]:
+            with self.subTest(key=key):
+                inputs = dict(revisions={key: 'next'}, **ownership)
+                quiet = check(publish(**inputs), 261, 'partial')
+                self.assertTrue(quiet['complete'] and quiet['reconciling'])
+                self.assertFalse(quiet['unverifiable'])
+                failed = check(publish(**inputs, unavailable={key}), 261, 'partial')
+                self.assertTrue(failed['complete'] and failed['unverifiable'])
+                self.assertEqual(1, failed['unavailable'])
+
+        for _ in range(10):
+            self.tick(catalog, source)
+            if not catalog.history_pending:
+                break
+        settled = check(publish(revisions={'root-0000': 'next'}), 761, 'acquired')
+        self.assertTrue(settled['complete'])
+        self.assertFalse(settled['reconciling'] or settled['unverifiable'])
 
     def test_watch_projection_picks_up_committed_usage_without_claiming_a_complete_day(self):
         from src.reports.web_history_evidence import DOMAIN
