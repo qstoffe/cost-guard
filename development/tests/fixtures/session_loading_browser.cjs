@@ -185,9 +185,12 @@ module.exports.zoom = async function sessionLoadingZoom({evaluate,until,command,
 module.exports.firstLoad = async function firstLoad({evaluate,until,fixture}) {
    await fixture('detail-delayed');
    await evaluate(`window.firstLoadEvents=[];window.firstLoadStart=performance.now();window.detailRequests=[];
-     const fetchDetail=window.fetch;window.fetch=(url,options)=>{
-       if(url==='/api/detail')detailRequests.push(JSON.parse(options.body).action);
-       return fetchDetail(url,options);};
+     const detailApi=api;api=async (...args)=>{
+       const action=args[0]==='/api/detail' && args[1]?.action;
+       if(action)detailRequests.push(action);
+       const dto=await detailApi(...args);
+       if(action==='begin' && dto.result)window.firstReadyBegin??=performance.timeOrigin+performance.now();
+       return dto;};
     const status=SessionDetail.View.prototype.sourceStatus;
      SessionDetail.View.prototype.sourceStatus=function(value){status.call(this,value);
        firstLoadEvents.push({at:performance.now(),phase:value.acquisition?.phase,
@@ -208,9 +211,9 @@ module.exports.firstLoad = async function firstLoad({evaluate,until,fixture}) {
     appliedAt:performance.timeOrigin+firstLoadApplied,events:firstLoadEvents,
     rows:current.detail.body.rows.length,percent:current.detail.loader.bar.value})`);
   measured.publicationToDOM=measured.appliedAt-lane.metrics.published_at_ms;
-  // timeOrigin, not the route start, qualifies the browser/host clock join.
-  measured.publicationToBegin=await evaluate('performance.timeOrigin')+
-     measured.events.find(e=>e.result).at-lane.metrics.published_at_ms;
+  // The parsed begin precedes chunk transfer and DOM work. sourceStatus for
+  // a ready response is notified *after* the complete history is rendered.
+  measured.publicationToBegin=await evaluate('window.firstReadyBegin')-lane.metrics.published_at_ms;
   assert.ok(measured.elapsed>=5000 && measured.elapsed<15000,JSON.stringify(measured));
   assert.ok(measured.publicationToBegin>=0 && measured.publicationToBegin<1250,JSON.stringify(measured));
   assert.ok(measured.publicationToDOM>=0 && measured.publicationToDOM<3000,JSON.stringify(measured));

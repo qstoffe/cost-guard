@@ -190,6 +190,7 @@ const WatchView = (() => {
     } else text(node, value);
   }
   function clearInvocation(job) {
+    clearTimeout(job.holdTimer);
     drawInvocation(job, '', null);
     drawShellTiming(job, null);
     job.node.remove();
@@ -202,12 +203,24 @@ const WatchView = (() => {
     job.note.hidden = true;
     drawShellTiming(job, null);
   }
-  function drawInvocations(target, label, details, total, verified, mode, legacy, state, clock) {
+  // As with the source's ongoing evidence, an incomplete observation cannot
+  // renew a Running claim indefinitely.
+  const invocationGraceMs = 15_000;
+  function holdInvocation(target, key, job) {
+    withholdInvocation(job);
+    job.holdTimer ??= setTimeout(() => {
+      clearInvocation(job);
+      target.jobs.delete(key);
+    }, invocationGraceMs);
+  }
+  function drawInvocations(target, label, details, total, verified, mode, legacy, state, clock,
+      {keepRows = false, withholdDetails = false} = {}) {
     const limit = 5;
     const observed = verified && state !== 'pending' && state !== 'invalidated';
-    const rows = label && observed ?
+    const evidence = label && observed ?
       (details?.length ? details : legacy ? [legacy] : []).filter(detail => detail.identity).slice(0, limit) : [];
-    const keep = new Set(rows.map(detail => detail.identity));
+    const keep = new Set(evidence.map(detail => detail.identity));
+    const rows = withholdDetails ? evidence.filter(detail => target.jobs.has(detail.identity)) : evidence;
     // No rows under a live label means missing details, not completed work.
     // A capped or otherwise partial list cannot establish that an absent job ended.
     const complete = keep.size > 0 && keep.size >= total;
@@ -216,11 +229,15 @@ const WatchView = (() => {
     if (reset) target.node.open = false;
     const startOpen = reset || target.jobs.size === 0;
     const withheld = [];
+    const canKeepRows = keepRows && total >= new Set([...target.jobs.keys(), ...keep]).size;
     // Retain at most a page of missing jobs, newest observations first.
     for (const [key, job] of [...target.jobs].reverse()) if (!keep.has(key)) {
       if (!reset && !complete && withheld.length < limit) {
-        withholdInvocation(job);
-        job.node.hidden = true;
+        if (canKeepRows && !job.node.hidden) holdInvocation(target, key, job);
+        else {
+          withholdInvocation(job);
+          job.node.hidden = true;
+        }
         withheld.push(job.node);
       } else {
         clearInvocation(job); target.jobs.delete(key);
@@ -232,11 +249,14 @@ const WatchView = (() => {
     rows.forEach((detail, index) => {
       const fresh = !target.jobs.has(detail.identity);
       const job = target.jobs.get(detail.identity) || invocationDisclosure();
+      clearTimeout(job.holdTimer);
+      job.holdTimer = undefined;
       target.jobs.delete(detail.identity);
       target.jobs.set(detail.identity, job);
       job.node.className = 'watch-running-tool' + (rows.length === 1 && total <= 1 ? ' watch-running-single' : '');
-      drawInvocation(job, `${detail.kind || 'Tool'} ${index + 1} — ${mode}, running`, detail);
-      drawShellTiming(job, detail, clock);
+      drawInvocation(job, `${detail.kind || 'Tool'} ${index + 1} — ${mode}, running`,
+        withholdDetails ? {identity: detail.identity} : detail);
+      drawShellTiming(job, withholdDetails ? null : detail, clock);
       if (fresh) job.node.open = startOpen;
       wanted.push(job.node);
     });
@@ -380,40 +400,89 @@ const WatchView = (() => {
         skills.map(parts), 'No confirmed custom skills');
     }
   }
-  function drawRunningActivity(running, backgroundDetail, tool, verified, state, clock) {
+  function drawRunningActivity(running, backgroundDetail, tool, verified, state, clock, options) {
     drawInvocations(running, tool?.running_tool ? `Running: ${tool.running_tool} ${display(tool, 'running_ms')}` : '',
-      tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation, state, clock);
+      tool?.running_invocations, tool?.running_invocation_count || 1, verified, 'foreground', tool?.running_invocation, state, clock, options);
     const kinds = tool?.background_kinds || [];
     const background = kinds.length === 1 ? kinds[0] : new Set(kinds).size === 1 ? `${kinds.length}× ${kinds[0]}` : `${kinds.length} jobs`;
     drawInvocations(backgroundDetail, kinds.length ? `Running: ${background} ${display(tool, 'background_ms')}` : '',
       tool?.background_invocations, tool?.background_invocation_count || kinds.length, verified, 'background',
-      kinds.length === 1 ? tool?.background_invocation : null, state, clock);
+      kinds.length === 1 ? tool?.background_invocation : null, state, clock, options);
   }
   class LiveInvocations {
     constructor() {
       this.root = el('div', undefined, 'watch-activity');
       this.running = runningDisclosure(); this.background = runningDisclosure();
       this.root.append(this.running.node, this.background.node);
-      this.update(null);
+      this.reset();
     }
-    update(result, id, scope) {
-      // Match the Live source, session and running focal before consuming its
-      // detail state. Pending cards offer status but never private input.
+    clearRows() {
+      clearTimeout(this.gapTimer);
+      this.gapTimer = undefined;
+      this.focalId = undefined;
+      drawRunningActivity(this.running, this.background, null, false, 'invalidated');
+      this.root.hidden = true;
+    }
+    reset() {
+      this.binding = null;
+      this.detailQualified = false;
+      this.endProof = null;
+      this.clearRows();
+    }
+    observeDetail(activity, proof) {
+      if (activity?.invocation_scope) {
+        if (this.binding && (this.binding.scope !== activity.invocation_scope ||
+            this.binding.historyScope !== activity.scope)) this.reset();
+        this.binding = {scope: activity.invocation_scope, historyScope: activity.scope};
+      }
+      this.detailQualified = !!activity?.invocation_scope;
+      if (proof && this.binding?.historyScope === proof.scope &&
+          (!this.endProof || this.endProof.at < proof.observed_at_ms)) {
+        this.endProof = {at: proof.observed_at_ms, ids: new Set(proof.ended)};
+      }
+    }
+    hold() {
+      if (this.root.hidden || this.gapTimer != null) return;
+      for (const target of [this.running, this.background]) {
+        for (const job of target.jobs.values()) withholdInvocation(job);
+      }
+      this.gapTimer = setTimeout(() => this.clearRows(), invocationGraceMs);
+    }
+    update(result, id) {
+      // An offline/retrying observation has no current Live result. Explicit
+      // source invalidation and navigation discard the source binding as well.
+      if (result === null) { this.reset(); return; }
+      if (!this.binding) return;
+      const {scope} = this.binding;
       const view = result?.view;
-      const matches = scope && result?.state === 'running' ?
-        (view?.active_cards || []).filter(card => card.session_id === id && card.activity_scope === scope &&
-          card.rows.some(row => row.prompt.event_id === card.focal_id &&
-            row.prompt.in_progress && !row.prompt.execution_unverified)) : [];
-      const card = matches.find(card => card.focal_id === this.focalId) || matches[0];
-      const tool = card?.rows.find(row => row.prompt.event_id === card.focal_id)?.tool;
-      if (this.scope !== scope || this.sessionId !== id || this.focalId !== card?.focal_id)
-        drawRunningActivity(this.running, this.background, null, false, 'invalidated');
-      this.scope = scope; this.sessionId = id; this.focalId = card?.focal_id;
-      if (!tool && this.root.hidden) return;
-      drawRunningActivity(this.running, this.background, tool, card?.invocation_verified === true,
-        tool?.detail_state === 'pending' ? 'pending' :
-          card?.invocation_verified === true ? tool?.detail_state : 'invalidated',
-        {now: view?.now_ms, zone: view?.timezone_id});
+      const cards = (view?.active_cards || []).filter(card => card.session_id === id);
+      const matching = cards.filter(card => card.activity_scope === scope);
+      if (!matching.length && cards.some(card => card.activity_scope)) { this.reset(); return; }
+      const focalRow = card => card?.rows.find(row => row.prompt.event_id === card.focal_id);
+      const invalid = (card, row) => card?.state === 'unavailable' ||
+        row && (!row.prompt.in_progress || row.prompt.execution_unverified || row.tool?.detail_state === 'invalidated');
+      const ended = (id, observedAt) => this.endProof?.ids.has(id) &&
+        (observedAt == null || observedAt <= this.endProof.at);
+      const current = matching.find(card => card.focal_id === this.focalId);
+      if (ended(this.focalId, current?.observed_at_ms) || invalid(current, focalRow(current)) ||
+          !cards.length && view?.cards_state === 'observed') this.clearRows();
+      const card = this.focalId && current || matching.find(card => {
+        const row = focalRow(card);
+        return row && !invalid(card, row) && !ended(card.focal_id, card.observed_at_ms);
+      });
+      const row = focalRow(card);
+      if (!card || !row) { this.hold(); return; }
+      if (this.focalId && this.focalId !== card.focal_id) this.clearRows();
+      if (!this.detailQualified && this.root.hidden) return;
+      const tool = row.tool;
+      const pending = !tool || tool.detail_state === 'pending' || card.invocation_verified !== true;
+      if (pending && [this.running, this.background].some(target =>
+        [...target.jobs.values()].some(job => !job.node.hidden))) { this.hold(); return; }
+      clearTimeout(this.gapTimer);
+      this.gapTimer = undefined;
+      this.focalId = card.focal_id;
+      drawRunningActivity(this.running, this.background, tool, !pending, pending ? 'pending' : 'observed',
+        {now: view?.now_ms, zone: view?.timezone_id}, {keepRows: true, withholdDetails: !this.detailQualified});
       this.root.hidden = this.running.node.hidden && this.background.node.hidden;
     }
   }

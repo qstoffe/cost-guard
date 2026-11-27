@@ -831,8 +831,10 @@ function navigate() {
   }
   document.getElementById('search').value = current.search || '';
   if (match && csrf && !hostState.terminal && sessionDetailAvailable && !current.detail) {
-    current.detail = new SessionDetail.View(api, match[1],
-      () => hostState.kind === 'connected' && !hostState.sourceBlocked ? liveValue : null);
+     current.detail = new SessionDetail.View(api, match[1], () => {
+       if (hostState.terminal || hostState.sourceBlocked || hostState.sourceOutage) return null;
+       return hostState.kind === 'connected' && liveValue?.state === 'running' ? liveValue : undefined;
+     });
     current.message = '';
   }
    if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {

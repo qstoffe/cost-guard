@@ -239,7 +239,7 @@ const SessionDetail = (() => {
       this.flight?.controller.abort(); this.flight = null; this.busy = false;
       this.showActivityFeedback(null);
       this.activity.update(null); this.activityLimit = 25;
-      this.invocations.update(null);
+      this.invocations.reset();
       if (this.data) this.data.activity = null;
       this.scroll.setAttribute('aria-busy', 'false'); this.loader.root.hidden = true;
       const token = this.token; this.token = null;
@@ -265,8 +265,10 @@ const SessionDetail = (() => {
       this.initialFailed = false; this.readFailures = 0;
       this.poll(true);
     }
-    updateInvocations(data = this.data) {
-      this.invocations.update(this.attached ? this.live() : null, this.id, data?.activity?.invocation_scope);
+    updateInvocations(data) {
+      if (!this.attached) return;
+      if (data) this.invocations.observeDetail(data.activity, data.live_activity);
+      this.invocations.update(this.live(), this.id);
     }
     async poll(foreground = false) {
       if (!this.attached || this.initialFailed) return;
@@ -340,6 +342,7 @@ const SessionDetail = (() => {
         if (data.result && this.values.scope && data.value_authority?.scope !== this.values.scope)
           this.invalidateValues();
         this.syncLiveActivity(data, this.data?.activity?.scope);
+        this.updateInvocations(data);
         this.exporter?.update(this.token, data.export_state || 'pending', data.export_scope, data.export_name);
         if (data.result || this.data) this.quotaUsage?.update(data.quota_usage,
           data.quota_state || (data.quota_usage ? 'ready' : 'unavailable'));
@@ -569,7 +572,7 @@ const SessionDetail = (() => {
       this.initialSettled.clear();
       this.loadingFeedback(null);
       this.context.contextObservation = null; this.context.update(null); this.activity.update(null);
-      this.invocations.update(null);
+      this.invocations.reset();
       this.syncLiveActivity({});
       this.freshness();
       this.quotaUsage?.update(null);
@@ -593,7 +596,6 @@ const SessionDetail = (() => {
       const protectedNode = protection();
       ReportView.text(this.heading, block.title || 'Untitled session'); this.context.update(block.session_context);
       this.activity.update(data.activity, data.result.view.timezone_id);
-      this.updateInvocations(data);
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       this.rowIndexes = new Map(block.rows.map((row, index) => [row.id, index]));
       const anchor = [...this.body.children].find(row => row.getBoundingClientRect().bottom > 0);

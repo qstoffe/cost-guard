@@ -14,6 +14,9 @@ module.exports = async (evaluate, command, session) => {
     const row = card.rows[0], tool = row.tool;
     const render = () => ReportView.renderLive(document.getElementById('result'), INPUT, state);
     const start = Date.parse('2026-03-29T00:45:20.123Z');
+    // Full Watch advances its display from the browser clock between frames.
+    const nativeNow = Date.now;
+    Date.now = () => view.now_ms;
     tool.running_invocations = [{...tool.running_invocation, kind:'shell', mode:'foreground',
       text:'command:\\npy -3 evaluate.py --fixture isolated\\n\\nworkdir:\\nC:/fixture',
       qualification:'Sensitive argument/value redacted.', started_at_ms:start,
@@ -60,13 +63,15 @@ module.exports = async (evaluate, command, session) => {
     tool.running_invocations = linked; tool.running_invocation = legacy; render();
     const recovered = root.node.open && !job.node.open && job.timing.node.isConnected;
     const lastNode = job.timing.node;
-    row.prompt.in_progress = false; render();
+    const active = view.active_cards;
+    view.active_cards = active.filter(item => item !== card); render();
     const cleared = !lastNode.isConnected && !lastNode.textContent.includes('2026-') && !job.input.textContent &&
       !rendered.root.isConnected && root.jobs.size === 0;
     selection.removeAllRanges();
-    row.prompt.in_progress = true; render();
+    view.active_cards = active; render();
     const revived = [...state.watch.cards.values()].find(value => value.value.session_id === 'root').runningDetail;
     revived.node.open = true; [...revived.jobs.values()][0].node.open = true;
+    Date.now = nativeNow;
     return {initial,tick,collapsed,stable,overflow,commandNote,changedZone,clockSkew,pastEstimate,pastDeadline,oneSample,
       manualCollapse,withheld,recovered,cleared};
   })()`);
