@@ -259,8 +259,7 @@ class WebHost:
                             identity = source_identity(selection) if selection else ''
                             if not self.history_reports and identity and self._source_identity and identity != self._source_identity:
                                 self.live.details.invalidate()
-                                with self.live.catalog.lock:
-                                    self.live.catalog.leases.clear()
+                                self.live.catalog.reset_browsing_leases()
                             self._source_identity = identity
                             error = driver.error if driver else self.live.source_failure if self.live else None
                             self.dispatcher.tick(identity=identity,

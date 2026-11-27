@@ -69,7 +69,8 @@ def measure(module, size, frozen):
             if not page['pending_sort']:
                 completed = dict(slices=batch + 1, simulated_seconds=round(clock[0], 3),
                     wall_seconds=round(time.perf_counter() - wall, 4))
-                ids = tuple(row.session_id for row in catalog.leases[first['token']]['epochs'][page['epoch']].rows)
+                ids = tuple(row.session_id for row in
+                            catalog.lease_pages.leases[first['token']]['epochs'][page['epoch']].rows)
                 assert ids == tuple(f'root-{index:04d}' for index in range(size))
                 assert not any(int(key.split('-')[1]) >= size for key in acquired)
                 break

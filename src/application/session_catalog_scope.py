@@ -5,17 +5,10 @@ from dataclasses import dataclass, field
 
 from src.analysis.timezones import calendar_periods
 
+from .session_row_sort import activity_time
+
 PERIODS = ("today", "7-days", "30-days", "month", "all")
 PAGE_SIZE = 25
-
-
-def retain_live_arrivals(live, roots, previous, added, since_ms, now_ms):
-    # Use the continuous interval, not the previous observation. A late
-    # discovery of a root created during this interval is still Live work.
-    retained = {key for key in live if key in roots and roots[key].provenance == previous[key].provenance}
-    if since_ms is not None:
-        retained.update(key for key in added if since_ms <= roots[key].created_at_ms <= now_ms)
-    return retained
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,10 +87,6 @@ def row_in_window(row, window, recently_finished=None):
     return (in_window(row.activity_latest_ms, window) or in_window(row.last_activity_ms, window)
         or in_window(recently_finished, window) or bool(row.running
         and type(row.prompt_started_ms) is int and 0 < row.prompt_started_ms < window.end_ms))
-
-
-def activity_time(row):
-    return row.last_activity_ms if row.last_activity_ms is not None else row.prompt_started_ms
 
 
 def provisional_order(rows, metadata):
