@@ -213,8 +213,8 @@ class SessionNavigationTests(unittest.TestCase):
             for index, (key, root) in enumerate(self.catalog.roots.items()):
                 row, revision = self.summary(self.service, root, self.catalog.revisions[key],
                                              on_activity=lambda *_: None)
-                # Two running starts tie, including sub-minute precision.
-                start = self.now - 10_000 + index // 2
+                # Lower IDs start later, but equal starts favor the higher ID.
+                start = self.now - 10_000 - index // 2
                 self.catalog.rows[key] = replace(row, running=index < running_count,
                     prompt_started_ms=start, activity_prompt_id=f"prompt-{index}",
                     last_activity_ms=start if index < running_count else self.now - 1000 + index)
@@ -223,7 +223,7 @@ class SessionNavigationTests(unittest.TestCase):
                 if index < running_count:
                     self.catalog._record_summary_prompt(key, self.catalog.rows[key], self.now, ended_prompts={})
             running_ids = [f"root-{index:04d}" for index in
-                           sorted(range(running_count), key=lambda index: (-(index // 2), index))]
+                           sorted(range(running_count), key=lambda index: (index // 2, -index))]
             for sort in ('activity', 'name', 'model', 'ccost', 'prompts', 'duration', 'ctx'):
                 for direction in (1, -1):
                     with self.subTest(running=running_count, sort=sort, direction=direction):
