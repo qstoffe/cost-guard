@@ -595,6 +595,83 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertTrue(settled['complete'])
         self.assertFalse(settled['reconciling'] or settled['unverifiable'])
 
+        # A timing correction, not a deletion: both physical calls now belong to October.
+        moved = make_root_snapshot(0, 2, month_start_ms=start - DAY_MS)
+        source.snapshots['root-0000'] = replace(moved, complete=True, source_revision='moved')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        for _ in range(10):
+            self.tick(catalog, source)
+            if not catalog.history_pending:
+                break
+        empty = publish(revisions={'root-0000': 'moved'})
+        view = empty['view']
+        self.assertEqual('acquired', empty['source']['status'])
+        self.assertTrue(view['history_progress']['complete'])
+        self.assertIsNone(view['token_mix_period'].get('coverage'))
+        self.assertEqual((0, [], []), (view['token_mix']['request_count'], view['model_token_mix'],
+                                        view['publisher_token_mix']))
+        cold, _ = HistoryProjection(ArchivedUsage(WebArchive(self.directory))).render(identity='test',
+            selection=service.selection, config=service.config, reference=self.pricing.catalog, now=self.now,
+            revisions={}, activity={}, available=True)
+        self.assertEqual(cold['token-mix', 'month']['view'], view)
+        self.assertEqual(2, cold['token-mix', 'all']['view']['token_mix']['request_count'])
+
+    def test_unreadable_overwrite_keeps_last_readable_mix_after_restart_until_repaired(self):
+        from src.reports.web_history_evidence import DOMAIN
+        from src.web.history_reports import HistoryReports, checkpoint_stamp, settings_signature
+
+        source = self.source(1, 2)
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(catalog, source)
+        service = report_service(source, self.cache, self.now, self.pricing)
+        stamp = checkpoint_stamp(service.config, 'UTC', None, settings_signature(service.config))
+        inputs = dict(identity='test', selection=service.selection, config=service.config, now=self.now,
+                      revisions={}, activity={}, available=True, only='all')
+        request = ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope='all')
+
+        def open_reports(storage):
+            projector = ArchivedHistoryProcess(storage)
+            self.addCleanup(projector.close)
+            owner = HistoryReports(storage, lambda: self.pricing.catalog, projector)
+            self.addCleanup(owner.close)
+            return owner
+
+        def publish(owner, previous, status):
+            results, *_ = owner._render(inputs, stamp, previous)
+            self.assertTrue(results)
+            result = owner.lookup(request, service.config)['result']
+            view = result['view']
+            self.assertEqual(status, result['source']['status'])
+            self.assertEqual(status == 'partial', view['history_progress']['unverifiable'])
+            self.assertTrue(view['history_progress']['complete'])
+            self.assertEqual('partial' if status == 'partial' else None, view['token_mix_period'].get('coverage'))
+            for mix in (view['token_mix'], view['model_token_mix'][0]['mix'], view['publisher_token_mix'][0]['mix']):
+                self.assertEqual((2, '261'), (mix['request_count'], mix['observed_total_tokens']))
+            return results
+
+        owner = open_reports(archive)
+        prior = publish(owner, {}, 'acquired')
+        (root, readable), = archive.history_rows(DOMAIN)
+        # An Accounts-only revision is valid for its own consumer, but not a new verified report.
+        self.assertTrue(archive.publish(readable.partition, DOMAIN, {root: ArchiveFact('accounts',
+            readable.observed_ms + 1, {'account_usage': readable.value['account_usage']})}))
+        prior = publish(owner, prior, 'partial')
+        # Simulate a future writer's unsupported outer envelope in the same partition.
+        self.assertTrue(archive.publish(readable.partition, DOMAIN, {root: ArchiveFact('future-format',
+            readable.observed_ms + 2, ['unsupported-envelope'])}))
+        publish(owner, prior, 'partial')
+
+        reopened = WebArchive(self.directory)
+        cold, _ = HistoryProjection(ArchivedUsage(reopened)).render(reference=self.pricing.catalog, **inputs)
+        self.assertEqual('unknown', cold['token-mix', 'all']['view']['token_mix_period']['coverage'])
+        restarted = open_reports(reopened)
+        restored, *_ = restarted._load_checkpoint('all', stamp)
+        prior = publish(restarted, restored, 'partial')
+        self.assertTrue(reopened.publish(readable.partition, DOMAIN, {root: replace(readable,
+            revision='readable-again', observed_ms=readable.observed_ms + 3)}))
+        publish(restarted, prior, 'acquired')
+
     def test_watch_projection_picks_up_committed_usage_without_claiming_a_complete_day(self):
         from src.reports.web_history_evidence import DOMAIN
 
