@@ -304,6 +304,7 @@ class ScheduledContinuation:
     created_ms: int
     wake_at_ms: int | None
     awaits: str
+    dispatched_ms: int | None = None
 
 
 ONGOING_EVIDENCE_GRACE_MS = 15_000

@@ -51,5 +51,5 @@ def scheduled_continuations(client):
                 # The service can record delivery before the prompt appears in
                 # history. Allow a bounded handoff, without naming an inbox item.
                 pending.append(ScheduledContinuation(session, created, None,
-                    'Delivery of the automatic continuation'))
+                    'Delivery of the automatic continuation', dispatched_ms=fired))
     return tuple(pending)

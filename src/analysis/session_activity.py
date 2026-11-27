@@ -5,7 +5,7 @@ from src.domain import EventKind, MessageRole
 from src.domain.models import OngoingStatus
 from src.domain.session_tree import root_by_session
 
-from .child_activity import descendant_activity, running_tool
+from .child_activity import descendant_activity, outstanding_background, running_tool
 from .child_links import OPEN_END, ChildLinkIndex
 from .prompt_index import prompt_owners
 
@@ -55,41 +55,47 @@ def _terminal_outcomes(prompts, root_id):
             and not record.in_progress}
 
 
-def _ongoing(snapshot, children, event, messages, running, *, newest, child_candidates):
-    """Use owned jobs/continuations without turning dormant time into execution."""
+def _execution_status(snapshot, children, messages, running, *, newest, child_candidates, verified_jobs):
+    """Distinguish verified foreground work from the generic running fallback."""
     if newest and running and snapshot.root.active is True:
-        return OngoingStatus('running')
-    if not (snapshot.background or snapshot.continuations):
+        return OngoingStatus('running'), True
+    if not verified_jobs:
         if running or (child_candidates and descendant_activity(snapshot, children, children.scopes(messages))[0]):
-            return OngoingStatus('running')
-        return None
-    scopes = children.scopes(messages)
+            return OngoingStatus('running'), True
+        return None, False
+    scopes = children.scopes(messages) if child_candidates or messages else ()
     if (running and any(running_tool(message, foreground_only=True) for message in messages)) or (
             child_candidates and descendant_activity(snapshot, children, scopes, foreground_only=True)[0]):
-        return OngoingStatus('running')
-    owned = {(message.session_id, message.message_id)
-             for message in (*messages, *children.messages(scopes))}
-    job = next((job for job in snapshot.background if job.running and job.registry_verified
-                and (job.session_id, job.owner_message_id) in owned), None)
+        return OngoingStatus('running'), True
+    jobs = outstanding_background(snapshot, (*messages, *children.messages(scopes)),
+                                  carry_root=newest and running)
+    job = next((job for job in jobs if job.registry_verified), None)
     if job is not None:
         kind = 'shell' if job.kind in ('shell', 'bash', 'functions.shell', 'functions.bash') else 'job'
-        awaits = f'A descendant {kind}' if job.session_id != event.session_id else f'A background {kind}'
-        return OngoingStatus('background', awaits=awaits)
+        awaits = f'A descendant {kind}' if job.session_id != snapshot.root.session_id else f'A background {kind}'
+        return OngoingStatus('background', awaits=awaits), False
     if running or (child_candidates and descendant_activity(snapshot, children, scopes)[0]):
-        return OngoingStatus('running')
-    if newest:
-        continuations = [item for item in snapshot.continuations or () if (
-            item.session_id == event.session_id and event.created_at_ms <= item.created_ms or any(
+        return OngoingStatus('running'), False
+    return None, False
+
+
+def _waiting_status(snapshot, children, scopes):
+    """Pending work belongs to the session; dispatch handoff ends when a new user turn appears."""
+    eligible = []
+    root_id = snapshot.root.session_id
+    for item in snapshot.continuations:
+        turns = children.turns.get(item.session_id, ())
+        if item.dispatched_ms is not None and any(
+                turn.kind is EventKind.USER_PROMPT and turn.created_at_ms >= item.dispatched_ms for turn in turns):
+            continue
+        if item.session_id == root_id or any(
                 item.session_id == scope.session_id and scope.invocation_end_ms == OPEN_END
                 and scope.start_ms <= item.created_ms < scope.end_ms
-                and not any(child.session_id == scope.session_id and child.kind in KINDS
-                            and item.created_ms < child.created_at_ms < scope.end_ms
-                            for child in snapshot.events)
-                for scope in scopes))]
-        if continuations:
-            first = min(continuations, key=lambda item: (item.wake_at_ms is None, item.wake_at_ms or 0))
-            return OngoingStatus('waiting', first.wake_at_ms, first.awaits)
-    return None
+                and not any(item.created_ms < turn.created_at_ms < scope.end_ms for turn in turns)
+                for scope in scopes):
+            eligible.append(item)
+    first = min(eligible, key=lambda item: (item.wake_at_ms is None, item.wake_at_ms or 0), default=None)
+    return OngoingStatus('waiting', first.wake_at_ms, first.awaits) if first is not None else None
 
 
 def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
@@ -164,20 +170,21 @@ def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
     has_live_children = any(session.active is True for session in snapshot.sessions
                             if session.session_id != snapshot.root.session_id) or any(
         session_id != snapshot.root.session_id for session_id, _ in running)
-    live = ongoing = waiting = None
+    verified_jobs = any(job.running and job.registry_verified for job in snapshot.background)
+    live = ongoing = None
     for event in root_events:
         key = event.session_id, event.event_id
-        status = _ongoing(snapshot, children, event, attempts[key], key in running,
-                          newest=event is root_events[0], child_candidates=has_live_children)
-        if status is None:
-            continue
-        if status.phase == 'waiting':
-            waiting = status
-        else:
+        status, foreground = _execution_status(snapshot, children, attempts[key], key in running,
+            newest=event is root_events[0], child_candidates=has_live_children, verified_jobs=verified_jobs)
+        if foreground:
             live, ongoing = event, status
             break
-    if live is None and waiting is not None:
-        live, ongoing = root_events[0], waiting
+        if status is not None and (ongoing is None or ongoing.phase == 'running' and status.phase == 'background'):
+            live, ongoing = event, status
+    if live is None and root_events and snapshot.continuations:
+        ongoing = _waiting_status(snapshot, children, scopes)
+        if ongoing is not None:
+            live = root_events[0]
     outcomes = (_terminal_outcomes(item.bundle.prompts, snapshot.root.session_id)
                 if snapshot.continuations is None or on_prompt_ends is not None else {})
     if on_prompt_ends is not None and snapshot.complete and live is None:
