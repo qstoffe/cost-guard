@@ -552,9 +552,10 @@ const SessionsCatalog = (() => {
         value: label === 'N/A' ? null : label + (help ? '*' : ''), help,
         reason: value.metric_absences?.activity, onHelpLost: row.metricHelpLost
       });
-      const status = value.running ? 'running' : value.terminal_status;
-      row.className = status ? `session-${status}` : '';
-      ReportView.text(row.statusMarker, status ? `[${status.toUpperCase()}] ` :
+      const status = ReportView.lifecycle(value, this.renderTimezone);
+      row.className = status ? `session-${status.row}` : '';
+      ReportView.sessionLifecycle(row.statusIcon, row.name, status, value.title);
+      ReportView.text(row.statusMarker, status ? '' :
         value.activity_state === 'unverified' ? '[UNVERIFIED] ' : value.new_arrival ? '[NEW · Loading] ' : '');
       const finalizing = value.finalization_status === 'pending';
       const unavailable = value.finalization_status === 'unavailable';
@@ -581,11 +582,10 @@ const SessionsCatalog = (() => {
         row.value = value;
         if (!row.name) {
           row.activity = el('span'); row.name = el('a', undefined, 'session-name');
-          row.statusMarker = el('span'); row.titleNode = el('span');
+          row.statusIcon = el('span'); row.statusMarker = el('span'); row.titleNode = el('span');
           row.finalizationMarker = el('span');
           row.name.append(row.statusMarker, row.titleNode);
           if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) row.name.href = '#/sessions/' + value.session_id;
-          ContextHelp.value(row.name, () => row.value.title);
           row.metricHelpLost = () => {
             row.name.focus?.({preventScroll: true});
             ContextHelp.dismiss(row.name);
@@ -593,6 +593,7 @@ const SessionsCatalog = (() => {
           row.metrics = Array.from({length: 5}, () => el('span'));
           const cells = [row.activity, row.name, ...row.metrics];
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
+          row.name.parentNode.insertBefore(row.statusIcon, row.name);
           row.activity.after(row.finalizationMarker);
         }
         this.activity(row);

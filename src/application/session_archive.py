@@ -1,5 +1,5 @@
 """Session display persistence and pagination over the ready subset."""
-from dataclasses import replace
+from dataclasses import asdict, replace
 from decimal import Decimal, InvalidOperation
 import json
 import logging
@@ -192,6 +192,8 @@ class SessionArchive:
 def _encode_live(entry):
     row, start, terminal = entry
     payload = encode_summary(row)
+    if start is not None and row.ongoing is not None:
+        payload['ongoing'] = asdict(row.ongoing)
     finish, outcome, finalization = terminal or (None, None, None)
     if outcome is not None:
         payload['terminal_outcome'] = outcome
@@ -303,17 +305,20 @@ def cached_page(archive, *, token, offset, sort, direction, period, navigation, 
         data = json.loads(payload)
         outcome = data.pop('terminal_outcome', None)
         finalization = data.pop('finalization', None)
-        recent = terminal_at is not None and now < terminal_at + TERMINAL_HIGHLIGHT_MS
+        ongoing = data.pop('ongoing', None)
+        terminal_until = terminal_at + TERMINAL_HIGHLIGHT_MS if terminal_at is not None else None
+        recent = terminal_until is not None and now < terminal_until
         row = _display_row(key, data, provisional=running_since is not None or finalization is not None)
         if row is not None:
             shown.append((replace(row, running=running_since is not None), bool(saved),
-                          outcome if recent else None, finalization, recent))
+                           outcome if recent else None, finalization, recent,
+                            ongoing if running_since is not None else None, terminal_until))
     for key, fact in facts:
         row = _display_row(key, fact.value.get('row'))
         if row is not None:
-            shown.append((replace(row, running=False), True, None, None, False))
+            shown.append((replace(row, running=False), True, None, None, False, None, None))
     view = session_view(tuple(entry[0] for entry in shown), zone, unit)
-    for value, (row, saved, outcome, finalization, recent) in zip(view['session_usage'], shown):
+    for value, (row, saved, outcome, finalization, recent, ongoing, terminal_until) in zip(view['session_usage'], shown):
         value['indexed'] = saved
         value['has_summary'] = saved
         value['new_arrival'] = False
@@ -324,6 +329,9 @@ def cached_page(archive, *, token, offset, sort, direction, period, navigation, 
                                                 value['metric_state'])
         if outcome:
             value['terminal_status'] = outcome
+            value['terminal_until_ms'] = terminal_until
+        if ongoing is not None:
+            value['ongoing'] = ongoing
         if finalization and (not recent or finalization == 'unavailable'):
             value['finalization_status'] = finalization
         if row.running or finalization:

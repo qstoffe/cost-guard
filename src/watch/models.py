@@ -10,6 +10,7 @@ from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.analysis.context import PriceWarningSeverity
 from src.analysis.daily_usage import DailyUsage
+from src.domain.models import OngoingStatus
 
 if TYPE_CHECKING:
     from src.application.quota_ccost import CapacityOffer
@@ -165,6 +166,9 @@ class WatchCard:
     activity_scope: str = ""
     invocation_verified: bool | None = None
     session_duration_ms: int | None = None
+    ongoing: OngoingStatus | None = None
+    terminal_status: str | None = None
+    terminal_until_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

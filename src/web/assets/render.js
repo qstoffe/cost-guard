@@ -82,6 +82,57 @@ const ReportView = (() => {
   function timestamp(value, zone = timezone) {
     return Number.isSafeInteger(value) && value >= 0 ? formatDateTime(value, DateTimeMode.DATE_TIME, zone) : 'N/A';
   }
+  const lifecycleStates = {
+    running: {label: 'Running', hint: 'The model or a foreground tool is executing.', row: 'running'},
+    background: {label: 'Background activity', hint: 'Owned work is still running in the background.', row: 'running',
+      path: 'M8 2a6 6 0 0 1 6 6m0 0a6 6 0 0 1-6 6M2 8h3l2-3 2 6 2-3h3'},
+    waiting: {label: 'Scheduled / Waiting', hint: 'An automatic continuation is pending.', row: 'running',
+      path: 'M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2Zm0 3v3l2 1'},
+    completed: {label: 'Completed', hint: 'The prompt finished successfully.', row: 'completed',
+      path: 'M3 2.5h10a.5.5 0 0 1 .5.5v10a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5ZM5 8l2 2 4-4'},
+    aborted: {label: 'Aborted', hint: 'The prompt was stopped before completing.', row: 'aborted',
+      path: 'M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2Zm0 3v3.5m0 2v.25'}
+  };
+  function lifecycle(value, zone, now = Date.now()) {
+    const phase = value.ongoing?.phase || (value.running ? 'running' :
+      value.terminal_until_ms == null || now < value.terminal_until_ms ? value.terminal_status : null);
+    if (!Object.hasOwn(lifecycleStates, phase)) return null;
+    const state = lifecycleStates[phase], awaited = value.ongoing?.awaits;
+    const wake = timestamp(value.ongoing?.wake_at_ms, zone);
+    const explanation = wake !== 'N/A' ? `Next wake-up: ${wake}` :
+      awaited ? `${awaited} ${phase === 'background' ? 'is still running.' : 'is pending.'}` : state.hint;
+    return {...state, phase, explanation, description: `${state.label} — ${explanation}`};
+  }
+  function lifecycleIcon(target, status) {
+    const phase = status?.phase || '';
+    if (target.dataset.phase === phase) return;
+    target.dataset.phase = phase;
+    target.classList.toggle('session-lifecycle-icon', true);
+    target.hidden = !phase;
+    if (!phase || phase === 'running') {
+      target.textContent = phase ? '▶' : '';
+      return;
+    }
+    const svgNS = 'http://www.w3.org/2000/svg', doc = target.ownerDocument;
+    const svg = doc.createElementNS(svgNS, 'svg'), path = doc.createElementNS(svgNS, 'path');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('aria-hidden', 'true');
+    path.setAttribute('d', status.path);
+    svg.append(path);
+    target.replaceChildren(svg);
+  }
+  function sessionLifecycle(icon, name, status, title) {
+    lifecycleIcon(icon, status);
+    if (status) {
+      icon.setAttribute('aria-label', status.label);
+      ContextHelp.value(icon, status.description);
+    } else {
+      icon.removeAttribute('aria-label');
+      ContextHelp.clearValue(icon);
+    }
+    const content = status ? ContextHelp.sessionName(target => lifecycleIcon(target, status), status.description, title) : title;
+    ContextHelp.attach(name, content, true);
+  }
   const calendarWeekday = new Intl.DateTimeFormat('en', {weekday: 'long', timeZone: 'UTC'});
   let monthLanguage, calendarMonths;
   function calendarCaption(day, kind, language = 'en') {
@@ -963,5 +1014,5 @@ const ReportView = (() => {
     return ['Complete session', costValue(block, 'total_ccost'), known(block.total_calls),
       display(block, 'duration_ms'), '—', known(block.total_ictx_cost_text), known(block.total_extra_cost_text), known(block.total_mix_text)];
   }
-  return {render, renderLive, element, modelHeading, latestModels, latestModelsHelp, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, valueSlot, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, ccostHelp, headerHelp, activityHelp, costGroups, sessionCostHelp};
+  return {render, renderLive, element, modelHeading, latestModels, latestModelsHelp, detailCells, detailTotals, compare, sortedCompare, overviewAccounts, display, metric, metricToken, valueSlot, aiStatsModelHelp, contextSummary, text, setUnit, syncUnits, defaultUnit, mixLegend, hourlySummary, historyWarning, bind, setQuotaMode, quotaView, quotaUsageHelp, quotaCapacityHelp, quotaLabel, capacityKnown, estimateValue, LiveStatus, costHelp, costValue, accountHeading, formatDateTime, DateTimeMode, calendarCaption, timestamp, setTimezone, configuredTimezone, CostDisplay, ccostHelp, headerHelp, activityHelp, costGroups, sessionCostHelp, lifecycle, sessionLifecycle};
 })();

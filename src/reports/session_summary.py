@@ -28,6 +28,7 @@ NAMESPACE = "session-summary"
 
 def encode_summary(row):
     values = asdict(row)
+    values.pop("ongoing")
     if row.ccost_complete is None:
         values.pop("ccost_complete")
     if not row.ccost_retained:
@@ -43,7 +44,7 @@ def decode_summary(values, *, provisional=False):
     values = dict(values)
     values.setdefault("ccost_complete", None)
     values.setdefault("ccost_retained", False)
-    if set(values) != {field.name for field in fields(SessionUsageRow)}:
+    if set(values) != {field.name for field in fields(SessionUsageRow)} - {"ongoing"}:
         raise ValueError("incomplete_summary")
     if values["ccost_complete"] is not None and (not provisional or type(values["ccost_complete"]) is not bool):
         raise ValueError("invalid_live_cost_coverage")
@@ -112,8 +113,8 @@ def summary_key(service, root):
 
 
 def session_summary(service, root, revision, *, active=False, metrics=None, on_stage=None, on_dependencies=None,
-                    on_activity=None, activity_end_ms=None, on_evidence=None, on_prompt_ends=None,
-                    fresh_snapshot=False, active_snapshot=None):
+                     on_activity=None, activity_end_ms=None, on_evidence=None, on_prompt_ends=None,
+                     fresh_snapshot=False, active_snapshot=None, on_continuation_unobserved=None):
     """One root only. A cache miss may acquire history, never all catalog roots."""
     stage = on_stage or (lambda _stage: None)
     stage('checking_cache')
@@ -193,7 +194,13 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     # Derived analysis alone does not carry full-source acquisition completeness.
     # Establish it once on scalar-cache miss, without changing finite-report semantics.
     stage('reading_summary')
-    options = {'snapshot': active_snapshot} if active and active_snapshot is not None else {}
+    snapshot = active_snapshot if active else None
+    reused_live_snapshot = snapshot is not None
+    if snapshot is None and on_prompt_ends is not None:
+        load_live = getattr(service.source, 'load_live_session_snapshot', None)
+        if load_live is not None:
+            snapshot = load_live(root.session_id)
+    options = {'snapshot': snapshot} if snapshot is not None else {}
     item = service._analyze(root, detail=True, force_fresh=active or fresh_snapshot, **options)
     stage('projecting_summary')
     row = service._session_rows((item,), catalog_models=True)[0]
@@ -204,7 +211,10 @@ def session_summary(service, root, revision, *, active=False, metrics=None, on_s
     row = replace(row, complete=row.complete and item.snapshot.complete, cost_groups=groups,
                   empty_history=empty_history(item.snapshot),
                   **activity_fields(item, on_activity=on_activity, on_prompt_ends=on_prompt_ends))
-    if options:
+    if (on_continuation_unobserved is not None and not row.running and item.snapshot.complete
+            and item.snapshot.continuations is None):
+        on_continuation_unobserved()
+    if reused_live_snapshot:
         service.source.refresh_observation_epoch()
     if getattr(service.source, "observation_epoch", None) != epoch:
         raise SourceUnavailableError("Source registration changed during session summary acquisition")

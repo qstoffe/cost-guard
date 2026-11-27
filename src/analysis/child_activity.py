@@ -5,15 +5,17 @@ from src.domain import EventKind, MessageRole
 from .child_links import OPEN_END, part_time
 
 
-def running_tool(message, terminal_at=0):
+def running_tool(message, terminal_at=0, *, foreground_only=False):
     terminal = max(terminal_at, message.termination.completed_at_ms if message.termination else
         message.completed_at_ms if message.error_name else 0)
     return any(part.kind == "tool" and isinstance(state := part.data.get("state"), Mapping)
         and str(state.get("status", "")).lower() in {"pending", "streaming", "running"}
+        and not (foreground_only and isinstance(inputs := state.get("input"), Mapping)
+                 and inputs.get("background") is True)
         and (not terminal or part_time(part)[0] > terminal) for part in message.parts)
 
 
-def descendant_activity(snapshot, children, scopes):
+def descendant_activity(snapshot, children, scopes, *, foreground_only=False):
     """Return positive activity and process-local uncertainty, never cached truth.
 
     Closed launches need an owned child turn/crossing assistant or a newly
@@ -50,9 +52,11 @@ def descendant_activity(snapshot, children, scopes):
         terminal = latest and (latest.termination or latest.error_name or
             latest.completed_at_ms is not None and latest.finish_reason not in {None, "tool-calls"})
         terminal_at = (latest.termination.completed_at_ms if latest.termination else latest.completed_at_ms or 0) if terminal else 0
-        tools = any(running_tool(message, terminal_at) for message in messages)
-        background = any(item.running and item.owner_message_id in {m.message_id for m in messages}
-            for item in snapshot.background)
+        tools = any(running_tool(message, terminal_at, foreground_only=foreground_only) for message in messages)
+        message_ids = {message.message_id for message in messages}
+        background = not foreground_only and any(item.running and item.session_id == scope.session_id
+                         and item.owner_message_id in message_ids
+             for item in snapshot.background)
         if tools or background:
             active = True
         elif not terminal and session.active is True:

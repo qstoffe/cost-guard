@@ -145,7 +145,8 @@ def global_bracket(source, root_ids, *, allow_reuse, failures=None):
 
 def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers: int = 1,
                      progress=None, available_only: bool = False, failures=None, on_root=None,
-                     identify_members: bool = False, brackets=None, parallel_members=False) -> dict[str, SessionSnapshot]:
+                     identify_members: bool = False, brackets=None, parallel_members=False,
+                     observe_continuations=False) -> dict[str, SessionSnapshot]:
     """Share brackets, not weakened proofs: every returned tree is equal before/after its messages.
 
     Unstable trees alone retry; a reused bracket does not consume either fresh
@@ -158,6 +159,10 @@ def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers
     reuse = True
     attempts = 0
     while pending and attempts < 2:
+        continuations = source.current_continuations() if observe_continuations else ()
+        by_session = {}
+        for continuation in continuations or ():
+            by_session.setdefault(continuation.session_id, []).append(continuation)
         source._diagnostics["last_snapshot_stage"] = "catalog_before"
         progress('catalog-before', 0, len(pending))
         index, reused = bracket(pending, allow_reuse=reuse, failures=failures)
@@ -192,7 +197,10 @@ def load_snapshots(source: OpenCodeV2Source, root_ids: Sequence[str], *, workers
                                                   phase="snapshot", generation="v2")
             revision = after.revision(root_id, source._revision)
             if revision == revisions[root_id]:
-                complete[root_id] = replace(snapshots[root_id], source_revision=revision, complete=True)
+                snapshot = snapshots[root_id]
+                owned = None if continuations is None else tuple(
+                    item for session in snapshot.sessions for item in by_session.get(session.session_id, ()))
+                complete[root_id] = replace(snapshot, source_revision=revision, complete=True, continuations=owned)
             else:
                 unstable.append(root_id)
         pending = tuple(unstable)

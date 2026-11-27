@@ -4,6 +4,11 @@ const ContextHelp = (() => {
   const entries = new WeakMap(), documents = new WeakMap();
   const durations = new WeakSet();
   const warnings = new WeakSet();
+  const sessionNames = new WeakSet();
+  function sessionName(icon, status, name) {
+    const value = {icon, status, name};
+    sessionNames.add(value); return value;
+  }
   function warningParagraph(before, warning) {
     const value = {before: String(before) + '\n\n', warning: String(warning)};
     warnings.add(value); return value;
@@ -113,6 +118,15 @@ const ContextHelp = (() => {
         [value.before, value.duration, value.after].forEach((text, index) => {
           fragmentText(fragments[index], text);
         });
+      } else if (sessionNames.has(value)) {
+        if (fragments?.kind !== 'session-status') {
+          const icon = doc.createElement('span'), status = doc.createTextNode(''), name = doc.createTextNode('');
+          panel.replaceChildren(icon, status, doc.createTextNode('\n'), name);
+          fragments = [icon, status, name]; fragments.kind = 'session-status';
+        }
+        value.icon(fragments[0]);
+        fragmentText(fragments[1], value.status);
+        fragmentText(fragments[2], value.name);
       } else {
         const text = String(value);
         if (!text) { close(); return; }
@@ -305,5 +319,5 @@ const ContextHelp = (() => {
   }
   function refresh(target) { documents.get(target.ownerDocument)?.refresh(target); }
   function dismiss(target) { documents.get(target.ownerDocument)?.dismiss(target); }
-  return {attach, button, heading, value, timedAction, clearValue, refresh, dismiss, runningDuration, warningParagraph, HOVER_DELAY};
+  return {attach, button, heading, value, timedAction, clearValue, refresh, dismiss, runningDuration, warningParagraph, sessionName, HOVER_DELAY};
 })();
