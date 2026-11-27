@@ -577,6 +577,9 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 }
 .sessions-catalog-search { display: grid; gap: .25rem; margin-block: var(--space-3); width: min(100%, 22rem); }
 .sessions-catalog-search input { min-width: 0; }
+.sessions-catalog-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-bottom: 1rem; }
+.sessions-catalog-toolbar > .sessions-periods { margin: 0; }
+.sessions-catalog-toolbar > input { width: min(100%, 16rem); min-width: 0; margin-inline-start: auto; }
 .session-workspace-panel .session-catalog-table { min-width: 0; grid-template-columns: minmax(6ch, .7fr) minmax(0, 1fr); }
 .session-workspace-panel .session-name { white-space: normal; overflow-wrap: anywhere; }
 .session-workspace-panel th button { white-space: normal; }
