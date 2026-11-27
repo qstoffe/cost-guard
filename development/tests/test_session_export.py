@@ -91,9 +91,9 @@ class SessionArchiveTests(unittest.TestCase):
         for title, stem in [('Refactor: <auth>/fix?', 'Refactor authfix'), ('Översyn 👩‍💻', 'Översyn 👩‍💻'),
                 ('a\x00b\u202ec. . ', 'abc'), ('password=fixture-only', 'password=[REDACTED]'),
                 ('🚀' * 100, '🚀' * 50), ('  internal spaces', '  internal spaces'),
-                *[(value, 'session-' + SESSION) for value in (None, '.. ', 'COM1 .txt', 'lpt9', '<>:|?*')]]:
+                *[(value, 'Untitled session') for value in (None, '.. ', 'COM1 .txt', 'lpt9', '<>:|?*')]]:
             with self.subTest(title=title):
-                self.assertEqual(stem + '.zip', analysis_filename(title, SESSION))
+                self.assertEqual(stem + '.zip', analysis_filename(title))
 
     def test_bad_member_identity_and_incomplete_catalog_cannot_produce_a_partial_zip(self):
         for error in ('foreign parent', 'foreign session', 'foreign message', 'duplicate message', 'cycle cursor',
@@ -176,6 +176,24 @@ class SessionArchiveTests(unittest.TestCase):
                     list(source.export_session_tree(member, epoch, lambda: False))
             self.assertEqual([], state.requests)
 
+    def test_title_observations_never_substitute_the_id_or_cross_a_source_restart(self):
+        with export_source() as (source, state, registration):
+            state.tree[SESSION]['info'].pop('title')
+            source.list_sessions()
+            old_epoch = source.observation_epoch
+            self.assertEqual(('ready', None), source.observed_session_title(SESSION, old_epoch))
+            self.assertEqual(('ready', 'Deep 🚀'), source.observed_session_title(LEAF, old_epoch))
+            record = json.loads(registration.read_text())
+            record['pid'] += 1
+            registration.write_text(json.dumps(record))
+            source.refresh_observation_epoch()
+            self.assertNotEqual(old_epoch, source.observation_epoch)
+            self.assertEqual(('pending', None), source.observed_session_title(LEAF, source.observation_epoch))
+            state.tree[LEAF]['info']['title'] = 'Different owner'
+            source.list_sessions()
+            self.assertEqual(('ready', 'Different owner'), source.observed_session_title(LEAF, source.observation_epoch))
+            self.assertEqual(('pending', None), source.observed_session_title(LEAF, old_epoch))
+
 
 class ExportHttpTests(unittest.TestCase):
     def test_authenticated_complete_attachment_or_bounded_error_only(self):
@@ -235,6 +253,19 @@ class ExportHttpTests(unittest.TestCase):
                 self.assertEqual(410, request({**start, 'token': 'a' * 32})[0])
                 self.assertEqual({'error': 'export_source_changed'}, json.loads(request({**start, 'scope': 'b'*64})[2]))
                 self.assertEqual([], state.requests)
+                def name_status():
+                    status, _, data = request({'action': 'export-status', 'token': token}, path='/api/detail')
+                    self.assertEqual(200, status)
+                    return json.loads(data)
+
+                self.assertEqual('pending', name_status()['export_name_state'])
+                self.assertNotIn('export_name', name_status(), 'cold does not mean untitled')
+                source.list_sessions()
+                requests_after_list = list(state.requests)
+                observed = name_status()
+                self.assertEqual(('Unicode å 日本語', 'Unicode å 日本語.zip', start['scope']),
+                    (observed['export_title'], observed['export_name'], observed['export_scope']))
+                self.assertEqual(requests_after_list, state.requests, 'the compatible catalog is not reacquired for naming')
                 entered = Event()
                 def hold(member):
                     entered.set()
