@@ -226,12 +226,12 @@ const ReportView = (() => {
     const token = display(row, key);
     return token === 'N/A' || token === '' ? null : token;
   };
-  function metric(node, field, {value, reason, help, label, onHelpLost} = {}) {
+  function metric(node, field, {value, state, reason, help, label, onHelpLost} = {}) {
     const render = () => {
       const shown = typeof value === 'function' ? value() : value;
       const absence = shown == null && reason === 'complete_empty_history' ? emptyHistoryHelp[field] : '';
-      const pending = shown == null && !absence;
-      const hint = absence || (shown != null && help);
+      const pending = shown == null && !absence && (state == null || state === 'pending');
+      const hint = absence || ((shown != null || state === 'unavailable') && help);
       if (hint) ContextHelp.value(node, hint);
       else {
         ContextHelp.clearValue(node);
@@ -239,7 +239,7 @@ const ReportView = (() => {
       }
       if (shown != null && label) node.setAttribute('aria-label', label(shown));
       else node.removeAttribute('aria-label');
-      paintValue(node, absence ? '?' : shown, pending, metricLabels[field]);
+      paintValue(node, absence ? '?' : shown ?? '—', pending, metricLabels[field]);
     };
     if (typeof value === 'function') bind(node, render);
     else { effects.delete(node); render(); }

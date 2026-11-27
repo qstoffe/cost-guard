@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from src.analysis.cache import decode_trace_entry
 from src.analysis.metric_evidence import EMPTY_HISTORY
-from src.cache.session_projection import SESSIONS_DOMAIN, SORT_COLUMNS, TERMINAL_HIGHLIGHT_MS
+from src.cache.session_projection import HISTORICAL_QUALIFIERS, SESSIONS_DOMAIN, TERMINAL_HIGHLIGHT_MS
 from src.cache.web_archive import ArchiveFact
 from src.reports import web_history_evidence
 from src.reports.models import ReportKind, ReportProjection, SessionUsageRow
@@ -23,6 +23,7 @@ from .session_row_sort import sort_values
 
 LOG = logging.getLogger(__name__)
 DOMAIN = SESSIONS_DOMAIN
+SETTLED_UNAVAILABLE = 'settled_unavailable'
 EFFORT_EVIDENCE = 'model_effort_evidence'
 CURRENT_EFFORT_EVIDENCE = 2
 REQUIRES_SOURCE_EFFORT_EVIDENCE = 1
@@ -72,26 +73,34 @@ class SessionArchive:
         try:
             self.storage.initialize()
             self.storage_ready = True
+            self.restore_ready_index()
             return self.read_rows()
         except (sqlite3.Error, OSError):
             LOG.warning('session_archive_read_unavailable')
             return None
 
+    def restore_ready_index(self):
+        restored = set()
+        for key, fact in self.storage.unindexed_session_facts():
+            if key in restored:
+                continue
+            row = historical_row(key, fact.value.get('row'))
+            if row is not None and self.storage.restore_ready_session(
+                    key, fact, sort_values(row), row.last_activity_ms, row.activity_latest_ms,
+                    evidence_domains=(web_history_evidence.DOMAIN, detail_archive.DOMAIN)):
+                restored.add(key)
+
     def read_rows(self):
         decoded, authorities, ranks = {}, {}, {}
         backfill, refresh = set(), set()
+        indexed = self.storage.indexed_session_ids()
         for key, fact in self.storage.history_rows(DOMAIN):
-            try:
-                row = decode_summary(fact.value['row'])
-                if row.session_id != key:
-                    continue
-                upgrade = needs_effort_backfill(row)
-            except (AttributeError, KeyError, TypeError, ValueError, InvalidOperation):
-                row = recover_summary(key, fact.value.get('row', fact.value))
-                upgrade = False
+            if key not in indexed:
+                continue
+            row = historical_row(key, fact.value.get('row'))
             if row is None:
                 continue
-            row = replace(row, running=False)
+            upgrade = needs_effort_backfill(row)
             prior = decoded.get(key)
             if prior is not None and ranks[key] >= fact.history_rank:
                 decoded[key] = retain_readable_fields(prior, row)
@@ -233,6 +242,32 @@ def historical_int(value, minimum=0):
     return value if type(value) is int and minimum <= value <= 2**53 - 1 else None
 
 
+def historical_metrics_settled(row):
+    return all(getattr(row, name) is expected for name, expected in HISTORICAL_QUALIFIERS.items())
+
+
+def historical_row(key, data):
+    if (not isinstance(data, dict) or data.get('session_id') != key
+            or any(data.get(name) is not expected for name, expected in HISTORICAL_QUALIFIERS.items())):
+        return None
+    try:
+        row = decode_summary({'empty_history': False, **data, 'running': False})
+        if not isinstance(row.title, str):
+            return None
+        return replace(row, prompt_count=historical_int(row.prompt_count),
+                       duration_ms=historical_int(row.duration_ms), context_tokens=historical_int(row.context_tokens))
+    except (AttributeError, KeyError, TypeError, ValueError, InvalidOperation):
+        # An older wire shape can lack derived grouping/help fields. The
+        # stored acquisition qualifiers still establish that metrics settled;
+        # preserve supported scalars and mark only unavailable values absent.
+        row = recover_summary(key, data)
+        if row is None:
+            return None
+        return replace(row, **HISTORICAL_QUALIFIERS, complete=data.get('complete') is True and row.ccost is not None,
+                       selected_display_model=data['selected_display_model']
+                       if isinstance(data.get('selected_display_model'), str) else '')
+
+
 def recover_summary(key, value):
     """Decode independently representable scalars without manufacturing zeros."""
     if not isinstance(value, dict) or value.get('session_id', key) != key:
@@ -309,6 +344,24 @@ def _display_row(key, data, *, provisional=False):
         return recover_summary(key, data)
 
 
+def settled_metric_states(row):
+    known = dict(
+        activity=historical_int(row.last_activity_ms, 1) is not None or
+                 historical_int(row.prompt_started_ms, 1) is not None,
+        model=bool(row.model not in (None, '', 'N/A') or row.selected_display_model),
+        effort=row.effort_key is not None,
+        # Preserve a positive known subtotal of a partial valuation. A zero
+        # subtotal with incomplete coverage says nothing about the whole cost.
+        ccost=row.ccost is not None and (row.complete or row.ccost > 0),
+        prompts=row.prompt_count is not None,
+        duration=row.duration_ms is not None,
+        ctx=row.context_tokens is not None,
+    )
+    absences = {key: EMPTY_HISTORY if row.empty_history and key in ('activity', 'model', 'ctx')
+                else SETTLED_UNAVAILABLE for key, present in known.items() if not present}
+    return {key: 'ready' if present else 'unavailable' for key, present in known.items()}, absences
+
+
 def cached_page(archive, *, token, offset, sort, direction, period, navigation, now, zone, unit, query=''):
     """One committed snapshot for ready rows, Live overlays and period coverage."""
     window = catalog_window(period, zone, now)
@@ -333,9 +386,9 @@ def cached_page(archive, *, token, offset, sort, direction, period, navigation, 
                            outcome if recent else None, finalization, recent,
                             ongoing if running_since is not None else None, terminal_until))
     for key, fact in facts:
-        row = _display_row(key, fact.value.get('row'))
+        row = historical_row(key, fact.value.get('row'))
         if row is not None:
-            shown.append((replace(row, running=False), True, None, None, False, None, None))
+            shown.append((row, True, None, None, False, None, None))
     view = session_view(tuple(entry[0] for entry in shown), zone, unit)
     for value, (row, saved, outcome, finalization, recent, ongoing, terminal_until) in zip(view['session_usage'], shown):
         value['indexed'] = saved
@@ -363,8 +416,12 @@ def cached_page(archive, *, token, offset, sort, direction, period, navigation, 
                 value['metric_states'][key] = known_state if known else 'pending'
             value['metric_states']['ccost'] = ('retained' if row.ccost_retained else 'ready' if row.ccost is not None else
                 'unavailable' if row.ccost_unavailable else 'pending')
-        if row.empty_history and saved and not row.running and not finalization:
-            value['metric_absences'] = dict.fromkeys(('model', 'ctx', 'activity'), EMPTY_HISTORY)
+        elif saved:
+            states, absences = settled_metric_states(row)
+            value['metric_authority'] = 'settled_history'
+            value['metric_states'] = states
+            if absences:
+                value['metric_absences'] = absences
     state, terminal = runtime or ('loading', False)
     complete, unavailable = pending
     progress = dict(cached=cached, complete=state == 'observed' and complete and not terminal,

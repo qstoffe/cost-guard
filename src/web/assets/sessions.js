@@ -599,6 +599,7 @@ const SessionsCatalog = (() => {
     activity(row) {
       const value = row.value;
       const render = at => ReportView.timestamp(at, this.renderTimezone);
+      const state = value.metric_states?.activity;
       let label, help = '';
       if (value.running) {
         label = render(value.prompt_started_ms ?? value.last_activity_ms);
@@ -613,7 +614,8 @@ const SessionsCatalog = (() => {
         label = render(value.last_activity_ms);
       }
       ReportView.metric(row.activity, 'activity', {
-        value: label === 'N/A' ? null : label + (help ? '*' : ''), help,
+        value: label === 'N/A' ? null : label + (help ? '*' : ''), state,
+        help: state === 'unavailable' ? 'No supported prompt activity time is available.' : help,
         reason: value.metric_absences?.activity, onHelpLost: row.metricHelpLost
       });
       const status = ReportView.lifecycle(value, this.renderTimezone);
@@ -640,7 +642,9 @@ const SessionsCatalog = (() => {
         if (removedFocus) this.pan.focus?.({preventScroll: true});
       }
       values.forEach((value, index) => {
-        value = this.costs.select(value, [this.data?.source?.identity, this.data?.source?.generation, value.session_id],
+        const settled = value.metric_authority === 'settled_history';
+        if (!settled || value.metric_states.ccost !== 'unavailable') value = this.costs.select(value,
+          [this.data?.source?.identity, this.data?.source?.generation, value.session_id],
           'ccost', value.unresolved_cost == null ? value.complete === true : !value.unresolved_cost);
         const row = old.get(value.session_id) || el('tr'); row.dataset.id = value.session_id;
         row.value = value;
@@ -666,25 +670,29 @@ const SessionsCatalog = (() => {
         const model = (value.model !== 'N/A' && value.model) || value.selected_display_model;
         const amounts = [
           model ? model + (value.has_model_details ? '*' : '') : null,
-          () => ReportView.metricToken(value, 'ccost') ?? (value.metric_states?.ccost === 'unavailable' ? '—' : null),
+          () => settled && value.metric_states.ccost === 'unavailable' ? null :
+            ReportView.metricToken(value, 'ccost') ?? (value.metric_states?.ccost === 'unavailable' ? '—' : null),
           value.prompt_count,
           ReportView.metricToken(value, 'duration_ms'),
           ReportView.metricToken(value, 'context_tokens')
         ];
-        const current = value;
         const helps = [
-          () => ReportView.metricToken(value, 'model_help'),
-          () => value.metric_states?.ccost === 'unavailable' && ReportView.metricToken(value, 'ccost') == null ?
-            ReportView.metricToken(value, 'ccost_unavailable_help') || 'Whole-session reference CCost unavailable.' :
-             ReportView.sessionCostHelp(value, value) + (value.metric_states?.ccost === 'retained' ?
-               '\nLast qualified value; refresh pending.' : ''), null, null,
-          current.context_tokens == null ? null : `~${current.context_tokens.toLocaleString()} tokens`
+          settled && value.metric_states.model === 'unavailable' ? 'No supported model is available.' :
+            () => ReportView.metricToken(value, 'model_help'),
+          () => value.metric_states?.ccost === 'unavailable' && (settled || ReportView.metricToken(value, 'ccost') == null) ?
+             ReportView.metricToken(value, 'ccost_unavailable_help') || 'Whole-session reference CCost unavailable.' :
+              ReportView.sessionCostHelp(value, value) + (value.metric_states?.ccost === 'retained' ?
+                '\nLast qualified value; refresh pending.' : ''),
+          settled && value.metric_states.prompts === 'unavailable' ? 'The number of prompts is unavailable.' : null,
+          settled && value.metric_states.duration === 'unavailable' ? 'Execution duration is unavailable.' : null,
+          value.context_tokens == null ? value.context_detail : `~${value.context_tokens.toLocaleString()} tokens`
         ];
         row.metrics.forEach((node, index) => {
           const key = ['model', 'ccost', 'prompts', 'duration', 'ctx'][index];
           const state = value.metric_states?.[key] || value.metric_state || (value.indexed ? 'ready' : 'pending');
-          node.classList.toggle('session-metric-pending', state === 'retained' || key === 'ctx' && state !== 'ready');
+          node.classList.toggle('session-metric-pending', state === 'retained' || !settled && key === 'ctx' && state !== 'ready');
           ReportView.metric(node, key, {value: amounts[index], reason: value.metric_absences?.[key],
+            state: settled ? state : undefined,
             help: helps[index], label: state === 'retained' ? shown => `Retained value: ${shown}` : null,
             onHelpLost: row.metricHelpLost});
         });

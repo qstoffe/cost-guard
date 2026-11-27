@@ -25,7 +25,7 @@ from src.application.session_quota import source_scope
 from src.cache import CacheDatabase, CacheRepository
 from src.cache import session_projection
 from src.cache.web_archive import ArchiveFact, PREVIOUS_ARCHIVE_FILENAME, WebArchive
-from src.domain import TerminalEvidence, TerminalOutcome
+from src.domain import ActiveContext, ModelRef, TerminalEvidence, TerminalOutcome
 from src.reports.models import SessionUsageRow
 from src.reports import ReportKind, ReportRequest, ReportService
 from src.reports import ai_stats_warm
@@ -366,6 +366,74 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertEqual(1, help_by_id['root-0000'].count(' — max'))
         self.assertNotIn(' — max', help_by_id['root-0001'])
         self.assertIn('may be incomplete', help_by_id['root-0001'])
+
+    def test_committed_cost_sort_distinguishes_registry_only_history_unpriced_prompt_and_pending_read(self):
+        source = self.source(4, 1)
+        registry = make_root_snapshot(1, 0, month_start_ms=NOV_5 - DAY_MS)
+        source.snapshots['root-0001'] = replace(registry, complete=True,
+            active_contexts=(ActiveContext('root-0001', ()),))
+        unpriced = source.snapshots['root-0000']
+        source.snapshots['root-0000'] = replace(unpriced, invocations=tuple(
+            replace(request, model=ModelRef('unpriced', 'example')) for request in unpriced.invocations))
+        source.snapshots['root-0003'] = replace(source.snapshots['root-0003'], complete=False)
+        _, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        for _ in range(4):
+            self.tick(catalog, source)
+
+        for direction, expected in ((1, ['root-0001', 'root-0002', 'root-0000']),
+                                    (-1, ['root-0002', 'root-0001', 'root-0000'])):
+            page = catalog.page(period='all', sort='ccost', direction=direction)
+            rows = page['view']['session_usage']
+            self.assertEqual(expected, [row['session_id'] for row in rows])
+            self.assertEqual(3, page['total'])
+            self.assertFalse(page['history_progress']['complete'])
+
+        by_id = {row['session_id']: row for row in rows}
+        empty = by_id['root-0001']
+        self.assertEqual('settled_history', empty['metric_authority'])
+        self.assertEqual(('0', 0, 0), (empty['ccost'], empty['prompt_count'], empty['duration_ms']))
+        for field in ('activity', 'model', 'ctx'):
+            self.assertEqual('unavailable', empty['metric_states'][field])
+            self.assertEqual('settled_unavailable', empty['metric_absences'][field])
+        self.assertEqual('ready', empty['metric_states']['ccost'])
+        prompted = by_id['root-0000']
+        self.assertEqual(1, prompted['prompt_count'])
+        self.assertIsNotNone(prompted['last_activity_ms'])
+        self.assertEqual('unavailable', prompted['metric_states']['ccost'])
+
+    def test_prior_index_repairs_only_supported_rows_without_replaying_deleted_history(self):
+        source = self.source(5, 2)
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        for _ in range(5):
+            self.tick(catalog, source)
+        self.assertEqual(5, catalog.page(period='all')['total'])
+        with closing(sqlite3.connect(archive.path)) as db, db:
+            db.execute('PRAGMA user_version=6')
+            # 0 retained; 1 lost its pointer; 2 lost its pointer and has a mismatched detail.
+            db.execute("DELETE FROM ready_sessions WHERE item IN ('root-0001','root-0002')")
+            db.execute("UPDATE facts SET revision='other' WHERE item='root-0002' AND domain=?", (DETAILS,))
+            # 3 is indexed prematurely. 4 has a legacy zero sort key for incomplete valuation.
+            db.execute("""UPDATE facts SET value=json_set(value,'$.row.context_qualified',json('false'))
+                          WHERE item='root-0003' AND domain=?""", (SESSIONS,))
+            db.execute("""UPDATE facts SET value=json_set(value,'$.row.ccost','0','$.row.complete',json('false'))
+                          WHERE item='root-0004' AND domain=?""", (SESSIONS,))
+            db.execute("UPDATE ready_sessions SET cost_key=x'01' WHERE item='root-0004'")
+
+        reopened, catalog = self.restore('two')
+        empty_source = self.source(0, 0)
+        empty_source.observation_epoch = 'two'
+        catalog.observe(observe_catalog(empty_source, include_archived_revisions=True))
+
+        page = catalog.page(period='all', sort='ccost', direction=1)
+        rows = page['view']['session_usage']
+        self.assertEqual(['root-0000', 'root-0001', 'root-0004'], [r['session_id'] for r in rows])
+        self.assertEqual(3, page['total'])
+        self.assertEqual([2, 2, 2], [r['prompt_count'] for r in rows])
+        self.assertEqual('unavailable', rows[-1]['metric_states']['ccost'])
+        self.assertEqual(set(source.snapshots), {key for key, _ in reopened.history_rows(SESSIONS)})
+        self.assertEqual(0, empty_source.load_count)
 
     def test_prior_archive_reopens_with_ready_history_and_accepts_new_live_priority(self):
         archive, first = self.restore('one')

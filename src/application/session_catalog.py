@@ -18,7 +18,8 @@ from src.sources.errors import SourceError
 from .history_queue import HistoryQueue
 from .session_active_snapshots import ActiveSnapshotOffers
 from .session_archive import (
-    SessionArchive, cached_page, prepare_archive_facts, retain_pending_metrics, retain_readable_fields,
+    SessionArchive, cached_page, historical_metrics_settled, prepare_archive_facts,
+    retain_pending_metrics, retain_readable_fields,
 )
 from .session_archive_maintenance import advance_archive_maintenance
 from .session_arrivals import ARRIVAL_SECONDS, recent_live_roots, retain_live_arrivals
@@ -733,10 +734,8 @@ class SessionCatalog:
                     self.withdraw_prompts((), unobserved=((root, revision, prompt_observed_at, epoch),))
                 saved = False
                 unqualified = bool(partition and not active and not row.running and actual == revision)
-                if (unqualified and evidence and isinstance(actual, str) and row.activity_qualified
-                        and row.context_qualified and row.effort_qualified and not row.effort_pending
-                        and not row.model_pending and (not finalizing or handoff is None
-                                                       or handoff.identity in ended_prompts)):
+                if (unqualified and evidence and isinstance(actual, str) and historical_metrics_settled(row)
+                        and (not finalizing or handoff is None or handoff.identity in ended_prompts)):
                     item, = evidence
                     facts = prepare_archive_facts(service, item)
                     if facts is not None:
