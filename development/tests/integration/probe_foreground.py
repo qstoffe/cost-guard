@@ -297,19 +297,24 @@ class ForegroundTests(unittest.TestCase):
     def test_selected_token_mix_updates_on_return(self):
         self.check_period_return(ReportKind.TOKEN_MIX, 'Model 0, revision 1', 'Model 0, revision 2')
 
-    def test_account_chart_applies_latest_committed_total_for_selected_period(self):
+    def test_account_chart_applies_latest_committed_usage_for_selected_period(self):
         frames = self.period_frames()
         frames.publish_chart(1)
         self.open_view('#/accounts')
         self.page.get_by_role('button', name='7 days', exact=True).click()
-        total = self.page.locator('.account-timeline-legend-value')
-        expect(total).to_have_text('$0.10')
+        plot = self.page.locator('.account-timeline-plot')
+        bar = plot.locator('.account-timeline-bar')
+        slot = plot.locator(f'.account-timeline-target[data-slot="{bar.get_attribute("data-bucket")}"]')
+        slot.hover()
+        cost = self.page.locator('.account-timeline-tip-values .account-timeline-tip-row > :last-child')
+        expect(cost).to_have_text('$0.10')
         self.blur(hidden=True)
         frames.publish_chart(2)
-        expect(total).to_have_text('$0.10')
+        expect(cost).to_have_text('$0.10')
         self.activate()
-        expect(total).to_have_text('$0.20', timeout=2000)
-        expect(total).to_be_visible()
+        slot.hover()
+        expect(cost).to_have_text('$0.20', timeout=2000)
+        expect(cost).to_be_visible()
         self.within('Accounts CCost (7 days)')
 
     def test_benchmark_reconciles_committed_scores_despite_an_older_lookup(self):

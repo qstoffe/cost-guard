@@ -16,6 +16,7 @@ from src.numbers import ccost_amount
 from .contracts import record
 from .projection import identity, quota_record
 from .quota_ccost import capacity_period, direct_native_ccost, quota_ccost_values
+from .watch_accounts import primary_quota
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +49,8 @@ def account_roster(accounts, *, now_ms=None):
 
 def _account_month(item, now_ms):
     account = item.account
-    for quota in account.quotas:
+    primary = primary_quota(account)
+    for quota in (primary, *(quota for quota in account.quotas if quota is not primary)):
         period = next((value for value in item.quota_periods if value.quota is quota), None)
         values = dict(quota_record(quota, period.cost if period else None,
                                    provider_id=account.ref.provider_id, availability=account.availability).fields)
@@ -134,8 +136,11 @@ def seed_today(view, day, amounts):
         subtotal = Decimal(item['total']['amount']) if item['total'] else Decimal(0)
         subtotal += amount - (Decimal(point['amount']) if point else Decimal(0))
         total = _point(subtotal, '~').to_json() if subtotal else None
-        series.append(dict(item, points=points, total=total, peak=str(peak),
-                           ticks=[tick.to_json() for tick in _ticks(peak)]))
+        seeded = dict(item, points=points, total=total, peak=str(peak),
+                      ticks=[tick.to_json() for tick in _ticks(peak)])
+        if item.get('discrepancy_comparable'):
+            seeded['discrepancy_comparable'] = False
+        series.append(seeded)
     return dict(view, series=series)
 
 
@@ -194,6 +199,7 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
         # An empty boundary slot has no elapsed time, but may contain an event exactly at Now.
         total = _range_total(tuple(point for (left, right), point in zip(elapsed, amounts)
                                    if left < right or point is not None and point[0]))
+        exact_total = total is not None and not total[1]
         if total is not None:
             amount, mark = total
             if not native and comparable and month.used is not None and month.used != amount:
@@ -203,8 +209,11 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
             total = _point(amount, mark)
         # The browser chooses the largest visible series' scale, without
         # reimplementing the product's Decimal/unit formatting.
+        discrepancy_comparable = (native and comparable and month.used is not None and exact_total
+                                  and not any(partial) and not any(initial))
         authority = dict(provider_monthly_total=True, provider_window_matches=comparable, observed_total=total,
-                         month_total=_point(month.used) if month.used is not None else None) if native else {}
+                          discrepancy_comparable=discrepancy_comparable,
+                          month_total=_point(month.used) if month.used is not None else None) if native else {}
         series.append(record(id=item.key, account=item.label, peak=peak, ticks=_ticks(peak), points=points,
                              total=total, **authority))
     return record(period=period, timezone_id=zone, start_ms=window.start, end_ms=now_ms, buckets=window.buckets,

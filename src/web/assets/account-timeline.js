@@ -11,6 +11,14 @@ const AccountTimelineView = (() => {
     display: {amount: item.display.credits},
     display_units: {usd: {amount: item.display.usd}}
   }, 'amount');
+  function discrepancyHelp(item) {
+    if (!item.discrepancy_comparable) return '';
+    const provider = shown(item.month_total), observed = shown(item.observed_total);
+    if (provider === observed) return '';
+    return `Provider-reported monthly usage: ${provider}\nOpenCode-observed CCost: ${observed}\n\n` +
+      'OpenCode counts only the usage it observes, valued at reference prices. ' +
+      'Provider coverage, attribution, pricing or reporting windows can differ.';
+  }
   function svg(tag, attrs = {}, text) {
     const node = document.createElementNS(ns, tag);
     for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
@@ -125,12 +133,14 @@ const AccountTimelineView = (() => {
   }
 
   class View {
-    constructor(api, changeDemand) {
+    constructor(api, changeDemand, monthlyCost = () => '?') {
       this.api = api;
       this.changeDemand = changeDemand;
+      this.monthlyCost = monthlyCost;
       this.period = 'month';
       this.cache = new Map();
       this.entries = new Map();
+      this.legendEntries = new Map();
       this.selected = new Map();
       this.colors = new Map();
       this.generation = 0;
@@ -171,11 +181,6 @@ const AccountTimelineView = (() => {
       this.plot.append(this.shades, this.highlight, this.layers, this.labels, this.targets);
       this.scroller.append(this.plot);
       this.range = e('p', undefined, 'account-timeline-range');
-      this.observedCost = ContextHelp.value(e('span', 'Observed OpenCode daily CCost'),
-        ReportView.ccostHelp('Daily reference cost observed in OpenCode, separate from the provider’s total.'));
-      this.observedSeparator = document.createTextNode(' · ');
-      this.rangeLabel = e('span');
-      this.range.append(this.rangeLabel);
       this.selectedLegend = e('ul', undefined, 'account-timeline-selected');
       this.selectedLegend.setAttribute('role', 'list');
       this.selectedLegend.setAttribute('aria-label', 'Selected accounts');
@@ -316,6 +321,7 @@ const AccountTimelineView = (() => {
         this.retireRead();
         this.panel.hidePopover();
         this.inspect(null);
+        for (const {amount} of this.legendEntries.values()) ContextHelp.dismiss(amount);
         this.draw();
       }
       this.schedule(0);
@@ -472,6 +478,38 @@ const AccountTimelineView = (() => {
       this.summary.replaceChildren(...selectedInks.slice(0, 4).map(swatch));
     }
 
+    drawLegend() {
+      const selected = new Set(this.series.map(item => item.id));
+      for (const [id, {row, amount}] of this.legendEntries) {
+        if (selected.has(id)) continue;
+        ContextHelp.dismiss(amount);
+        row.remove();
+        this.legendEntries.delete(id);
+      }
+      this.series.forEach((item, index) => {
+        let entry = this.legendEntries.get(item.id);
+        if (!entry) {
+          const row = e('li'), caption = e('span'), name = e('span');
+          const amount = e('span', undefined, 'account-timeline-legend-value');
+          caption.append(name, ' ', amount);
+          row.append(swatch(this.colors.get(item.id)), caption);
+          entry = {row, name, amount};
+          this.legendEntries.set(item.id, entry);
+        }
+        const {row, name, amount} = entry;
+        ReportView.text(name, item.account);
+        ReportView.text(amount, `(${this.monthlyCost(item.id)})`);
+        const help = discrepancyHelp(item);
+        if (entry.help !== help) {
+          if (help) ContextHelp.value(amount, help);
+          else ContextHelp.clearValue(amount);
+          entry.help = help;
+        }
+        if (this.selectedLegend.children[index] !== row)
+          this.selectedLegend.insertBefore(row, this.selectedLegend.children[index] || null);
+      });
+    }
+
     draw() {
       const cached = this.cache.get(this.period);
       const view = cached?.view;
@@ -487,33 +525,7 @@ const AccountTimelineView = (() => {
       const selectedSeries = roster.filter(item => this.selected.get(item.id) ?? true);
       this.series = view ? selectedSeries : [];
       this.selectedLegend.hidden = !view || !selectedSeries.length;
-      const totalText = value => value ? (view?.history_progress ? shown(value) :
-        shown(value).replace(/^[~≈]/, '')) : '—';
-      const legend = this.series.map(item => [
-        this.colors.get(item.id), item.account,
-        item.provider_monthly_total ? totalText(item.month_total) : totalText(item.total),
-        item.provider_monthly_total ? totalText(item.observed_total) : null,
-        item.provider_window_matches
-      ]);
-      const legendKey = JSON.stringify(legend);
-      if (legendKey !== this.legendKey) {
-        this.legendKey = legendKey;
-        this.selectedLegend.replaceChildren(...legend.map(([ink, name, total, observed, sameWindow]) => {
-          const row = e('li');
-          const value = e('span', total === '—' ? undefined : total, 'account-timeline-legend-value');
-          if (total === '—') {
-            const dash = e('span', total);
-            dash.setAttribute('aria-hidden', 'true');
-            value.append(dash, e('span', 'Total unavailable', 'sr-only'));
-          }
-          row.append(swatch(ink), e('span', name));
-          if (observed !== null) {
-            row.append(e('span', sameWindow ? 'Provider monthly total:' : 'Provider billing-period total:'), value,
-              e('span', `Observed OpenCode subtotal: ${observed}`));
-          } else row.append(value);
-          return row;
-        }));
-      }
+      this.drawLegend();
       this.view = view;
       this.unread = new Set(view?.initial_pending_buckets);
       this.shown = cached?.shown;
@@ -555,13 +567,7 @@ const AccountTimelineView = (() => {
       const layout = sameGeometry ? this.layout : this.layout = layoutSlots(view, width);
       const {slots, group} = layout;
       this.range.hidden = !!unselected;
-      if (nativeMonth && !this.observedCost.parentNode) {
-        this.range.prepend(this.observedCost, this.observedSeparator);
-      } else if (!nativeMonth && this.observedCost.parentNode) {
-        this.observedCost.remove();
-        this.observedSeparator.remove();
-      }
-      ReportView.text(this.rangeLabel, `Range: ${rangeLabel(view, layout)}`);
+      ReportView.text(this.range, `Range: ${rangeLabel(view, layout)}`);
       if (!sameGeometry) {
         const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;
         this.plot.style.setProperty('--timeline-min-width', `${minimum}px`);

@@ -1,7 +1,7 @@
 // Check the shared report renderer too: its sortable headers are distinct from
 // the interactive Sessions catalog and Session Detail.
 const assert = require('node:assert/strict');
-module.exports = async ({evaluate, owner, heading, checks}) => {
+module.exports = async ({evaluate, until, owner, heading, checks}) => {
   await evaluate(owner, `(() => {
     const root = document.createElement('section'); root.id = 'frozen-cost-report'; document.body.append(root);
     const source = liveValue.probe_ccost_unavailable.mixed;
@@ -35,16 +35,30 @@ module.exports = async ({evaluate, owner, heading, checks}) => {
   checks.push('Frozen report reading guide, session/prompt/component headings and account scope labels, with reversible numeric sort.');
 
   await evaluate(owner, `(() => {
-    const chart = new AccountTimelineView.View(()=>{},()=>{});
+    const chart = new AccountTimelineView.View(()=>{},()=>{},()=> '77');
     document.body.append(chart.root);
     const start = Date.UTC(2026,10,1), end = start + 86400000;
     const amount = {amount:'100',display:{credits:'100',usd:'$1.00'}};
+    const observed = {amount:'45',display:{credits:'45',usd:'$0.45'}};
+    const base = {points:[amount],total:amount,peak:'100',ticks:[amount]};
+    const native = {...base,provider_monthly_total:true,month_total:amount,discrepancy_comparable:true};
     chart.cache.set(chart.period,{view:{period:chart.period,timezone_id:'UTC',start_ms:start,end_ms:end,
-      buckets:[[start,end]],series:[{id:'00000001',account:'Monthly plan',points:[amount],total:amount,
-        provider_monthly_total:true,observed_total:amount,peak:'100',ticks:[amount]}]}});
+      buckets:[[start,end]],series:[
+        {...native,id:'00000001',account:'Monthly plan',observed_total:observed},
+        {...native,id:'00000002',account:'Same after rounding',observed_total:{...amount,amount:'100.001'}},
+        {...native,id:'00000003',account:'Incomplete month',observed_total:observed,discrepancy_comparable:false},
+        {...base,id:'00000004',account:'Non-native plan'},
+      ]}});
     chart.draw();
   })()`);
   await heading(owner,'.account-timeline h2 button','CCost',/account and period/);
-  await heading(owner,'.account-timeline-range > span:first-child','Observed OpenCode daily CCost',/daily.*provider/i);
-  checks.push('Accounts chart heading and conditional observed-month label retain distinct scope from provider totals.');
+  const targets = '.account-timeline-selected [tabindex="0"]';
+  assert.deepEqual(await evaluate(owner,`[...document.querySelectorAll('${targets}')].map(n=>n.parentElement.textContent)`),
+    ['Monthly plan (77)']);
+  await evaluate(owner,`document.querySelector('${targets}').focus()`);
+  await until(owner,`document.querySelector('${targets}').getAttribute('aria-describedby')?.includes('context-help')
+    && document.querySelector('#context-help')?.matches(':popover-open')`);
+  assert.match(await evaluate(owner,`document.querySelector('#context-help').textContent`),
+    /^Provider-reported monthly usage: 100\nOpenCode-observed CCost: 45\n[\s\S]*reference prices[\s\S]*can differ/);
+  checks.push('Chart heading explains CCost; only a qualified, visibly different monthly comparison has focusable help, distinct from the card amount.');
 };
