@@ -48,6 +48,11 @@ class ArchiveFact:
         return self.observed_ms, self.partition, self.revision
 
 
+@dataclass(frozen=True, slots=True)
+class UnreadableHistoryFact:
+    history_rank: tuple[int, str, str]
+
+
 class WebArchive:
     def __init__(self, directory, *, previous_directory=None, retire_previous=False, notify_sessions=None,
                  schedule_session_expiries=None, retain_writer=False, retain_session_readers=False):
@@ -259,7 +264,7 @@ class WebArchive:
                 FROM facts WHERE domain=?''', (domain,))
             yield from self._historical_facts(rows)
 
-    def history_changes(self, domain, after, *, limit=64):
+    def history_changes(self, domain, after, *, limit=64, include_unreadable=False):
         if not self.path.is_file():
             return after, (), False
         with self._connect() as db:
@@ -268,8 +273,8 @@ class WebArchive:
                 WHERE c.domain=? AND c.cursor>? ORDER BY c.cursor LIMIT ?''',
                 (domain, after, limit + 1)).fetchall()
         batch = rows[:limit]
-        return (batch[-1][0] if batch else after, tuple(self._historical_facts(row[1:] for row in batch)),
-                len(rows) > limit)
+        facts = self._historical_facts((row[1:] for row in batch), include_unreadable=include_unreadable)
+        return batch[-1][0] if batch else after, tuple(facts), len(rows) > limit
 
     def history_item(self, domain, key, after):
         if not self.path.is_file():
@@ -367,14 +372,16 @@ class WebArchive:
             return db.execute('SELECT COUNT(DISTINCT item) FROM fact_cursors WHERE domain=?', (domain,)).fetchone()[0]
 
     @staticmethod
-    def _historical_facts(rows):
+    def _historical_facts(rows, *, include_unreadable=False):
         for key, revision, observed, raw, partition in rows:
             try:
                 value = json.loads(raw)
             except (ValueError, TypeError):
-                continue
+                value = None
             if isinstance(value, dict):
                 yield key, ArchiveFact(revision, observed, value, partition)
+            elif include_unreadable:
+                yield key, UnreadableHistoryFact((observed, partition, revision))
 
     def publish(self, partition, domain, facts):
         return self.publish_batch(partition, {domain: facts})

@@ -29,7 +29,14 @@ module.exports = async function probe({evaluate, until, checks}) {
         if(mixStep==='queued') return {...identity,id:'finite-week',refresh:'queued'};
         if(mixStep==='ready') return {...identity,result_id:'week-v1',result:weekMix};
         if(mixStep==='refresh-error') return {...identity,id:'week-v1',result_id:'week-v1',result:weekMix,refresh:'delayed'};
-        if(mixStep==='refreshed') return {...identity,result_id:'week-v2',result:{...weekMix,sequence:weekMix.sequence+1}};
+         if(mixStep==='refreshed') return {...identity,result_id:'week-v2',result:{...weekMix,sequence:weekMix.sequence+1}};
+         if(mixStep==='live' || mixStep==='unavailable') {
+           const failed=mixStep==='unavailable';
+           return {...identity,result_id:'week-'+mixStep,result:{...weekMix,sequence:weekMix.sequence+(failed?4:3),
+             source:{...weekMix.source,status:'partial'},view:{...weekMix.view,
+               token_mix_period:{...weekMix.view.token_mix_period,coverage:'partial'},
+               history_progress:{complete:true,reconciling:true,unverifiable:failed,unavailable:failed?1:0}}}};
+         }
         const unknown={...weekMix,source:{...weekMix.source,status:'partial',omitted_roots:1},
           view:{...weekMix.view,token_mix:null,model_token_mix:[],publisher_token_mix:[],
             token_mix_period:{...weekMix.view.token_mix_period,coverage:'unknown'}}};
@@ -78,6 +85,17 @@ module.exports = async function probe({evaluate, until, checks}) {
   assert.equal(await evaluate(`current.result===weekMix && (${retained})`), true);
   await evaluate(`mixStep='refreshed';acquire(current,true)`);
   assert.equal(await evaluate(`current.result.sequence===weekMix.sequence+1 && (${retained})`), true);
+  const title = await evaluate(`current.tokenMix.title.innerText`);
+  assert.match(title, /tokens$/);
+  for (const [phase, status] of [['live',''], ['unavailable','Showing verified usage only. Some history could not be checked.']]) {
+    await evaluate(`mixStep='${phase}';acquire(current,true)`);
+    const frame = await evaluate(`({title:current.tokenMix.title.innerText,
+      visible:current.tokenMix.title.getClientRects().length>0,
+      status:current.tokenMix.status.hidden?'':current.tokenMix.status.innerText,
+      spinner:!!current.tokenMix.selector.querySelector('.period-spinner'),
+      coverage:current.result.view.token_mix_period.coverage})`);
+    assert.deepEqual(frame,{title,visible:true,status,spinner:false,coverage:'partial'},phase);
+  }
   await evaluate(`mixStep='rotated';acquire(current,true)`);
   assert.equal(await evaluate(`current.result.view.token_mix===null &&
     current.tokenMix.status.textContent==='Usage for this period could not be verified.' &&
@@ -89,4 +107,5 @@ module.exports = async function probe({evaluate, until, checks}) {
   await until(`current.result?.view.token_mix_period.period==='all' && !current.loading`);
   checks.push({scenario:'All time → cold 7 days; bounded busy/churn/cache/transport recovery, neutral indeterminate DOM and single status; quiet retained refresh, coherent swap, identity rotation, unknown coverage, terminal permissions',
     lookups:pending.lookups, job:pending.jobs[0].id, phases:pending.jobs.map(job => job.phase)});
+  checks.push('Spinner-free partial frame keeps the visible total during Live reconciliation; a concurrent unavailable root restores the verification warning.');
 };

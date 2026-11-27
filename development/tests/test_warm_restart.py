@@ -514,11 +514,163 @@ class DisplayHistoryTests(unittest.TestCase):
         # A restart can serve qualified committed history before a projector is available.
         reopened = HistoryReports(WebArchive(self.directory), lambda: self.pricing.catalog, projector=None)
         self.addCleanup(reopened.close)
-        restored = reopened.lookup(mix, config)['result']['view']
+        notified = []
+        def on_restore(kinds, periods):
+            # The first notified consumer must see both views without decoding
+            # the SQLite checkpoint again, even before the next scheduler turn.
+            with patch.object(reopened.archive, 'history_item', side_effect=AssertionError('checkpoint reread')):
+                for request in (stats, mix):
+                    result = reopened.lookup(request, config)['result']
+                    self.assertEqual('partial', result['source']['status'])
+                notified.append(reopened.lookup(mix, config)['result']['view'])
+
+        reopened.notify = on_restore
+        reopened._load_checkpoint('all', stamp)
+        restored, = notified
         self.assertEqual(2, restored['token_mix']['request_count'])
+        self.assertEqual('partial', restored['token_mix_period']['coverage'])
         self.assertTrue(restored['history_progress']['restored'])
         self.assertFalse(restored['history_progress']['complete'])
         self.assertIsNone(reopened.lookup(mix, dict(config, ccostDisplayUnit='usd'))['result'])
+
+    def test_month_retains_qualified_calls_until_a_revision_is_committed(self):
+        from src.analysis.timezones import calendar_periods
+        from src.web.history_reports import HistoryReports, checkpoint_stamp, settings_signature
+
+        source = self.source(1, 2, today_roots=1, now_ms=self.now)
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(catalog, source)
+        service = report_service(source, self.cache, self.now, self.pricing)
+        projector = ArchivedHistoryProcess(archive)
+        self.addCleanup(projector.close)
+        reports = HistoryReports(archive, lambda: self.pricing.catalog, projector)
+        self.addCleanup(reports.close)
+        request = ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope='month')
+        start = dict(calendar_periods('UTC', self.now))['month']
+        stamp = checkpoint_stamp(service.config, 'UTC', start, settings_signature(service.config))
+        previous = {}
+
+        def publish(**qualifications):
+            nonlocal previous
+            inputs = dict(identity='test', selection=service.selection, config=service.config, now=self.now,
+                          activity={'root-0000': self.now, 'live': self.now}, available=True, only='month',
+                          **qualifications)
+            previous, *_ = reports._render(inputs, stamp, previous)
+            self.assertTrue(previous, 'publication committed')
+            with patch('src.web.history_reports.time.time', return_value=self.now / 1000), \
+                 patch.object(archive, 'history_item', side_effect=AssertionError('warm checkpoint reread')):
+                return reports.lookup(request, service.config)['result']
+
+        def check(result, tokens, status):
+            view = result['view']
+            for mix in (view['token_mix'], view['model_token_mix'][0]['mix'], view['publisher_token_mix'][0]['mix']):
+                self.assertEqual((2, str(tokens)), (mix['request_count'], mix['observed_total_tokens']))
+            self.assertEqual(status, result['source']['status'])
+            self.assertEqual('partial' if status == 'partial' else None, view['token_mix_period'].get('coverage'))
+            return view['history_progress']
+
+        check(publish(revisions={}), 261, 'acquired')
+        old = source.snapshots['root-0000']
+        first, second = old.invocations
+        source.snapshots['root-0000'] = replace(old, source_revision='next',
+            invocations=(replace(first, tokens=replace(first.tokens, input=600)), second))
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        for key, ownership in [('live', dict(live_roots={'live'})),
+                               ('root-0000', dict(refresh_roots=catalog.history_refresh_roots()))]:
+            with self.subTest(key=key):
+                inputs = dict(revisions={key: 'next'}, **ownership)
+                quiet = check(publish(**inputs), 261, 'partial')
+                self.assertTrue(quiet['complete'] and quiet['reconciling'])
+                self.assertFalse(quiet['unverifiable'])
+                failed = check(publish(**inputs, unavailable={key}), 261, 'partial')
+                self.assertTrue(failed['complete'] and failed['unverifiable'])
+                self.assertEqual(1, failed['unavailable'])
+
+        for _ in range(10):
+            self.tick(catalog, source)
+            if not catalog.history_pending:
+                break
+        settled = check(publish(revisions={'root-0000': 'next'}), 761, 'acquired')
+        self.assertTrue(settled['complete'])
+        self.assertFalse(settled['reconciling'] or settled['unverifiable'])
+
+        # A timing correction, not a deletion: both physical calls now belong to October.
+        moved = make_root_snapshot(0, 2, month_start_ms=start - DAY_MS)
+        source.snapshots['root-0000'] = replace(moved, complete=True, source_revision='moved')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        for _ in range(10):
+            self.tick(catalog, source)
+            if not catalog.history_pending:
+                break
+        empty = publish(revisions={'root-0000': 'moved'})
+        view = empty['view']
+        self.assertEqual('acquired', empty['source']['status'])
+        self.assertTrue(view['history_progress']['complete'])
+        self.assertIsNone(view['token_mix_period'].get('coverage'))
+        self.assertEqual((0, [], []), (view['token_mix']['request_count'], view['model_token_mix'],
+                                        view['publisher_token_mix']))
+        cold, _ = HistoryProjection(ArchivedUsage(WebArchive(self.directory))).render(identity='test',
+            selection=service.selection, config=service.config, reference=self.pricing.catalog, now=self.now,
+            revisions={}, activity={}, available=True)
+        self.assertEqual(cold['token-mix', 'month']['view'], view)
+        self.assertEqual(2, cold['token-mix', 'all']['view']['token_mix']['request_count'])
+
+    def test_unreadable_overwrite_keeps_last_readable_mix_after_restart_until_repaired(self):
+        from src.reports.web_history_evidence import DOMAIN
+        from src.web.history_reports import HistoryReports, checkpoint_stamp, settings_signature
+
+        source = self.source(1, 2)
+        archive, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(catalog, source)
+        service = report_service(source, self.cache, self.now, self.pricing)
+        stamp = checkpoint_stamp(service.config, 'UTC', None, settings_signature(service.config))
+        inputs = dict(identity='test', selection=service.selection, config=service.config, now=self.now,
+                      revisions={}, activity={}, available=True, only='all')
+        request = ReportRequest(ReportKind.TOKEN_MIX, token_mix_scope='all')
+
+        def open_reports(storage):
+            projector = ArchivedHistoryProcess(storage)
+            self.addCleanup(projector.close)
+            owner = HistoryReports(storage, lambda: self.pricing.catalog, projector)
+            self.addCleanup(owner.close)
+            return owner
+
+        def publish(owner, previous, status):
+            results, *_ = owner._render(inputs, stamp, previous)
+            self.assertTrue(results)
+            result = owner.lookup(request, service.config)['result']
+            view = result['view']
+            self.assertEqual(status, result['source']['status'])
+            self.assertEqual(status == 'partial', view['history_progress']['unverifiable'])
+            self.assertTrue(view['history_progress']['complete'])
+            self.assertEqual('partial' if status == 'partial' else None, view['token_mix_period'].get('coverage'))
+            for mix in (view['token_mix'], view['model_token_mix'][0]['mix'], view['publisher_token_mix'][0]['mix']):
+                self.assertEqual((2, '261'), (mix['request_count'], mix['observed_total_tokens']))
+            return results
+
+        owner = open_reports(archive)
+        prior = publish(owner, {}, 'acquired')
+        (root, readable), = archive.history_rows(DOMAIN)
+        # An Accounts-only revision is valid for its own consumer, but not a new verified report.
+        self.assertTrue(archive.publish(readable.partition, DOMAIN, {root: ArchiveFact('accounts',
+            readable.observed_ms + 1, {'account_usage': readable.value['account_usage']})}))
+        prior = publish(owner, prior, 'partial')
+        # Simulate a future writer's unsupported outer envelope in the same partition.
+        self.assertTrue(archive.publish(readable.partition, DOMAIN, {root: ArchiveFact('future-format',
+            readable.observed_ms + 2, ['unsupported-envelope'])}))
+        publish(owner, prior, 'partial')
+
+        reopened = WebArchive(self.directory)
+        cold, _ = HistoryProjection(ArchivedUsage(reopened)).render(reference=self.pricing.catalog, **inputs)
+        self.assertEqual('unknown', cold['token-mix', 'all']['view']['token_mix_period']['coverage'])
+        restarted = open_reports(reopened)
+        restored, *_ = restarted._load_checkpoint('all', stamp)
+        prior = publish(restarted, restored, 'partial')
+        self.assertTrue(reopened.publish(readable.partition, DOMAIN, {root: replace(readable,
+            revision='readable-again', observed_ms=readable.observed_ms + 3)}))
+        publish(restarted, prior, 'acquired')
 
     def test_watch_projection_picks_up_committed_usage_without_claiming_a_complete_day(self):
         from src.reports.web_history_evidence import DOMAIN

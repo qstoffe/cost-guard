@@ -169,8 +169,10 @@ const TokenMixView = (() => {
       const unknown = coverage === 'unknown' || !hasUsage && result.source.status === 'partial';
       for (const node of [this.title, this.summary, this.models.root, this.publishers.root])
         node.hidden = unknown;
-      const pending = view.history_progress && !view.history_progress.complete && !view.history_progress.terminal;
-      ReportView.text(this.status, pending ? '' : unknown ? 'Usage for this period could not be verified.' :
+      const progress = view.history_progress;
+      const pending = progress && !progress.complete && !progress.terminal;
+      const reconciling = progress?.reconciling && !progress.unverifiable;
+      ReportView.text(this.status, pending || reconciling ? '' : unknown ? 'Usage for this period could not be verified.' :
         coverage === 'partial' ? 'Showing verified usage only. Some history could not be checked.' :
           hasUsage ? '' : 'No usage yet.');
       this.status.hidden = !this.status.textContent;

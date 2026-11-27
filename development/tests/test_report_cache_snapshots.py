@@ -159,7 +159,10 @@ class ReportCacheSnapshotTests(unittest.TestCase):
 
         protected = frames.restored_periods({'today', 'month'}, 'UTC', day)
         changes = archive.history_changes
-        with patch.object(archive, 'history_changes', side_effect=lambda d, cursor: changes(d, cursor, limit=1)), \
+        def one_change(domain, cursor, **options):
+            return changes(domain, cursor, limit=1, **options)
+
+        with patch.object(archive, 'history_changes', side_effect=one_change), \
              patch('src.reports.archived_usage.monotonic', side_effect=[0, 5]):
             partial = project(owner, defer_while_loading=protected)
         self.assertEqual({'today'}, set(partial), 'a cold period may advance, but not at the expense of a saved one')

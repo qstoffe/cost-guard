@@ -43,6 +43,7 @@ class HistoryReports:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='cost-guard-history-projection')
         self.publication = {}
         self._committed = {}
+        self._restored_frames = {}
         self.job = None
         self.job_key = None
         self.published_keys = {}
@@ -72,7 +73,14 @@ class HistoryReports:
         return {}
 
     def _load_checkpoint(self, period, stamp):
-        return self._read_checkpoint(period, stamp), False, 0.0, None
+        results = self._read_checkpoint(period, stamp)
+        if results:
+            # The decoded checkpoint is already detached. Publish its warm
+            # pointer before notifying waiters, just like a current-run commit.
+            self._restored_frames = {**self._restored_frames, period: (stamp, results)}
+            if self.notify is not None:
+                self.notify(('ai-stats', 'token-mix'), (period,))
+        return results, False, 0.0, None
 
     def _measure_render(self, inputs, stamp, previous):
         started = time.thread_time()
@@ -108,6 +116,7 @@ class HistoryReports:
             # Event consumers must see the committed frame even before the host
             # tick collects this job. Do not share mutable projection results.
             self._committed = {**self._committed, period: committed[period].value}
+            self._restored_frames = {name: frame for name, frame in self._restored_frames.items() if name != period}
             if self.notify is not None:
                 self.notify(('ai-stats', 'token-mix'), (period,))
         return results, more, cpu, clock_due
@@ -118,7 +127,8 @@ class HistoryReports:
         if kind is ReportKind.TOKEN_MIX:
             if fresh['token_mix_period']['start_ms'] != saved['token_mix_period']['start_ms'] and period != 'all':
                 return current
-            if not fresh['model_token_mix'] and saved['model_token_mix']:
+            if (current['source']['status'] != 'acquired'
+                    and not fresh['model_token_mix'] and saved['model_token_mix']):
                 # Retain values, not the old job's loading state or identity.
                 for key in ('token_mix', 'model_token_mix', 'publisher_token_mix'):
                     fresh[key] = saved[key]
@@ -146,7 +156,7 @@ class HistoryReports:
                 result['source']['identity'] = REPORT_CHECKPOINTS
             stats['view']['history_progress'][period].update(complete=False, restored=True)
             mix['view']['history_progress'].update(complete=False, restored=True)
-            mix['view']['token_mix_period']['coverage'] = 'partial'
+            mix['view']['token_mix_period'].setdefault('coverage', 'partial')
         except (AttributeError, KeyError, TypeError):
             return None
         return {(ReportKind.AI_STATS.value, period): stats, (ReportKind.TOKEN_MIX.value, period): mix}
@@ -261,6 +271,8 @@ class HistoryReports:
         frame = self._committed.get(period)
         if frame is not None and frame['stamp'][:len(stamp)] == stamp:
             result = frame['views'].get(request.kind.value)
+        elif (restored := self._restored_frames.get(period)) is not None and restored[0] == stamp:
+            result = restored[1].get((request.kind.value, period))
         else:
             result = None
             try:
@@ -275,3 +287,4 @@ class HistoryReports:
     def close(self):
         self.pool.shutdown(wait=True, cancel_futures=True)
         self._committed = {}
+        self._restored_frames = {}
