@@ -221,14 +221,6 @@ const AccountCards = (() => {
         this.align();
       }
     }
-    monthlyCost(id) {
-      for (const {value} of this.cards.values()) {
-        if (value.observation.id !== id) continue;
-        const monthly = [value.primary, ...value.secondary].find(row => !monthlyApplicable(row.quota));
-        return monthly ? quotaCost(monthly) : '?';
-      }
-      return '?';
-    }
     align() {
       // Share semantic slots at every ordinal, within this physical comparison row.
       const template = typeof getComputedStyle === 'function' ? getComputedStyle(this.grid).gridTemplateColumns : '';

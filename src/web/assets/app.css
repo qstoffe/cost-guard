@@ -287,19 +287,20 @@ section > label input { min-width: 0; }
   position: relative; display: block; height: 0; line-height: 1rem; padding-inline: 0 .32rem;
   transform: translateY(-.5rem); text-align: end; white-space: nowrap;
 }
-.account-timeline-range, .account-timeline-selected {
+.account-timeline-range, .account-timeline-saved, .account-timeline-selected {
   grid-column: 2; margin: .4rem 0 0; font-size: .76rem; line-height: 1.35;
 }
-.account-timeline-range { color: var(--muted); font-variant-numeric: tabular-nums; }
+.account-timeline-range, .account-timeline-saved { color: var(--muted); font-variant-numeric: tabular-nums; }
 .account-timeline-selected {
   display: grid; justify-self: start; gap: .3rem; padding: 0; list-style: none; min-width: 0;
+  width: min(100%, 27rem);
 }
 .account-timeline-selected > li {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .4rem; align-items: baseline;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .4rem; align-items: baseline;
   overflow-wrap: anywhere;
 }
 .account-timeline-legend-value {
-  color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: end;
 }
 .account-timeline-legend-value.help-value { text-decoration: underline dotted; text-underline-offset: .15em; }
 .account-timeline-target { fill: transparent; }

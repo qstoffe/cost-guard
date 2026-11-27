@@ -485,15 +485,13 @@ function show(state) {
       state.accounts.update(liveValue?.view || {});
       state.accounts.attach(output);
       if (accountTimelineAvailable) {
-        state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update(),
-          id => state.accounts.monthlyCost(id));
+        state.accountTimeline ||= new AccountTimelineView.View(api, () => demand?.update());
         const chart = state.accountTimeline;
         chart.sharedHistory = archiveHistory;
         chart.cacheEvents = reportCacheEvents;
         if (!archiveHistory && !historyBlocked()) chart.setScope(liveValue?.account_timeline_scope ?? null);
         if (state.accounts.root.lastChild !== chart.root) state.accounts.root.append(chart.root);
         chart.active(!document.hidden && !!csrf && (hostState.writable || archiveReadable()));
-        chart.drawLegend();
       }
     } else if (liveValue?.view) {
       state.miniControls = miniWatch?.button.parentNode;

@@ -81,10 +81,8 @@ def replace_geometry(page, period, now, zone, width=20, *, sample=None):
         chart.schedule = () => {};
         const sample = seed ?? chart.view.series.find(row => row.points.some(point => Number(point?.amount) > 0));
         const peak = sample.points.find(point => Number(point?.amount) > 0);
-        // Synthetic accounts are not live cards. Include a nontrivial amount
-        // beside the long names when measuring layout at narrow widths.
-        chart.monthlyCost = () => '$1234.56';
         const series = Array.from({length: width}, (_, i) => ({...sample,
+            total: i % 2 ? {amount: '123456', display: {usd: '$1234.56', credits: '123456'}} : peak,
             id: (i + 1).toString(16).padStart(8, '0'),
             account: i === width - 1 ? `Provider${'UnbrokenQuotaName'.repeat(4)}${i + 1}` :
                 i % 3 ? `Provider · ${i % 3 === 1 ? 'Weekly' : 'Model daily'} quota ${i + 1}` : `Account ${i + 1}`,
@@ -131,23 +129,22 @@ def assert_legend_geometry(selected, *, compact=False, wraps=False):
             const lines = [...range.getClientRects()];
             range.selectNodeContents(value);
             const [cost, ...extra] = range.getClientRects();
-            const last = lines.at(-1);
-            return {wrapped: lines.length > 1 || Math.abs(cost.top - last.top) > 1,
-                gap: cost.left - last.right,
+            return {wrapped: lines.length > 1, right: cost.right,
+                sameRow: Math.abs(cost.top - lines[0].top) <= 1 && lines.every(line => line.right < cost.left),
                 fit: !extra.length && [...lines, cost].every(line =>
                     line.left >= plot.left - 1 && line.right <= plot.right + 1) && cost.width > 0 &&
                     getComputedStyle(value).fontVariantNumeric === 'tabular-nums'};
         });
         return {
             fit: bounds.right <= plot.right + 1 && rows.every(row => row.fit),
-            adjacent: rows.every(row => row.gap > 0 && row.gap < 16),
+            aligned: rows.every(row => row.sameRow && Math.abs(row.right - rows[0].right) <= 1),
             room: plot.right - bounds.right,
             wrapped: rows.some(row => row.wrapped),
         };
     }''')
-    assert layout['fit'], layout
+    assert layout['fit'] and layout['aligned'], layout
     if compact:
-        assert layout['room'] >= 32 and layout['adjacent'] and not layout['wrapped'], layout
+        assert layout['room'] >= 32, layout
     if wraps:
         assert layout['wrapped'], layout
 
@@ -603,7 +600,7 @@ def check(browser, root, screenshots=None):
         expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05 05:00')
         assert rows.evaluate_all('''rows => rows.every((row, i) => row.getBoundingClientRect().top >=
             (i ? rows[i - 1] : row.parentElement.previousElementSibling).getBoundingClientRect().bottom)''')
-        expect(rows.filter(has_text=low_label)).to_have_text(f'{low_label} (?)')
+        expect(rows.filter(has_text=low_label).locator('.account-timeline-legend-value')).to_have_text('$601.00')
         stable_totals = total.all_text_contents()
         assert 'checkbox' in chart.aria_snapshot()
         page.keyboard.press('Escape')
@@ -705,7 +702,7 @@ def check(browser, root, screenshots=None):
         chart.get_by_role('button', name='Today', exact=True).click()
         page.wait_for_function("() => current.accountTimeline.view?.period === 'today'")
         expect(range_line).to_have_text('Range: 2026-11-05 00:00–05:00')
-        before_total = total.inner_text()
+        expect(total).to_have_text('<$0.01')
         before = page.evaluate('''() => {
             const chart = current.accountTimeline;
             const point = chart.view.series.find(row => Number(row.peak) > 0);
@@ -730,7 +727,7 @@ def check(browser, root, screenshots=None):
                 Number(value.view.series.find(row => row.id === before.id)?.peak) > before.peak;
         }""", arg=before, timeout=30_000)
         expect(range_line).to_have_text('Range: 2026-11-05 00:00–05:01')
-        expect(total).to_have_text(before_total)
+        expect(total).to_have_text('$100.00')
         assert page.evaluate('window.liveCueFlashes') == 0
         assert source.timeline_reads[live_key] == 1 and sum(source.timeline_reads.values()) == 15
 
@@ -752,8 +749,8 @@ def check(browser, root, screenshots=None):
               f'card-ready → complete chart paint {(completed_paint - card_seen) * 1000:.0f} ms (gated reads)')
 
 
-def check_monthly_card(browser, root):
-    """Give the card an actual fixed quota without prewarming the separate staged-acquisition fixture."""
+def check_range_totals(browser, root):
+    """Exercise independent chart buckets and a native card that reports different usage."""
     from playwright.sync_api import expect
 
     with chart_fixture(browser, root, monthly=True) as (page, host, _, source, *_):
@@ -765,22 +762,34 @@ def check_monthly_card(browser, root):
         name = 'GitHub Copilot Plus · account 1'
         card = page.locator('.watch-account-grid .account-card').filter(has=page.get_by_role('heading', name=name))
         card_month = card.locator('.watch-quota-summary').filter(has_text='Monthly').locator('.watch-period-cost')
-        monthly_row = chart.get_by_role('listitem').filter(has_text=name)
-        for period, label, unit, mode, amount in [
-            ('month', 'This month', 'usd', 'used', '$7.95'),
-            ('today', 'Today', 'credits', 'used', '795'),
-            ('7-days', '7 days', 'usd', 'remaining', '$2.05'),
-            ('30-days', '30 days', 'usd', 'used', '$7.95'),
+        total = chart.get_by_role('listitem').filter(has_text=name).locator('.account-timeline-legend-value')
+        for period, label, unit, mode, card_amount, bucket_sum in [
+            ('month', 'This month', 'usd', 'used', '$7.95', '$1000.10'),
+            ('today', 'Today', 'credits', 'used', '795', '0'),
+            ('7-days', '7 days', 'usd', 'remaining', '$2.05', '$1000.10'),
+            ('30-days', '30 days', 'usd', 'used', '$7.95', '$1000.10'),
         ]:
             chart.get_by_role('button', name=label, exact=True).click()
-            page.wait_for_function('period => current.accountTimeline.view?.period === period', arg=period)
+            page.wait_for_function('''period => {
+                const view = current.accountTimeline.view;
+                return view?.period === period && !view.initial_pending_buckets.length;
+            }''', arg=period)
             page.evaluate('''([unit, mode]) => {
                 ReportView.setQuotaMode(mode); ReportView.setUnit(unit, current.accounts.root);
                 current.accountTimeline.draw();
             }''', [unit, mode])
-            expect(card_month).to_have_text(f'({amount})')
-            expect(monthly_row).to_have_text(f'{name} ({amount})')
-        print('Monthly legend PASS: visible card matches across all four chart periods, units and used/remaining')
+            expect(card_month).to_have_text(f'({card_amount})')
+            points = page.evaluate('''name => {
+                const view = current.accountTimeline.view, row = view.series.find(s => s.account === name);
+                return row.points.filter((_, i) => !view.future_buckets.includes(i));
+            }''', name)
+            # The longer ranges may extend before confirmed coverage. Derive the qualifier
+            # from the individual elapsed buckets, never from the very total under test.
+            assert any(p is not None for p in points), period
+            assert sum(Decimal(p['amount']) for p in points if p) == (0 if period == 'today' else 100010), period
+            partial = any(p is None or p['display'][unit].startswith('~') for p in points)
+            expect(total).to_have_text(('~' if partial else '') + bucket_sum)
+        print('Accounts range totals PASS: four periods, units and independent card used/remaining')
 
 
 def check_period_help(browser, root):
@@ -894,8 +903,8 @@ def check_best_effort(browser, root):
         point = low['points'][2]
         assert 0 < float(point['amount']) < 0.1 and point['display'] == {'usd': '~<$0.01', 'credits': '~<0.1'}, point
         total = chart.get_by_role('listitem').filter(has_text=low['account']).locator('.account-timeline-legend-value')
-        assert low['total']['display']['usd'].startswith('~') and float(low['total']['amount']) > 0, low['total']
-        expect(total).to_have_text('(?)')
+        assert Decimal(low['total']['amount']) == 60000 + Decimal(point['amount']), low['total']
+        expect(total).to_have_text('~$600.00')
         expect(total).not_to_have_class(re.compile('help-value'))
         target = plot.locator('.account-timeline-target[data-slot="2"]')
         tip = chart.locator('.account-timeline-tip')
@@ -934,7 +943,7 @@ def main():
             check(browser, root, options.screenshots)
             monthly = root / 'monthly'
             monthly.mkdir()
-            check_monthly_card(browser, monthly)
+            check_range_totals(browser, monthly)
             best_effort = root / 'best-effort'
             best_effort.mkdir()
             check_best_effort(browser, best_effort)

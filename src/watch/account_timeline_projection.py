@@ -27,10 +27,10 @@ class _ReadOnlyArchive(WebArchive):
     def generation(self, domain):
         return self.revision
 
-    def _open(self, *, write, check_same_thread=True):
+    def _open(self, *, write, check_same_thread=True, snapshot=True):
         if write:
             raise RuntimeError('account_projection_read_only')
-        return super()._open(write=False, check_same_thread=check_same_thread)
+        return super()._open(write=False, check_same_thread=check_same_thread, snapshot=snapshot)
 
 
 def _write(channel, value, limit):
@@ -169,8 +169,8 @@ class ArchivedAccountProjection:
         pricing = _pricing_input(prices() or catalog)
         request = _Request(self.sequence, archive_revision, _observation_input(observation),
                            tuple(periods), roster, zone, pricing, _migration_gap_input(migration_gap), now,
-                           {key: progress[key] for key in ('unavailable_history', 'live_roots', 'pending_history',
-                            'source_available', 'progress_roots') if key in progress})
+                            {key: progress[key] for key in ('unavailable_history', 'live_roots', 'pending_history',
+                             'source_available', 'progress_roots', 'defer_while_loading') if key in progress})
         self.child_cpu = 0
         try:
             _write(self.channel, request, MAX_REQUEST_BYTES)

@@ -133,10 +133,9 @@ const AccountTimelineView = (() => {
   }
 
   class View {
-    constructor(api, changeDemand, monthlyCost = () => '?') {
+    constructor(api, changeDemand) {
       this.api = api;
       this.changeDemand = changeDemand;
-      this.monthlyCost = monthlyCost;
       this.period = 'month';
       this.cache = new Map();
       this.entries = new Map();
@@ -181,6 +180,7 @@ const AccountTimelineView = (() => {
       this.plot.append(this.shades, this.highlight, this.layers, this.labels, this.targets);
       this.scroller.append(this.plot);
       this.range = e('p', undefined, 'account-timeline-range');
+      this.savedView = e('p', 'Saved view', 'account-timeline-saved');
       this.selectedLegend = e('ul', undefined, 'account-timeline-selected');
       this.selectedLegend.setAttribute('role', 'list');
       this.selectedLegend.setAttribute('aria-label', 'Selected accounts');
@@ -200,7 +200,7 @@ const AccountTimelineView = (() => {
       this.tooltip.append(tipHeader, this.tipValues);
       this.announce = e('span', '', 'sr-only');
       this.announce.setAttribute('role', 'status');
-      this.frame.append(this.axis, this.scroller, this.range, this.selectedLegend, this.tooltip);
+      this.frame.append(this.axis, this.scroller, this.range, this.savedView, this.selectedLegend, this.tooltip);
       graph.append(this.frame, this.empty, this.announce);
       this.chooser = e('button', undefined, 'account-timeline-chooser');
       this.chooser.type = 'button';
@@ -411,7 +411,7 @@ const AccountTimelineView = (() => {
           view.buckets.forEach(([start], index) => {
             if (previous?.has(start) || view.series.some(series => series.points[index] != null)) shown.add(start);
           });
-          this.cache.set(period, {revision: value.revision, view, shown});
+          this.cache.set(period, {revision: value.revision, view, shown, restored: value.restored === true});
           this.roster = value.view.series;
           this.draw();
         } else if (!value.unchanged) {
@@ -489,16 +489,15 @@ const AccountTimelineView = (() => {
       this.series.forEach((item, index) => {
         let entry = this.legendEntries.get(item.id);
         if (!entry) {
-          const row = e('li'), caption = e('span'), name = e('span');
+          const row = e('li'), name = e('span');
           const amount = e('span', undefined, 'account-timeline-legend-value');
-          caption.append(name, ' ', amount);
-          row.append(swatch(this.colors.get(item.id)), caption);
+          row.append(swatch(this.colors.get(item.id)), name, amount);
           entry = {row, name, amount};
           this.legendEntries.set(item.id, entry);
         }
         const {row, name, amount} = entry;
         ReportView.text(name, item.account);
-        ReportView.text(amount, `(${this.monthlyCost(item.id)})`);
+        ReportView.text(amount, item.total ? shown(item.total) : '—');
         const help = discrepancyHelp(item);
         if (entry.help !== help) {
           if (help) ContextHelp.value(amount, help);
@@ -567,6 +566,7 @@ const AccountTimelineView = (() => {
       const layout = sameGeometry ? this.layout : this.layout = layoutSlots(view, width);
       const {slots, group} = layout;
       this.range.hidden = !!unselected;
+      this.savedView.hidden = !!unselected || !cached?.restored;
       ReportView.text(this.range, `Range: ${rangeLabel(view, layout)}`);
       if (!sameGeometry) {
         const plotHeight = layout.hourly ? 230 : layout.crossYear ? 258 : 244;

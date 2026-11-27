@@ -440,7 +440,9 @@ class AccountTimeline:
         if self.snapshots is not None:
             # Only this tick's owner mutates the report frames; HTTP readers
             # observe the previous batch until the next batch is committed.
-            self.snapshots.publish(zone=zone, day=self.day, marker=self.marker, now=now, periods=periods,
+            restored = self.snapshots.restored_periods(periods - self.results.keys(), zone, self.day)
+            eligible = set(periods) - restored
+            self.snapshots.publish(zone=zone, day=self.day, marker=self.marker, now=now, periods=eligible,
                 results={**self.results, **self.seeded}, roster=self.public_roster,
                 ready=self.public_ready, active=self.active_periods, active_until=self.active_until)
 
@@ -609,6 +611,8 @@ class AccountTimeline:
             return marker
         self.last_started = now_ms
         self.archive_refresh_due = False
+        restored = (self.snapshots.restored_periods(periods - self.results.keys(), zone, day)
+                    if self.snapshots is not None else frozenset())
 
         def step():
             started = monotonic()
@@ -616,7 +620,7 @@ class AccountTimeline:
             job_revision = self.archive.generation(ARCHIVED_USAGE) if self.archive else None
             extra = dict(unavailable_history=unavailable_history, live_roots=live_roots, progress_roots=progress_roots,
                           pending_history=pending_history, source_available=coverage_confirmed,
-                          archive_revision=job_revision) if self.archive else {}
+                          archive_revision=job_revision, defer_while_loading=restored) if self.archive else {}
             values, more, removed = self.history.step(source, observation, sorted(periods), roster,
                 zone, catalog, prices, migration_gap, now_ms, foreground=bool(fast), preferred=foreground,
                  shared_roots=shared_roots, require_prices=require_background_prices and not foreground, **extra)

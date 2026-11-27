@@ -61,7 +61,7 @@ const point = {amount: '100', display: {credits: '100', usd: '$1.00'}};
 const first = {id: '00000000', account: 'Account A',
   points: [point, null], total: point, peak: '100', ticks: [{amount: '0', display: {credits: '0', usd: '$0.00'}}, point]};
 const second = {...first, id: '00000008', account: 'Account B'};
-const contents = node => node.textContent + node.children.map(contents).join('');
+const legendRow = node => node.children.slice(1).map(child => child.textContent);
 const start = Date.UTC(2026, 10, 1), day = 86_400_000;
 const frame = (scope, revision, pending, series, initial = pending, acquiring = true, price = 'price') =>
   ({scope, revision, acquiring,
@@ -73,8 +73,7 @@ async function check() {
   const calls = [];
   let demand = 0;
   const chart = new context.View((path, request, signal) =>
-    new Promise(resolve => calls.push({path, request, signal, resolve})), () => demand++,
-    id => id === first.id ? '74' : '32');
+    new Promise(resolve => calls.push({path, request, signal, resolve})), () => demand++);
   chart.active(true);
   chart.setScope('old');
   const old = chart.refresh();
@@ -112,9 +111,9 @@ async function check() {
   assert.equal(chart.tipTitle.textContent, '2026-11-02 Monday');
   assert.equal(chart.tipState.textContent, '');
   assert.equal(chart.announce.textContent, '2026-11-02 Monday. Account A: —. Account B: —');
-  assert.equal(contents(chart.selectedLegend.children[0]), 'Account A (74)');
+  assert.deepEqual(legendRow(chart.selectedLegend.children[0]), ['Account A', '100']);
   chart.inspect(null);
-  assert.equal(contents(chart.selectedLegend.children[0]), 'Account A (74)', 'closing the tooltip never clears Monthly');
+  assert.deepEqual(legendRow(chart.selectedLegend.children[0]), ['Account A', '100'], 'inspection does not change the range total');
   chart.choose(1);
   const check = chart.entries.get(second.id).input;
   assert.equal(check.checked, true, 'every available account starts selected');
@@ -140,7 +139,7 @@ async function check() {
   check.checked = true;
   check.events.change();
   assert.match(chart.entries.get(second.id).name.textContent, /^Renamed account/);
-  assert.deepEqual(chart.selectedLegend.children.map(contents), ['Renamed account (32)', 'Account A (74)']);
+  assert.deepEqual(chart.selectedLegend.children.map(legendRow), [['Renamed account', '100'], ['Account A', '100']]);
 
   const provisional = chart.refresh();
   const estimated = {amount: '0.00001', display: {credits: '~<0.1', usd: '~<$0.01'}};
@@ -328,19 +327,26 @@ async function checkBucketAmounts() {
   const series = cases.map(([account, total], i) => ({
     ...first, id: i.toString(16).padStart(8, '0'), account, total, points: [total, null]
   }));
-  const response = frame('current', 1, [], series);
+  const response = {...frame('current', 1, [], series), restored: true};
   const chart = new context.View(async () => response, () => {});
   chart.setScope('current');
   chart.active(true);
   await chart.refresh();
 
+  assert.equal(chart.savedView.hidden, false);
   for (const [displayUnit, column] of [['credits', 2], ['usd', 3]]) {
     unit = displayUnit;
     chart.draw();
     chart.choose(0);
+    assert.deepEqual(chart.selectedLegend.children.map(row => row.children.at(-1).textContent),
+      cases.map(([, total]) => total?.display[unit] ?? '—'));
     assert.deepEqual(chart.tipValues.children.map(row => row.children[2].textContent), cases.map(row => row[column]));
     for (const row of cases) assert.ok(chart.announce.textContent.includes(`${row[0]}: ${row[column]}`));
   }
+  response.restored = false;
+  response.revision++;
+  await chart.refresh();
+  assert.equal(chart.savedView.hidden, true);
 }
 
 async function checkOverlayRanks() {

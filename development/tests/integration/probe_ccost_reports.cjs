@@ -35,7 +35,7 @@ module.exports = async ({evaluate, until, owner, heading, checks}) => {
   checks.push('Frozen report reading guide, session/prompt/component headings and account scope labels, with reversible numeric sort.');
 
   await evaluate(owner, `(() => {
-    const chart = new AccountTimelineView.View(()=>{},()=>{},()=> '77');
+    const chart = new AccountTimelineView.View(()=>{},()=>{});
     document.body.append(chart.root);
     const start = Date.UTC(2026,10,1), end = start + 86400000;
     const amount = {amount:'100',display:{credits:'100',usd:'$1.00'}};
@@ -44,7 +44,7 @@ module.exports = async ({evaluate, until, owner, heading, checks}) => {
     const native = {...base,provider_monthly_total:true,month_total:amount,discrepancy_comparable:true};
     chart.cache.set(chart.period,{view:{period:chart.period,timezone_id:'UTC',start_ms:start,end_ms:end,
       buckets:[[start,end]],series:[
-        {...native,id:'00000001',account:'Monthly plan',observed_total:observed},
+        {...native,id:'00000001',account:'Monthly plan',points:[observed],total:observed,observed_total:observed},
         {...native,id:'00000002',account:'Same after rounding',observed_total:{...amount,amount:'100.001'}},
         {...native,id:'00000003',account:'Incomplete month',observed_total:observed,discrepancy_comparable:false},
         {...base,id:'00000004',account:'Non-native plan'},
@@ -53,8 +53,8 @@ module.exports = async ({evaluate, until, owner, heading, checks}) => {
   })()`);
   await heading(owner,'.account-timeline h2 button','CCost',/account and period/);
   const targets = '.account-timeline-selected [tabindex="0"]';
-  assert.deepEqual(await evaluate(owner,`[...document.querySelectorAll('${targets}')].map(n=>n.parentElement.textContent)`),
-    ['Monthly plan (77)']);
+  assert.deepEqual(await evaluate(owner,`[...document.querySelectorAll('${targets}')].map(n=>[n.previousElementSibling.textContent,n.textContent])`),
+    [['Monthly plan', '45']]);
   await evaluate(owner,`document.querySelector('${targets}').focus()`);
   await until(owner,`document.querySelector('${targets}').getAttribute('aria-describedby')?.includes('context-help')
     && document.querySelector('#context-help')?.matches(':popover-open')`);

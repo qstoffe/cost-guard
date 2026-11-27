@@ -183,6 +183,9 @@ class TimelineProjectionTests(unittest.TestCase):
         self.assertEqual('~150', rows[0]['points'][1]['display']['credits'])
         unknown = self.view(projected(a), (), start=None)
         self.assertTrue(all(p is None for p in unknown[0]['points']))
+        self.assertIsNone(unknown[0]['total'])
+        partial_zero, = self.view(projected(a), (), gaps=((NOV_1, NOV_1 + DAY_MS),))
+        self.assertEqual('~0', partial_zero['total']['display']['credits'])
 
     def test_priced_subtotal_survives_missing_price_provider_and_coverage(self):
         account = subscription()
