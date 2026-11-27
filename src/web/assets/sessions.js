@@ -49,6 +49,7 @@ const SessionsCatalog = (() => {
       const pan = el('div', undefined, 'sessions-table-pan'); pan.tabIndex = 0;
       pan.setAttribute('role', 'region'); pan.setAttribute('aria-label', 'Sessions');
       const table = el('table', undefined, 'sessions-table session-catalog-table');
+      if (!compact) table.classList.add('session-catalog-full');
       const head = el('thead'), header = el('tr'); this.headers = [];
       for (const [key, name, help] of (compact ? columns.slice(0, 2) : columns)) {
         const th = el('th'), button = el('button', name); th.scope = 'col';

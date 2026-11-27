@@ -476,8 +476,12 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 [data-section="ai-stats"] main, [data-section="token-mix"] main { padding-top: .65rem; }
 .sessions-table-pan { overflow-x: auto; max-height: none; border: 0; }
 .sessions-table { display: grid; width: 100%; min-width: max-content; table-layout: auto; }
-.session-catalog-table { grid-template-columns: 19ch minmax(12rem, 1fr) 24ch 14ch 9ch 12ch 8ch; }
-.session-catalog-table td:not(:nth-child(2)) > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.session-catalog-full { grid-template-columns: max-content minmax(12rem, 1fr) repeat(5, max-content); }
+/* Long names truncate without contributing to the table's scrollable minimum width. */
+.session-catalog-full td:has(> .session-name) { contain: inline-size; }
+.session-catalog-table:not(.session-catalog-full) td:not(:nth-child(2)) > span {
+  display: block; overflow: hidden; text-overflow: ellipsis;
+}
 .session-catalog-table td:not(:nth-child(2)) > span:focus-visible { outline-offset: -2px; }
 .session-catalog-table td:has(.metric-spinner) { text-align: center; }
 .session-history-table { grid-template-columns: minmax(32ch, 1fr) repeat(9, max-content);
