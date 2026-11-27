@@ -25,6 +25,7 @@ from src.reports.models import SessionUsageRow
 from src.reports.session_summary import encode_summary
 from src.watch.account_timeline_archive import ArchivedAccountTimeline
 from src.watch.account_timeline_projection import ArchivedAccountProjection
+from src.watch.account_timeline_snapshots import AccountTimelineSnapshots, DOMAIN as CHART_FRAMES
 from src.web.session_cache_events import SessionCacheEvents
 
 
@@ -121,6 +122,63 @@ class ReportCacheSnapshotTests(unittest.TestCase):
         restarted = SessionArchive(WebArchive(self.archive.path.parent))
         self.assertEqual((3, 0, 3, None, (True, 0), [('alpha', True), ('beta', True), ('gamma', True)]),
                          read(restarted, 0, 1))
+
+    def test_reopened_month_survives_a_partial_archive_slice_until_corrected_recent_usage_is_ready(self):
+        account = subscription()
+        roster = account_roster(projected(account))
+        catalog = FakePricingProvider().catalog
+        roots = [('early', NOV_1 + 1000), ('recent', NOV_5 - 1000)]
+        observation = SimpleNamespace(root_by_session={key: key for key, _ in roots}, sessions=[
+            SimpleNamespace(session_id=key, created_at_ms=at, updated_at_ms=at, archived_at_ms=None)
+            for key, at in roots])
+
+        def write(key, at, amount):
+            call = request(key, at, amount=amount, ref=account.ref)
+            self.archive.publish('source', DOMAIN, {key: ArchiveFact(str(amount), NOV_5 + amount,
+                {'account_usage': [encode_trace_entry(call)]})})
+
+        def project(owner, **kwargs):
+            return owner.step('source', observation, {'today', 'month'}, roster, 'UTC', catalog, lambda: catalog,
+                              None, NOV_5, source_available=True, **kwargs)[0]
+
+        for key, at in roots:
+            write(key, at, 1_000_000)
+        saved = project(ArchivedAccountTimeline(ArchivedUsage(self.archive)))['month'].to_json()
+        # The old compatible format persisted points but could misqualify the range total.
+        saved['series'][0]['total'] = None
+        day = NOV_1 + 4 * DAY_MS
+        self.archive.publish_checkpoint(CHART_FRAMES, {'month': ArchiveFact('saved', NOV_5 - 1,
+            dict(zone='UTC', day=day, scope='previous', view=saved, series=[], ready=True, active_until=1e12))})
+        write('recent', roots[-1][1], 3_000_000)
+
+        archive = WebArchive(self.archive.path.parent)
+        frames = AccountTimelineSnapshots(archive, None)
+        owner = ArchivedAccountTimeline(ArchivedUsage(archive))
+        def lookup():
+            return frames.lookup('month', None, zone='UTC', now=NOV_5)
+
+        protected = frames.restored_periods({'today', 'month'}, 'UTC', day)
+        changes = archive.history_changes
+        with patch.object(archive, 'history_changes', side_effect=lambda d, cursor: changes(d, cursor, limit=1)), \
+             patch('src.reports.archived_usage.monotonic', side_effect=[0, 5]):
+            partial = project(owner, defer_while_loading=protected)
+        self.assertEqual({'today'}, set(partial), 'a cold period may advance, but not at the expense of a saved one')
+        restored = lookup()
+        self.assertTrue(restored['restored'])
+        self.assertFalse(restored['acquiring'], 'do not revive the prior process activity cue')
+        row, = restored['view']['series']
+        self.assertEqual([100, 0, 0, 0, 100], [Decimal(p['amount']) for p in row['points'][:5]])
+        self.assertEqual('200', row['total']['display']['credits'])
+
+        current = project(owner, defer_while_loading=protected)
+        frames.publish(zone='UTC', day=day, marker='current', now=NOV_5, periods={'month'},
+                       results={'month': current['month'].to_json()}, roster=(), ready=True, active=(), active_until=0)
+        reply = lookup()
+        self.assertFalse(reply.get('restored'))
+        self.assertTrue(reply['view']['history_progress']['complete'])
+        row, = reply['view']['series']
+        self.assertEqual([100, 0, 0, 0, 300], [Decimal(p['amount']) for p in row['points'][:5]])
+        self.assertEqual('400', row['total']['display']['credits'])
 
     def test_owned_accounts_process_prices_committed_facts_and_rejects_a_regressed_result(self):
         quota = QuotaComponent('Monthly', 'fixed', unlimited=True, unit='AI credits',

@@ -41,10 +41,18 @@ class ArchivedAccountTimeline:
 
     def step(self, scope, observation, periods, roster, zone, catalog, prices, migration_gap, now_ms, *,
              unavailable_history=frozenset(), live_roots=frozenset(), pending_history=frozenset(),
-             source_available=False, progress_roots=None, **_):
+             source_available=False, progress_roots=None, defer_while_loading=frozenset(), **_):
         if not self.usage.archive.path.is_file():
             return {}, True, False
-        cursor, facts, more = self.usage.snapshot()
+        cursor, facts, more = self.usage.snapshot(seconds=0.8 if defer_while_loading else 0.2)
+        deferred = defer_while_loading if more else frozenset()
+        periods = tuple(name for name in periods if name not in deferred)
+        self.initial_periods = set(deferred)
+        if not periods:
+            # There is already a committed chart for every requested period.
+            # Rebuild the index once from the hydrated facts, not per cursor slice.
+            self.pending_periods = self.initial_periods.copy()
+            return {}, more, False
         catalog = prices() or catalog or PricingCatalog(())
         candidates = frozenset((route, item.account_key) for item in roster for route, _ in item.allocation)
         identities = tuple(replace(item, month=None) for item in roster)
@@ -92,7 +100,6 @@ class ArchivedAccountTimeline:
         # Without a current catalog we have values, not proof of absence.
         oldest = 0 if source_available and observation is not None and not more else None
         starts = {name: period_start(name, now_ms, zone) for name in periods}
-        self.initial_periods = set()
         values = {}
         for name, start in starts.items():
             initial = [span for key, span in historical.items() if span[1] > start and (

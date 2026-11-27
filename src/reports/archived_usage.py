@@ -35,13 +35,13 @@ class ArchivedUsage:
         self.facts = MappingProxyType({})
         self.complete_generation = None
 
-    def snapshot(self):
+    def snapshot(self, *, seconds=0.2):
         """Called on projection workers only. No consumer holds the shared lock while aggregating."""
         with self.lock:
             generation = self.archive.generation(DOMAIN)
             if generation == self.complete_generation:
                 return self.cursor, self.facts, False
-            deadline = monotonic() + 0.2
+            deadline = monotonic() + seconds
             next_facts = None
             cursor = self.cursor
             for _ in range(32):

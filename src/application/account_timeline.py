@@ -90,11 +90,28 @@ def _point(amount, mark=''):
 
 
 def _range_total(amounts):
-    subtotal = sum((point[0] for point in amounts if point is not None), Decimal(0))
-    uncertain = any(point is None or point[1] for point in amounts)
-    if not amounts or (uncertain and not subtotal):
+    known = tuple(point[0] for point in amounts if point is not None)
+    if not known:
         return None
-    return subtotal, '~' if uncertain else ''
+    uncertain = any(point is None or point[1] for point in amounts)
+    return sum(known, Decimal(0)), '~' if uncertain else ''
+
+
+def restore_range_totals(view):
+    """Older compatible checkpoints have the points but may misqualify their total."""
+    future = set(view['future_buckets'])
+    series = []
+    for item in view['series']:
+        amounts = []
+        for i, ((left, right), point) in enumerate(zip(view['buckets'], item['points'])):
+            if i in future:
+                continue
+            amount = Decimal(point['amount']) if point is not None else None
+            if left < right or amount:
+                amounts.append((amount, point['display']['credits'].startswith('~')) if point is not None else None)
+        total = _range_total(amounts)
+        series.append(dict(item, total=_point(*total).to_json() if total is not None else None))
+    return dict(view, series=series)
 
 
 def _calendar_details(period, window, end_ms, zone):
@@ -197,16 +214,11 @@ def timeline_view(period, now_ms, zone, roster, index, *, first_covered_ms, gaps
         peak = max((point[0] for point in amounts if point is not None), default=Decimal(0))
         points = tuple(_point(*point) if point is not None else None for point in amounts) + (None,) * len(window.future)
         # An empty boundary slot has no elapsed time, but may contain an event exactly at Now.
-        total = _range_total(tuple(point for (left, right), point in zip(elapsed, amounts)
-                                   if left < right or point is not None and point[0]))
-        exact_total = total is not None and not total[1]
-        if total is not None:
-            amount, mark = total
-            if not native and comparable and month.used is not None and month.used != amount:
-                # Retained history remains visible but is not a final same-window
-                # total while the current card and chart differ.
-                mark = '~'
-            total = _point(amount, mark)
+        elapsed_amounts = tuple(point for (left, right), point in zip(elapsed, amounts)
+                                if left < right or point is not None and point[0])
+        subtotal = _range_total(elapsed_amounts)
+        exact_total = subtotal is not None and not subtotal[1]
+        total = _point(*subtotal) if subtotal is not None else None
         # The browser chooses the largest visible series' scale, without
         # reimplementing the product's Decimal/unit formatting.
         discrepancy_comparable = (native and comparable and month.used is not None and exact_total

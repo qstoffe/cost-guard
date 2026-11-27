@@ -477,7 +477,8 @@ class DisplayHistoryTests(unittest.TestCase):
             self.assertTrue(frames.lookup('today', first['revision'], zone='UTC', now=self.now)['unchanged'])
 
         reopened = AccountTimelineSnapshots(WebArchive(self.directory), None)
-        self.assertEqual(first, reopened.lookup('today', None, zone='UTC', now=self.now))
+        self.assertEqual(dict(first, restored=True, acquiring=False),
+                         reopened.lookup('today', None, zone='UTC', now=self.now))
         for period, zone, now in (('month', 'UTC', self.now), ('today', 'UTC', self.now + DAY_MS),
                                   ('today', 'Europe/Stockholm', self.now)):
             with self.subTest(period=period, zone=zone, now=now):
