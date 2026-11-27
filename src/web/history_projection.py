@@ -26,11 +26,14 @@ class PreparedHistory:
     matches: MappingProxyType
     costs: MappingProxyType
     clock_points: tuple
+    report_gap: bool
 
     @classmethod
     def from_facts(cls, facts):
         roots, requests, prompt_of, matches, costs = [], [], {}, {}, {}
+        report_gap = False
         for key, fact in sorted(facts.items(), key=lambda pair: pair[1].report_rank):
+            report_gap |= fact.report_rank < fact.latest_rank
             if fact.report is None:
                 continue
             stats, usage, match = fact.report
@@ -55,7 +58,7 @@ class PreparedHistory:
         return cls(tuple(roots), deduplicated_requests(
             (entry for root in roots for entry in root.entries), shared_history=True),
             prepare_history_usage(requests, prompt_of, archived=True),
-             MappingProxyType(matches), MappingProxyType(costs), tuple(sorted(points)))
+             MappingProxyType(matches), MappingProxyType(costs), tuple(sorted(points)), report_gap)
 
 
 def observed_in_period(root, start, now):
@@ -156,7 +159,7 @@ class HistoryProjection:
             stats_progress = dict(cached=cached, complete=ready, remaining=None,
                                   unavailable=stats_unavailable, recovering=not available)
             mix_progress = dict(stats_progress, unavailable=unavailable_count, reconciling=reconciling,
-                                unverifiable=bool(unavailable_count or gap or mix_quality))
+                                 unverifiable=bool(unavailable_count or gap or mix_quality or prepared.report_gap))
             return verified, stats_progress, mix_progress
 
         for name, start in periods:
@@ -172,7 +175,10 @@ class HistoryProjection:
                                     all(root.source_complete and root.session_id in matches for root in period_roots))))
             mix_complete = complete and not mix_progress['unverifiable']
             if not mix_complete:
-                period.setdefault('coverage', 'partial')
+                # An unreadable fact's recorded usage time is unknown, so it
+                # cannot be excluded from any period using its ingestion clock.
+                period.setdefault('coverage', 'unknown' if prepared.report_gap and not mix.model_token_mix
+                                  else 'partial')
             mix = replace(mix, token_mix_period=period)
             reports['token-mix', name] = self._result(mix, service, config, identity, mix_complete, mix_progress)
         report = ReportProjection(ReportKind.AI_STATS, 'AI Stats', selection.selected.upper(),

@@ -8,6 +8,7 @@ from types import MappingProxyType, SimpleNamespace
 from src.analysis.ai_stats import StatsRoot
 from src.analysis.cache import decode_trace_entry
 from src.analysis.models import TraceEntry
+from src.cache.web_archive import UnreadableHistoryFact
 from src.domain import AccountRef, CostDisposition, ModelRef, TokenUsage
 
 from .ai_stats_evidence import INVALID, decoded
@@ -24,6 +25,7 @@ class UsageEvidence:
     account_rank: tuple = ()
     causal_prompts: dict | None = None
     last_request_ms: int = 0
+    latest_rank: tuple = ()
 
 
 class ArchivedUsage:
@@ -45,7 +47,7 @@ class ArchivedUsage:
             next_facts = None
             cursor = self.cursor
             for _ in range(32):
-                cursor, facts, more = self.archive.history_changes(DOMAIN, cursor)
+                cursor, facts, more = self.archive.history_changes(DOMAIN, cursor, include_unreadable=True)
                 if facts and next_facts is None:
                     next_facts = dict(self.facts)
                 for key, fact in facts:
@@ -59,7 +61,8 @@ class ArchivedUsage:
                         latest = max((old, decoded), key=lambda item: max(item.report_rank, item.account_rank))
                         next_facts[key] = UsageEvidence(latest.revision, latest.observed_ms,
                             report.report, accounts.accounts, report.report_rank, accounts.account_rank,
-                            report.causal_prompts, report.last_request_ms)
+                            report.causal_prompts, report.last_request_ms,
+                            max(old.latest_rank, decoded.latest_rank))
                 if not more or monotonic() >= deadline:
                     break
             if next_facts is not None:
@@ -70,8 +73,14 @@ class ArchivedUsage:
             return self.cursor, self.facts, more
 
     def _decode(self, key, fact):
+        if isinstance(fact, UnreadableHistoryFact):
+            observed, _, revision = fact.history_rank
+            return UsageEvidence(revision, observed, None, None, latest_rank=fact.history_rank)
         if 'legacy_requests' in fact.value:
-            return _decode_legacy(key, fact, retain_account_entries=self.retain_account_entries)
+            try:
+                return _decode_legacy(key, fact, retain_account_entries=self.retain_account_entries)
+            except INVALID:
+                return UsageEvidence(fact.revision, fact.observed_ms, None, None, latest_rank=fact.history_rank)
         try:
             root = SimpleNamespace(session_id=key, title=fact.value['title'],
                                    provenance=SimpleNamespace(source_instance='shared-history'))
@@ -96,8 +105,9 @@ class ArchivedUsage:
         return UsageEvidence(fact.revision, fact.observed_ms, report, accounts,
                               fact.history_rank if report is not None else (),
                               account_rank,
-                             fact.value.get('causal_prompts'),
-                             max((entry.completed_at_ms for entry, *_ in report[1]), default=0) if report else 0)
+                              fact.value.get('causal_prompts'),
+                              max((entry.completed_at_ms for entry, *_ in report[1]), default=0) if report else 0,
+                              fact.history_rank)
 
 
 def _account_entry(value):
@@ -145,6 +155,6 @@ def _decode_legacy(key, fact, *, retain_account_entries):
     root = StatsRoot(key, value['title'], entries, intervals, source_complete=False,
                      session_parents=tuple(tuple(pair) for pair in value['legacy_parents']), source_instance=fact.partition)
     return UsageEvidence(fact.revision, fact.observed_ms, (root, requests, None),
-                         entries if retain_account_entries else None,
-                         fact.history_rank, fact.history_rank, value['legacy_attribution'],
-                         max((entry.completed_at_ms for entry in entries), default=0))
+                          entries if retain_account_entries else None,
+                          fact.history_rank, fact.history_rank, value['legacy_attribution'],
+                          max((entry.completed_at_ms for entry in entries), default=0), fact.history_rank)

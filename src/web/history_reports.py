@@ -127,7 +127,8 @@ class HistoryReports:
         if kind is ReportKind.TOKEN_MIX:
             if fresh['token_mix_period']['start_ms'] != saved['token_mix_period']['start_ms'] and period != 'all':
                 return current
-            if not fresh['model_token_mix'] and saved['model_token_mix']:
+            if (current['source']['status'] != 'acquired'
+                    and not fresh['model_token_mix'] and saved['model_token_mix']):
                 # Retain values, not the old job's loading state or identity.
                 for key in ('token_mix', 'model_token_mix', 'publisher_token_mix'):
                     fresh[key] = saved[key]
