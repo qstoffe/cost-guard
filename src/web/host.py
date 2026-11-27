@@ -12,7 +12,6 @@ from src.analysis.account_timeline import PERIODS
 from src.analysis.timezones import calendar_periods, next_local_midnight_ms
 from src.cache.web_archive import WebArchive
 from src.reports import ReportKind
-from src.reports.archived_usage import ArchivedUsage
 from src.log_housekeeping import LogHousekeeping
 from src.config import ConfigError, load_configuration
 from src.watch.account_timeline import AccountTimeline
@@ -28,6 +27,7 @@ from .dispatch import DataDispatcher, source_identity
 from .cache_housekeeping import CacheHousekeeping
 from .database_sizes import database_sizes
 from .history_reports import HistoryReports
+from .history_process import ArchivedHistoryProcess
 from .report_cache_events import ReportCacheEvents
 from .session_cache_events import SessionCacheEvents
 from .watch_history import WatchHistory
@@ -59,7 +59,6 @@ class WebHost:
         self.observations = WebObservations()
         self.source_startup = None
         archive = None
-        usage = None
         if live_factory is None and jobs is None:
             from .source_startup import SourceStartup
             directory = root / 'cache' if store or previous_archive_directory is not None else archive_directory
@@ -69,22 +68,24 @@ class WebHost:
                     retain_writer=True, retain_session_readers=True,
                     notify_sessions=lambda times: self.session_cache_events.committed(times),
                     schedule_session_expiries=lambda times: self.session_cache_events.schedule_expiries(times))
-            usage = ArchivedUsage(archive) if archive is not None else None
             self.source_startup = SourceStartup(root, self.events.publish, self.stopping)
             live_factory = self.source_startup.acquire
-        self.report_cache_events = ReportCacheEvents(self.events) if usage else None
-        notify_reports = self.report_cache_events.committed if usage else None
+        self.report_cache_events = ReportCacheEvents(self.events) if archive is not None else None
+        notify_reports = self.report_cache_events.committed if self.report_cache_events else None
         if jobs is None:
             self.dispatcher = (DataDispatcher(self.jobs, owner_kinds=(ReportKind.NORMAL,), archive=archive,
                                                notify=notify_reports)
-                                if usage else DataDispatcher(self.jobs))
-        self.model_snapshots = self.dispatcher.models if usage else None
-        self.history_reports = HistoryReports(usage, self.dependencies.prices, notify=notify_reports) if usage else None
-        self.history_accounts = AccountTimeline(None, None, archived_usage=usage,
-                                               notify=notify_reports) if usage else None
-        self.watch_history = WatchHistory(usage, self.dependencies.prices, self.events.publish) if usage else None
+                                 if archive is not None else DataDispatcher(self.jobs))
+        self.model_snapshots = self.dispatcher.models if archive is not None else None
+        self.history_process = ArchivedHistoryProcess(archive) if archive is not None else None
+        self.history_reports = (HistoryReports(archive, self.dependencies.prices, self.history_process,
+                                               notify=notify_reports) if archive is not None else None)
+        self.history_accounts = AccountTimeline(None, None, archive=archive,
+                                                notify=notify_reports) if archive is not None else None
+        self.watch_history = (WatchHistory(archive, self.dependencies.prices, self.history_process,
+                                           self.events.publish) if archive is not None else None)
         self.history_config = {}
-        if usage:
+        if archive is not None:
             try:
                 self.history_config = load_configuration(root).values
             except ConfigError:
@@ -95,7 +96,7 @@ class WebHost:
         self.session_cache_events = SessionCacheEvents(self.events, self.history_zone,
             archive.next_ready_activity) if archive else None
         self.live = LiveRuntime(live_factory, self.events.publish, self.runtime_failed,
-             timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher and not usage else None,
+              timeline_demand=self.dispatcher.account_timeline_foreground if self.dispatcher and archive is None else None,
                archive=archive,
              timezone_id=self.history_zone) if live_factory else None
         if archive is not None and previous is not None:
@@ -358,6 +359,8 @@ class WebHost:
                     self.observations.lifecycle(self.store, code)
 
     def _close_history(self):
+        if self.history_process:
+            self.history_process.stop()
         try:
             if self.history_reports:
                 self.history_reports.close()
@@ -370,12 +373,16 @@ class WebHost:
                     if self.watch_history:
                         self.watch_history.close()
                 finally:
-                    if self.history_reports:
-                        archive = self.history_reports.archive
-                        try:
-                            archive.close_session_readers()
-                        finally:
-                            archive.close_writer()
+                    try:
+                        if self.history_process:
+                            self.history_process.close()
+                    finally:
+                        if self.history_reports:
+                            archive = self.history_reports.archive
+                            try:
+                                archive.close_session_readers()
+                            finally:
+                                archive.close_writer()
 
     def _tick_history_accounts(self, selection):
         accounts, source, observation, captured_at = self.live.account_observation
