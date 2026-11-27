@@ -39,7 +39,10 @@ function lifecycle(context, input) {
       const row = card.body.children[0];
       assert.equal(row.className, 'watch-running');
       assert.match(row['aria-label'], /Running/);
-      if (index && input.runningFrames) assert.match(row['aria-label'], /subagent activity/);
+      if (index && input.runningFrames) {
+        row.children[2].children[0].events.focus();
+        assert.match(context.document.body.children.at(-1).textContent, /subagent activity.*Parent attempt: cancellation/i);
+      }
     } else {
       assert.equal(card,undefined,'ended prompts leave Web Watch immediately');
       assert.equal(watch.history,undefined,'no replacement history subsection');
@@ -241,13 +244,16 @@ async function main() {
   const running = JSON.parse(JSON.stringify(completed));
   running.focal_id = running.rows[0].prompt.event_id = 'concurrent-focal';
   running.rows[0].prompt.in_progress = true;
+  running.ongoing = {phase:'running'};
   concurrent.view.active_cards = [completed, running];
   context.example = concurrent;
   context.concurrentParent = new Node('div'); context.concurrentState = {connection:'Live connected.'};
   vm.runInContext('ReportView.renderLive(concurrentParent, example, concurrentState)', context);
   const concurrentWatch = context.concurrentState.watch;
   assert.equal(concurrentWatch.active.children.length,1);
-  assert.equal(concurrentWatch.active.children[0].children[0].children[0].className, 'watch-running-title');
+  const heading = concurrentWatch.active.children[0].children[0];
+  assert.equal(heading.children[0].dataset.phase, 'running');
+  assert.equal(heading.querySelectorAll('a')[0].className, 'watch-running-title');
   concurrent.view.active_cards = [running];
   concurrent.view.history_cards = [{...completed, focal_id:''}];
   vm.runInContext('ReportView.renderLive(concurrentParent, example, concurrentState)', context);

@@ -287,8 +287,9 @@ class ExecutionObservationTests(unittest.TestCase):
                 partial = replace(self.source.load_session_snapshot('ses_current'), complete=False)
                 if kind == 'background':
                     partial = replace(partial, background=(BackgroundActivity(
-                        'new-work', 'ses_current', 'shell', 11_000, 'pending'),))
-                with patch.object(OpenCodeV2Source, 'load_session_snapshot', return_value=partial):
+                         'new-work', 'ses_current', 'shell', 11_000, 'pending', registry_verified=True),))
+                with patch.object(OpenCodeV2Source, 'load_session_snapshot', return_value=partial), \
+                        patch.object(OpenCodeV2Source, 'load_live_session_snapshot', return_value=partial):
                     active, _, _ = self.capture(20_000)
                     row = active[0].rows[0].prompt
                     self.assertTrue(row.in_progress)

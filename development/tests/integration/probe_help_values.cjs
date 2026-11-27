@@ -24,7 +24,7 @@ module.exports = async function values({command,evaluate,until,owner,mini,checks
     await evaluate(id,`document.querySelector(${JSON.stringify(selector)}).focus()`);
     await until(id,`document.querySelector('#context-help')?.matches(':popover-open')`);
     const text=await evaluate(id,`document.querySelector('#context-help').textContent`);
-    assert.match(text,new RegExp('^Prompt #'+(id===owner?'23':'37')+
+     assert.match(text,new RegExp('^Prompt #'+(id===owner?'23':'37: Keep completed literally…')+
       '\\nSession Models:\\n• fixture/main-model — High — \\(25 Credits\\)'));
     assert.match(text,/Sub Agents:\n• fixture\/child-model — Low — \(8 Credits\)/);
     assert.doesNotMatch(text,/Duration: N\/A/);
@@ -41,7 +41,7 @@ module.exports = async function values({command,evaluate,until,owner,mini,checks
     await evaluate(mini,`document.querySelector('.mini-prompts tr[data-id="root"] td:nth-child(3) .help-value').focus()`);
     await until(mini,`document.querySelector('#context-help')?.matches(':popover-open')`);
     const compact=await evaluate(mini,`document.querySelector('#context-help').textContent`);
-    assert.match(compact,new RegExp('^Prompt #\\d+\\nSession Models:\\n• fixture/main-model — High — \\('+total+
+     assert.match(compact,new RegExp('^Prompt #\\d+: Keep completed literally…\\nSession Models:\\n• fixture/main-model — High — \\('+total+
       '\\)\\n\\nSub Agents:\\n• fixture/child-model — Low — \\('+(unit==='credits'?'8 Credits':'\\$0.08')+
       '\\)(?:\\n\\nDuration: .+)?$'));
     assert.doesNotMatch(compact,/• Input:|• Cached input:|• Cache write:/,'Mini uses compact help, not the full category essay');

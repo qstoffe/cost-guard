@@ -53,7 +53,13 @@ module.exports=async({fixture,evaluate,until,command,sessionId,open,close,eviden
   await until(`miniWatch.view.promptRows.get(${JSON.stringify(upgrade)}).cells[2].textContent!==''`);
   assert.equal(await evaluate(`miniWatch.view.promptRows.get(${JSON.stringify(upgrade)})===upgradeNode`),true);
   assert.equal(await evaluate('upgradeNode.cells[3].textContent'),oldTotal,'qualified catalog total survives rich upgrade');
-  assert.match(await evaluate('upgradeNode.getAttribute("aria-label")'),/Completed/);
+  const appearance=await evaluate(`(()=>{const name=upgradeNode.querySelector('.mini-session');
+    return {name:name.textContent,label:upgradeNode.getAttribute('aria-label'),rowClass:upgradeNode.className,
+      icons:upgradeNode.querySelectorAll('.session-lifecycle-icon:not([hidden])').length};})()`);
+  assert.match(appearance.name,/^Synthetic \d+$/);
+  assert.equal(appearance.label,appearance.name+' · Prompt 1','hydrated history identifies the real prompt without a recent-terminal label');
+  assert.equal(appearance.rowClass,'');
+  assert.equal(appearance.icons,0,'a historical read is not a Live terminal transition');
   assert.equal(await evaluate('liveValue.view.history_epoch'),0,'one real representative is not global proof');
   await fixture('preview-two-running');
   await until('miniWatch.view.promptRows.has("preview-running-1")');

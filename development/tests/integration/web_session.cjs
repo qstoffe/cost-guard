@@ -3,13 +3,13 @@ const assert = require('node:assert/strict'), vm = require('node:vm'), fs = requ
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.events = {}; this.text = ''; this.attributes = {}; }
-  set textContent(value) { this.text = String(value); this.replaceChildren(); }
+  set textContent(value) { this.replaceChildren(); this.text = String(value); }
   get textContent() { return this.text + this.children.map(c => c.textContent).join(''); }
   get parentNode() { return this.parent; }
   get firstChild() { return this.children[0]; }
   get isConnected() { return Boolean(this.parent); }
   append(...children) { for (const child of children) { child.remove(); this.children.push(child); child.parent = this; } }
-  replaceChildren(...children) { for (const child of this.children) child.parent = null; this.children = []; this.append(...children); }
+  replaceChildren(...children) { for (const child of this.children) child.parent = null; this.children = []; this.text = ''; this.append(...children); }
   insertBefore(child, before) { child.remove(); const index = before ? this.children.indexOf(before) : this.children.length; this.children.splice(index, 0, child); child.parent = this; }
   after(child) { if (this.parent) this.parent.insertBefore(child, this.parent.children[this.parent.children.indexOf(this) + 1]); }
   remove() { if (this.parent) { this.parent.children.splice(this.parent.children.indexOf(this), 1); this.parent = null; } }
@@ -23,7 +23,8 @@ class Node {
 async function main() {
   let selected = null, offline = false, page = input.first;
   const calls = [], scrolls = [], delays = [], timers = new Map(); let timerId = 0;
-  const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag), activeElement: null, addEventListener(){}};
+  const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag),
+    createTextNode: text => Object.assign(new Node('#text'),{textContent:text}), activeElement: null, addEventListener(){}};
      const context = vm.createContext({document, console, Date, performance, URLSearchParams, AbortController, TextEncoder, location: {},
      history: {replaceState: (_, __, url) => { context.location.hash = url; }},
     setTimeout: (fn, delay) => { const id = ++timerId; if (!delay) fn(); else { timers.set(id, fn); delays.push(delay); } return id; },
@@ -367,7 +368,9 @@ async function main() {
    catalog.update({...catalogData,offset:25,total:26,view:{session_usage:[known]}});
    assert.equal(catalog.previous.disabled,false); assert.equal(catalog.next.disabled,true);
    assert.equal(catalog.body.children[0].className,'session-running');
-   assert.match(catalog.body.children[0].children[1].textContent,/^\[RUNNING\] Pending/);
+    assert.equal(catalog.body.children[0].statusIcon.textContent,'▶');
+    assert.doesNotMatch(catalog.body.children[0].children[1].textContent,/\[RUNNING\]/);
+    assert.equal(catalog.body.children[0].name.textContent,'Pending 0');
      assert.deepEqual(catalog.body.children[0].children.slice(2).map(cell=>cell.textContent),['','0.00','0','0s','']);
    selected=catalog.body.children[0].children[1];
    catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
@@ -439,7 +442,7 @@ async function main() {
      const rebasedView=context.rebasedCatalog;
      rebasedView.configure(new URLSearchParams('sort=ccost&direction=-1'));
      rebasedView.update({...usable,sort:'ccost',direction:-1,offset:25});rebasedView.attached=true;
-     const protectedRow=rebasedView.body.children[0], protectedLink=protectedRow.children[1].children[0];
+      const protectedRow=rebasedView.body.children[0], protectedLink=protectedRow.name;
      document.activeElement=protectedLink;protectedLink.blur=()=>{document.activeElement=null;};
      const savedSelection=selected;selected=null;
      let rebase=true;
@@ -462,7 +465,25 @@ async function main() {
     assert.ok(!catalog.body.children[0].children[1].textContent.includes('[RUNNING]'));
     assert.equal(catalog.body.children[0].children[1],selected,'status changes preserve selected title DOM');
     selected=null;
-     const liveRow=catalog.body.children[0], link=liveRow.children[1].children[0], model=liveRow.children[2].children[0];
+     const liveRow=catalog.body.children[0], link=liveRow.name, model=liveRow.children[2].children[0];
+     for(const [phase,label] of [['running','Running'],['background','Background activity'],['waiting','Scheduled / Waiting'],
+       ['completed','Completed'],['aborted','Aborted']]) {
+       const terminal=['completed','aborted'].includes(phase);
+       const value={...known,running:!terminal,ongoing:terminal?null:{phase},terminal_status:terminal?phase:null,
+         terminal_until_ms:terminal?Date.now()+30_000:null};
+       catalog.update({...catalogData,total:1,view:{session_usage:[value]}});
+       assert.equal(liveRow.statusIcon.attributes['aria-label'],label);
+       assert.equal(liveRow.statusIcon.hidden,false);
+       link.events.focus();
+       const panel=document.body.children.at(-1);
+       assert.equal(panel.children[0].dataset.phase,phase);
+       assert.deepEqual(panel.textContent.split('\n').slice(1),['Pending 0']);
+       assert.match(panel.textContent.split('\n')[0],new RegExp(label));
+     }
+     catalog.update({...catalogData,total:1,view:{session_usage:[{...known,running:false}]}});
+     link.events.focus();
+     assert.equal(document.body.children.at(-1).textContent,'Pending 0');
+     assert.equal(liveRow.statusIcon.hidden,true);
       const duration=liveRow.children[5].children[0];
       const prompts=liveRow.children[4].children[0];
      for(const state of ['pending','retained','ready','unavailable','ready']) {
@@ -485,7 +506,7 @@ async function main() {
       display:{ccost:'1.25?',duration_ms:'3s',model_help:'alpha/model\nbeta/model\nObserved so far; contributing model coverage may be incomplete.'},prompt_count:2};
      catalog.update({...catalogData,total:1,view:{session_usage:[multiple]}});
      assert.equal(liveRow.children[2].textContent, 'Main Model*');
-    assert.equal(liveRow.children[1].children[0],link,'focused link survives live metric deltas');
+     assert.equal(liveRow.name,link,'focused link survives live metric deltas');
     assert.equal(liveRow.children[2].children[0],model,'metric/help target remains keyed');
      assert.equal(liveRow.children[3].textContent,'1.25?','focus cannot freeze live cost');
      assert.equal(liveRow.children[4].textContent,'2');

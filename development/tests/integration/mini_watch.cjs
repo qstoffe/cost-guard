@@ -111,7 +111,7 @@ function setup() {
     assert.equal(helpText(view.summary),'Return to Watch in the Existing Parent Tab');
   assert.equal(view.daily.querySelectorAll('button').length,0,'daily has no help cue');
   assert.match(cardRow(0).attributes['aria-label'], /Prompt 23 · Running/);
-  assert.match(cardRow(0).children[0].textContent, /^▶ /);
+  assert.equal(cardRow(0).statusIcon.textContent, '▶');
   const contextItem = input.view.active_cards[0].rows[0], originalContext = contextItem.live_context;
   for (const formatted of ['123 456', '234 567', '0', '~source-format']) {
     contextItem.live_context = {display:{watch_next_context_tokens:formatted}};
@@ -288,9 +288,11 @@ function setup() {
   for (const [outcome, className, label] of [
     [{in_progress:false,completed_successfully:true},'mini-success','Completed'],
     [{in_progress:false,completed_successfully:false,aborted:true,abort_reason:'quota_limit'},'mini-error','Aborted · quota limit'],
-    [{in_progress:false,completed_successfully:false,aborted:false,has_error:true},'mini-error','Error'],
-    [{in_progress:false,completed_successfully:false,aborted:false,has_error:false},'','Ended']]) {
+     [{in_progress:false,completed_successfully:false,aborted:false,has_error:true},'','Error'],
+     [{in_progress:false,completed_successfully:false,aborted:false,has_error:false},'','Prompt 24']]) {
     const saved = {...prompt}, savedView = input.view;
+    Object.assign(originals[1],{ongoing:null,terminal_status:outcome.aborted?'aborted':outcome.completed_successfully?'completed':null,
+      terminal_until_ms:now+30_000});
     Object.assign(prompt, outcome, {completed_at_ms:10000}); controller.update(input);
     const terminal = view.promptRows.get(originals[1].session_id);
      assert.equal(terminal.className,className); assert.ok(terminal.attributes['aria-label'].includes(label));
@@ -302,15 +304,16 @@ function setup() {
     controller.update(input);
     assert.equal(view.promptRows.get(originals[1].session_id),terminal,'source handoff reuses the row');
     assert.equal(terminal.className,'','historical outcome does not retain terminal emphasis');
-    assert.ok(terminal.attributes['aria-label'].includes(label));
+     assert.equal(terminal.statusIcon.hidden,true);
     input.view = {...input.view,cards_state:'unavailable',active_cards:[],history_state:'refreshing'};
     for (const state of ['running','recovering','running']) {
       controller.update({...input,state}); controller.render();
        assert.equal(terminal.className,'','retention/retry does not restart completion');
        assert.doesNotMatch(terminal.children[0].textContent,/▶/);
     }
-     input.view = savedView; Object.assign(prompt,saved); controller.update(input);
-     assert.match(terminal.children[0].textContent,/^▶ /,'the next verified running publication restores its own cue');
+      input.view = savedView; Object.assign(prompt,saved);
+      Object.assign(originals[1],{ongoing:{phase:'running'},terminal_status:null,terminal_until_ms:null}); controller.update(input);
+      assert.equal(terminal.statusIcon.textContent,'▶','the next verified running publication restores its own cue');
   }
   input.view.active_cards = []; controller.update(input);
   assert.match(view.body.textContent,/No earlier sessions/);
@@ -377,7 +380,7 @@ function setup() {
   controller.update({...input, state: 'recovering'}); assert.equal(view.health.hidden,true); assert.equal(view.root.dataset.live,'false');
   controller.update(input);
   // A failed/partial read cannot erase rows or advance the independent clocks.
-  const retainedText = view.body.textContent, beforeDaily = view.daily.textContent;
+  const retainedText = view.body.textContent.replaceAll('▶',''), beforeDaily = view.daily.textContent;
   const healthy = JSON.parse(JSON.stringify(input));
   input.view = {...input.view,active_cards:[],cards_state:'unavailable',daily_state:'retrying',quota_stale:true,
     daily_usage:{...daily,total:{...daily.total,display_units:{usd:{known_ccost:'$999'}}}}};

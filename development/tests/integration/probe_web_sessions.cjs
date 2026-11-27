@@ -2,6 +2,23 @@
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
 const {spawn} = require('node:child_process'), readline = require('node:readline');
 const [browser, output, mode] = process.argv.slice(2);
+async function checkRunningPager(evaluate, until) {
+  await evaluate(`(()=>{window.pagerOriginal=current.catalog.data;const value=structuredClone(pagerOriginal);
+    value.total=1234567;value.view.session_usage[0].running=true;current.catalog.update(value);})()`);
+  await until(`(()=>{const row=document.querySelector('.session-catalog-table tbody tr');return row.classList.contains('session-running') &&
+    new Set([...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color)).size===1;})()`);
+  const pager=await evaluate(`(() => {
+    const bar=document.querySelector('.page-navigation'),label=bar.querySelector(':scope > span').getBoundingClientRect(),
+      buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
+    const row=document.querySelector('.session-catalog-table tbody tr'),colors=[...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color);
+    const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),
+      overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),
+      colors:[...new Set(colors)],marker:row.cells[1].querySelector('[data-phase="running"]:not([hidden])')?.textContent==='▶'&&!row.cells[1].textContent.includes('[RUNNING]'),
+      labelOnly:[...bar.querySelectorAll('button')].every(b=>!b.children.length && b.childNodes.length===1 && b.firstChild.nodeType===Node.TEXT_NODE && !b.hasAttribute('aria-busy'))};
+    current.catalog.update(pagerOriginal);window.pagerOriginal=null;return result;})()`);
+  assert.ok(pager.center<2);assert.equal(pager.overlap,false);assert.equal(pager.colors.length,1,JSON.stringify(pager));assert.equal(pager.marker,true);
+  assert.equal(pager.labelOnly,true,'all pager states use only meaningful text, never a reserved spinner slot');
+}
 async function main() {
   assert.ok(path.isAbsolute(browser) && path.isAbsolute(output));
   const directory = path.dirname(output);
@@ -100,7 +117,15 @@ async function main() {
        const request=fetch;window.fetch=(url,options)=>{if(url==='/api/reports')reportKinds.push(JSON.parse(options.body).kind);return request(url,options);};`},sessionId);
       await command('Page.navigate',{url:launch.url},sessionId);
             await until('typeof csrf !== "undefined" && csrf && hostState.kind === "connected"');
-            if (mode === '--archive') {
+             if (mode === '--running-pager') {
+               await evaluate(`location.hash='#/sessions'`);
+               await until('current.catalog?.data?.total===120 && !current.catalog.busy');
+               await evaluate(`current.catalog.detach()`);
+               await checkRunningPager(evaluate,until);
+               evidence={outcome:'PASS',browser:version.product,checks:['Running icon, row text and centered Sessions pager']};
+               return;
+             }
+             if (mode === '--archive') {
               const timings=await require('../fixtures/sessions_archive_browser.cjs')({
                 evaluate,until,fixture,command:(method,params)=>command(method,params,sessionId)});
               assert.deepEqual(errors,[]);
@@ -560,18 +585,7 @@ async function main() {
            await fs.writeFile(path.join(directory,'table-'+route.replaceAll('/','-')+'.png'),Buffer.from(image.data,'base64'));
          }
           if (route==='sessions') {
-            await evaluate(`(()=>{window.pagerOriginal=current.catalog.data;const value=structuredClone(pagerOriginal);
-              value.total=1234567;value.view.session_usage[0].running=true;current.catalog.update(value);})()`);
-            await until(`(()=>{const row=document.querySelector('.session-catalog-table tbody tr');return row.classList.contains('session-running') &&
-              new Set([...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color)).size===1;})()`);
-            const pager=await evaluate(`(() => {
-              const bar=document.querySelector('.page-navigation'),label=bar.querySelector(':scope > span').getBoundingClientRect(),buttons=[...bar.querySelectorAll('button')].map(b=>b.getBoundingClientRect()),bounds=bar.getBoundingClientRect();
-             const row=document.querySelector('.session-catalog-table tbody tr'),colors=[...row.querySelectorAll('td,a,span,button')].map(n=>getComputedStyle(n).color);
-               const result={center:Math.abs((label.left+label.right)/2-(bounds.left+bounds.right)/2),overlap:buttons.some(b=>b.left<label.right&&b.right>label.left&&b.top<label.bottom&&b.bottom>label.top),colors:[...new Set(colors)],marker:row.cells[1].textContent.startsWith('[RUNNING] '),
-                 labelOnly:[...bar.querySelectorAll('button')].every(b=>!b.children.length && b.childNodes.length===1 && b.firstChild.nodeType===Node.TEXT_NODE && !b.hasAttribute('aria-busy'))};
-               current.catalog.update(pagerOriginal);window.pagerOriginal=null;return result;})()`);
-             assert.ok(pager.center<2);assert.equal(pager.overlap,false);assert.equal(pager.colors.length,1,JSON.stringify(pager));assert.equal(pager.marker,true);
-              assert.equal(pager.labelOnly,true,'all pager states use only meaningful text, never a reserved spinner slot');
+             await checkRunningPager(evaluate,until);
          }
         }
        } catch(error) {

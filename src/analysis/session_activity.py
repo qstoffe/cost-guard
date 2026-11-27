@@ -2,10 +2,11 @@
 from collections import defaultdict
 
 from src.domain import EventKind, MessageRole
+from src.domain.models import OngoingStatus
 from src.domain.session_tree import root_by_session
 
-from .child_activity import descendant_activity
-from .child_links import ChildLinkIndex
+from .child_activity import descendant_activity, running_tool
+from .child_links import OPEN_END, ChildLinkIndex
 from .prompt_index import prompt_owners
 
 KINDS = {EventKind.USER_PROMPT, EventKind.SUBTASK, EventKind.COMPACTION}
@@ -52,6 +53,43 @@ def _terminal_outcomes(prompts, root_id):
             ('aborted' if record.aborted else 'completed' if record.completed_successfully else None)
             for record in prompts if record.session_id == root_id and not record.execution_unverified
             and not record.in_progress}
+
+
+def _ongoing(snapshot, children, event, messages, running, *, newest, child_candidates):
+    """Use owned jobs/continuations without turning dormant time into execution."""
+    if newest and running and snapshot.root.active is True:
+        return OngoingStatus('running')
+    if not (snapshot.background or snapshot.continuations):
+        if running or (child_candidates and descendant_activity(snapshot, children, children.scopes(messages))[0]):
+            return OngoingStatus('running')
+        return None
+    scopes = children.scopes(messages)
+    if (running and any(running_tool(message, foreground_only=True) for message in messages)) or (
+            child_candidates and descendant_activity(snapshot, children, scopes, foreground_only=True)[0]):
+        return OngoingStatus('running')
+    owned = {(message.session_id, message.message_id)
+             for message in (*messages, *children.messages(scopes))}
+    job = next((job for job in snapshot.background if job.running and job.registry_verified
+                and (job.session_id, job.owner_message_id) in owned), None)
+    if job is not None:
+        kind = 'shell' if job.kind in ('shell', 'bash', 'functions.shell', 'functions.bash') else 'job'
+        awaits = f'A descendant {kind}' if job.session_id != event.session_id else f'A background {kind}'
+        return OngoingStatus('background', awaits=awaits)
+    if running or (child_candidates and descendant_activity(snapshot, children, scopes)[0]):
+        return OngoingStatus('running')
+    if newest:
+        continuations = [item for item in snapshot.continuations or () if (
+            item.session_id == event.session_id and event.created_at_ms <= item.created_ms or any(
+                item.session_id == scope.session_id and scope.invocation_end_ms == OPEN_END
+                and scope.start_ms <= item.created_ms < scope.end_ms
+                and not any(child.session_id == scope.session_id and child.kind in KINDS
+                            and item.created_ms < child.created_at_ms < scope.end_ms
+                            for child in snapshot.events)
+                for scope in scopes))]
+        if continuations:
+            first = min(continuations, key=lambda item: (item.wake_at_ms is None, item.wake_at_ms or 0))
+            return OngoingStatus('waiting', first.wake_at_ms, first.awaits)
+    return None
 
 
 def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
@@ -126,21 +164,26 @@ def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
     has_live_children = any(session.active is True for session in snapshot.sessions
                             if session.session_id != snapshot.root.session_id) or any(
         session_id != snapshot.root.session_id for session_id, _ in running)
-    live = None
+    live = ongoing = waiting = None
     for event in root_events:
         key = event.session_id, event.event_id
-        if key in running:
-            live = event
+        status = _ongoing(snapshot, children, event, attempts[key], key in running,
+                          newest=event is root_events[0], child_candidates=has_live_children)
+        if status is None:
+            continue
+        if status.phase == 'waiting':
+            waiting = status
+        else:
+            live, ongoing = event, status
             break
-        if has_live_children:
-            scopes = children.scopes(attempts[key])
-            if scopes and descendant_activity(snapshot, children, scopes)[0]:
-                live = event
-                break
+    if live is None and waiting is not None:
+        live, ongoing = root_events[0], waiting
+    outcomes = (_terminal_outcomes(item.bundle.prompts, snapshot.root.session_id)
+                if snapshot.continuations is None or on_prompt_ends is not None else {})
     if on_prompt_ends is not None and snapshot.complete and live is None:
-        outcomes = _terminal_outcomes(item.bundle.prompts, snapshot.root.session_id)
         on_prompt_ends({key: outcomes.get(key) for key in
-                        _observed_ends(snapshot, children, root_events, attempts, owners, unsettled, ended_attempts)})
+                        _observed_ends(snapshot, children, root_events, attempts, owners, unsettled, ended_attempts)
+                        if snapshot.continuations is not None or outcomes.get(key) == 'aborted'})
     focal = live or (root_events[0] if root_events else None)
     start = focal.created_at_ms if focal is not None else None
     if type(start) is not int or start <= 0:
@@ -155,7 +198,8 @@ def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
     focal_children = children.messages(children.scopes(attempts[key]))
     child_keys = _prompt_keys(focal_children, owners)
     terminal = terminals.get(key)
-    if terminal is not None and not is_running and not (child_keys & unsettled):
+    if (terminal is not None and not is_running and not (child_keys & unsettled)
+            and (snapshot.continuations is not None or outcomes.get((start, focal.event_id)) == 'aborted')):
         message_ids = {(message.session_id, message.message_id) for message in (*attempts[key], *focal_children)}
         background = [work for work in snapshot.background
                       if (work.session_id, work.owner_message_id) in message_ids]
@@ -171,4 +215,4 @@ def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
         on_activity(values, snapshot.complete)
     return dict(last_activity_ms=start if is_running else terminal, activity_qualified=snapshot.complete,
                 running=is_running, activity_prompt_id=focal.event_id, prompt_started_ms=start,
-                activity_latest_ms=max(values, default=None))
+                activity_latest_ms=max(values, default=None), ongoing=ongoing)

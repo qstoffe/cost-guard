@@ -14,6 +14,7 @@ from src.analysis.token_mix import TokenMix
 from src.analysis.valuation import ComparisonCost
 from src.analysis.session_cost import SessionCost, SessionCostGroup
 from src.domain import AccountRef, AccountUsageStatus as Status, QuotaComponent
+from src.domain.models import OngoingStatus
 from src.reports.watch_context import WatchContextGuidance
 from src.reports.models import QuotaPeriodProjection
 from src.reports.prompt_costs import PromptCostPart
@@ -73,14 +74,14 @@ def summary_watch():
         running_tool="shell", running_ms=41000, background_kinds=("subagent",), background_ms=55000,
         skills=(SkillObservation("custom-skill", 1),))
     card = WatchCard("root", "Synthetic active session", "prompt", (WatchRow("root", "Session", item, "▶", tool),),
-        state="observed", session_context=guidance,
+        state="observed", ongoing=OngoingStatus("running"), session_context=guidance,
         session_cost=SessionCost(ComparisonCost(D("4582.125"), 2000, 2000), True, True,
             main_ccost=D(4000), subagent_ccost=D("582.125"), groups=(
                 SessionCostGroup(0, "fixture", "main-model", ("main-model",), (), D(4000), 1600, True, "High"),
                 SessionCostGroup(1, "fixture", "child-model", ("child-model",), (), D("582.125"), 400, True, "Low"))),
         session_cost_state="observed",
         observed_at_ms=NOW)
-    history = replace(card, session_id="past", title="Synthetic earlier session", focal_id="",
+    history = replace(card, session_id="past", title="Synthetic earlier session", focal_id="", ongoing=None,
         rows=(WatchRow("past", "Earlier", replace(item, in_progress=False, completed_at_ms=NOW - 1000)),),
         session_context=replace(guidance, severity=PriceWarningSeverity.APPROACHING,
             text="[Approaching price threshold >100.0K]", multiplier=None))

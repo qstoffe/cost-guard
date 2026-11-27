@@ -63,14 +63,16 @@ const MiniWatch = (() => {
       const previous = this.view;
       const prompts = view.cards_state === 'observed';
       const oldCards = new Map((previous?.active_cards || []).map(card =>
-        [JSON.stringify([card.session_id, card.focal_id]), card]));
+        [JSON.stringify([card.session_id, card.focal_id]),
+          {...card, ongoing: null, terminal_status: null, terminal_until_ms: null}]));
       const cards = (view.active_cards || []).map(card => {
         const key = JSON.stringify([card.session_id, card.focal_id]);
         if (!this.clocks.has('prompt:' + key)) this.clocks.set('prompt:' + key, {token: null, at: now});
         if (card.state === 'observed') this.observed('prompt:' + key, card.observed_at_ms, now);
         const old = oldCards.get(key);
         const value = card.state === 'observed' ? card :
-          old ? {...old, state: card.state, session_summary: card.session_summary} : card;
+          old ? {...old, state: card.state, session_summary: card.session_summary, ongoing: card.ongoing,
+            terminal_status: card.terminal_status, terminal_until_ms: card.terminal_until_ms} : card;
         const qualified = this.context(value);
         oldCards.set(key, qualified); return qualified;
       });
@@ -172,7 +174,8 @@ const MiniWatch = (() => {
     for (const card of view?.active_cards || []) for (const item of card.rows || []) {
       const prompt = item.prompt;
       if (!card.focal_id || prompt.event_id !== card.focal_id || prompt.is_compaction) continue;
-      if (prompt.execution_unverified) add(unverified, card, item, {usesStart: true});
+      if (card.ongoing) add(active, card, item, {running: true, usesStart: true});
+      else if (prompt.execution_unverified) add(unverified, card, item, {usesStart: true});
       else if (prompt.in_progress) add(active, card, item, {running: true, usesStart: true});
       else add(finished, card, item);
     }
@@ -219,7 +222,7 @@ const MiniWatch = (() => {
   const hydrationDetail = value => hydrationHelp[value?.hydration_state] || 'Waiting for an available history slot.';
   function measurementRow(view) {
     const row = view.sessionRow(); row.inert = true; row.setAttribute('aria-hidden', 'true');
-    row.children[0].children[0].textContent = '23:59';
+    row.time.textContent = '23:59';
     row.children[1].children[0].children[0].textContent = 'Session';
     row.children[2].children[0].textContent = '90 000';
     row.children[3].children[0].textContent = '90 000';
@@ -448,13 +451,14 @@ const MiniWatch = (() => {
       const row = this.el('tr');
       for (let index = 0; index < 5; index++) row.append(this.el('td'));
       const time = this.el('span', '', 'mini-activity');
-      const indicator = this.el('span', '', 'mini-activity-running'); indicator.setAttribute('aria-hidden', 'true');
-      time.append(indicator, this.el('span'));
-      ContextHelp.value(time, () => row.activityHelp || 'Unknown finish time'); row.children[0].append(time);
+      row.statusIcon = this.el('span');
+      ContextHelp.value(time, () => row.activityHelp || 'Unknown finish time');
+      row.children[0].append(row.statusIcon, time);
+      row.time = time;
       const cell = row.children[1], value = this.el('span', undefined, 'mini-session-value');
       cell.className = 'mini-session-cell';
       const title = this.el('span', '', 'mini-session');
-      ContextHelp.value(title, () => row.sessionHelp);
+      ContextHelp.value(title, '');
       value.append(title);
       cell.append(value);
       const promptCost = this.el('span', '', 'mini-cost-value'), sessionCost = this.el('span', '', 'mini-cost-value');
@@ -468,14 +472,16 @@ const MiniWatch = (() => {
       ReportView.text(cell.children[0].children[0], title);
       return title;
     }
-    rowHelp(row, session, item, card, historical) {
-      const number = item?.prompt?.prompt_number;
-      const preview = promptPreview(item?.prompt);
-      const identity = number == null ? 'Prompt number unavailable' : 'Prompt #' + number;
-      row.sessionHelp = `${session}\n${identity}${preview ? (number == null ? '\nPrompt: ' : ': ') + preview : ''}`;
+    rowHelp(row, item, card, historical, catalog) {
       const prompt = item?.prompt;
       const highlight = !historical && prompt?.in_progress && !prompt.execution_unverified && !prompt.aborted && !prompt.has_error;
-      row.costHelp = this.promptDetails(item, highlight);
+      const number = prompt?.prompt_number, preview = promptPreview(prompt);
+      const identity = number == null ? 'Prompt number unavailable' : 'Prompt #' + number;
+      const retained = catalog && ['refreshing', 'retrying', 'unavailable', 'partial'].includes(card.state);
+      row.costHelp = WatchView.promptDetails(item, highlight, {
+        heading: identity + (preview ? ': ' + preview : ''),
+        footnote: retained ? '\nProvisional or retained while prompt details are rechecked.' : ''
+      });
       const source = card.session_summary?.context, warning = source?.warning;
       const exceeded = warning?.severity === 'exceeded' && source.context_state === 'ready-current' &&
         Number.isFinite(source.watch_next_context_tokens) && warning.guidance_state === 'ready';
@@ -515,27 +521,22 @@ const MiniWatch = (() => {
       if (!row.children[4].className.includes('help-value')) row.children[4].tabIndex = -1;
     }
     drawPreview(row, card, activity, now, today) {
-      const text = ReportView.text, session = this.drawSession(row.children[1], card);
+      const session = this.drawSession(row.children[1], card);
       const help = hydrationDetail(card);
       const reason = card.hydration_reason === 'http_auth_failure' ? ' Source authorization is required.' : '';
       row.className = ''; row.setAttribute('aria-label', session + ' · Session activity');
-      row.sessionHelp = `${session}\n${help}${reason}`;
+      ReportView.sessionLifecycle(row.statusIcon, row.children[1].children[0].children[0], null, session);
       row.contextHelp = ''; row.children[4].classList.toggle('mini-context-exceeded', false);
       row.children[4].dataset.guidance = 'pending';
-      const time = row.children[0].children[0];
-      text(time.children[0], '');
       // Generic activity only; no synthetic prompt, event ID or finish outcome.
       const pending = activity.at == null && card.activity_ms === null &&
         ['queued', 'reading', 'waiting', 'retrying'].includes(card.hydration_state);
-      ReportView.valueSlot(time.children[1], activityLabel(activity, now, today), {pending, field: 'session activity'});
+      ReportView.valueSlot(row.time, activityLabel(activity, now, today), {pending, field: 'session activity'});
       row.activityHelp = activity.at == null ? help + reason : activityHelp(activity);
       this.drawMetrics(row, card, null, card, null);
     }
     costGroups(value, session = false) {
       return WatchView.costGroups(value, session);
-    }
-    promptDetails(item, highlight) {
-      return WatchView.promptDetails(item, highlight);
     }
     update(publication, health, overdue, observations, now) {
       const snapshot = observations.snapshot(now);
@@ -582,28 +583,23 @@ const MiniWatch = (() => {
         }
         row.dataset.running = String(running);
         if (preview) { this.drawPreview(row, card, activity, now, today); wanted.push(row); continue; }
-        const outcome = prompt?.execution_unverified ? 'Unverified' : prompt?.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt?.aborted ? 'Aborted' : prompt?.has_error ? 'Error' : prompt?.completed_successfully ? 'Completed' : 'Ended';
+        const status = historical ? null : ReportView.lifecycle(card, view?.timezone_id, now);
+        const outcome = status?.label || (prompt?.execution_unverified ? 'Unverified' :
+          prompt?.has_error && !prompt?.aborted ? 'Error' : '');
         const reason = !usesStart && prompt?.abort_reason ? ' · ' + prompt.abort_reason.replaceAll('_', ' ') : '';
         const session = this.drawSession(row.children[1], card);
+        ReportView.sessionLifecycle(row.statusIcon, row.children[1].children[0].children[0], status, session);
         const summaryContext = card.session_summary?.context;
         const source = historical || summaryContext?.context_scope ? summaryContext : item?.live_context;
-        this.rowHelp(row, session, item, card, historical);
-        row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'} · ${outcome}${reason}`);
-        row.className = historical || prompt?.execution_unverified ? '' : prompt?.in_progress ? 'mini-running' : prompt?.aborted || prompt?.has_error ? 'mini-error' : prompt?.completed_successfully ? 'mini-success' : '';
+        this.rowHelp(row, item, card, historical, catalog);
+        row.setAttribute('aria-label', `${session} · Prompt ${prompt?.prompt_number ?? 'unknown'}${outcome ? ` · ${outcome}${reason}` : ''}`);
+        row.className = status ? `mini-${{running: 'running', completed: 'success', aborted: 'error'}[status.row]}` : '';
         row.activityHelp = activity.generic ? activityHelp(activity) :
           activity.full || (usesStart ? 'Unknown start time' : 'Unknown finish time');
-        const time = row.children[0].children[0];
-        const verifiedRunning = !historical && prompt?.in_progress && !prompt.execution_unverified &&
-          !prompt.aborted && !prompt.has_error && !prompt.completed_successfully;
-        text(time.children[0], verifiedRunning ? '▶ ' : '');
-        ReportView.valueSlot(time.children[1], activityLabel(activity, now, today));
+        ReportView.valueSlot(row.time, activityLabel(activity, now, today));
         if (!usesStart && !knownTime(prompt?.completed_at_ms) && knownTime(prompt?.at_ms))
           row.activityHelp += '\nStarted: ' + (prompt.display?.date_time || 'N/A') + '\nCompletion unverified.';
         if (prompt?.model_display_help) row.activityHelp += '\n\n' + prompt.model_display_help;
-        if (catalog && ['refreshing', 'retrying', 'unavailable', 'partial'].includes(card.state)) {
-          row.sessionHelp += `\n${hydrationDetail(catalog)} Available prompt details may be retained.`;
-          row.costHelp += '\nProvisional or retained while prompt details are rechecked.';
-        }
         this.drawMetrics(row, card, prompt, catalog, source);
         wanted.push(row);
       }

@@ -293,6 +293,27 @@ class BackgroundActivity:
     invocation_start_kind: str = ""
     invocation_end_observed: bool = False
     invocation_registry_unlinked: bool = False
+    registry_verified: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledContinuation:
+    """A current automatic prompt into its creating session."""
+
+    session_id: str
+    created_ms: int
+    wake_at_ms: int | None
+    awaits: str
+
+
+ONGOING_EVIDENCE_GRACE_MS = 15_000
+
+
+@dataclass(frozen=True, slots=True)
+class OngoingStatus:
+    phase: str
+    wake_at_ms: int | None = None
+    awaits: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,6 +331,9 @@ class SessionSnapshot:
     # Full tree/history acquired consistently; absence can reclassify execution.
     # Partial/custom sources must opt in only after proving that contract.
     complete: bool = False
+    # None means the live registry could not be observed. History-only readers
+    # do not perform this optional acquisition.
+    continuations: tuple[ScheduledContinuation, ...] | None = ()
 
 
 @dataclass(frozen=True, slots=True)

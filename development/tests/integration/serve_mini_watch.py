@@ -438,7 +438,7 @@ def main():
                     if phase == 'retry':
                         lifecycle = replace(lifecycle, cards_state='unavailable', active_cards=(), history_state='refreshing')
                     else:
-                        lifecycle = lifecycle_frame(frame, phase)
+                        lifecycle = lifecycle_frame(replace(frame, now_ms=int(time.time() * 1000)), phase)
                     published = publish(value=lifecycle)
                     print(json.dumps({'ok': True, 'published': published}), flush=True)
                     continue

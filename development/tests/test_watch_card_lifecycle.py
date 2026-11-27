@@ -81,6 +81,99 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         active, history, _ = self.cards.project(now)
         return (active or history)[0].rows[-1].prompt
 
+    def enable_automations(self):
+        self.native.version = "2.4.2"
+        registration = json.loads(self.registration.read_text(encoding="utf-8"))
+        self.registration.write_text(json.dumps({**registration, "version": "2.4.2"}), encoding="utf-8")
+
+    def test_owned_first_fire_timer_keeps_idle_card_without_billing_dormant_time(self):
+        sid = self.root.session_id
+        self.enable_automations()
+        timer = {"id": "timer", "sessionID": sid, "action": {"type": "prompt", "to": {"session": sid}},
+                 "status": "active", "runCount": 0, "time": {"created": 3800}, "trigger": {"type": "at"},
+                 "nextDueAt": 120_000}
+        self.native.automation_response = {"data": [timer]}
+        self.capture(10_000)
+        active, _, _ = self.cards.project(10_000)
+        card, = active
+        self.assertEqual(("waiting", 120_000), (card.ongoing.phase, card.ongoing.wake_at_ms))
+        self.assertIsNone(card.terminal_status)
+        prompt = card.rows[-1].prompt
+        self.assertFalse(prompt.in_progress)
+        self.assertEqual(1000, prompt.duration_ms)
+        self.capture(60_000)
+        later = self.row(60_000)
+        self.assertEqual((prompt.duration_ms, prompt.ccost, prompt.calls),
+                         (later.duration_ms, later.ccost, later.calls))
+        self.assertIn("/api/experimental/automation", [path for path, _ in self.native.requests])
+
+        timer.update(status="done", runCount=1, lastRunAt=120_000, lastOutcome="fired")
+        with patch("src.sources.opencode_v2_continuation.time.time_ns", return_value=120_001_000_000):
+            self.capture(120_001)
+        bridge, = self.cards.project(120_001)[0]
+        self.assertEqual(("waiting", None), (bridge.ongoing.phase, bridge.ongoing.wake_at_ms))
+        with patch("src.sources.opencode_v2_continuation.time.time_ns", return_value=136_000_000_000):
+            self.capture(136_000)
+        terminal, = self.cards.project(136_000)[0]
+        self.assertEqual(("completed", 166_000), (terminal.terminal_status, terminal.terminal_until_ms))
+        self.assertFalse(self.cards.project(166_000)[0])
+
+    def test_event_registry_outage_withdraws_status_without_proving_a_terminal(self):
+        self.enable_automations()
+        sid = self.root.session_id
+        event = {"id": "event", "sessionID": sid, "time": {"created": 3800},
+                 "action": {"type": "prompt", "to": {"session": sid}}, "runCount": 0,
+                 "status": "active", "trigger": {"type": "event"}, "nextDueAt": 123456}
+        self.native.automation_response = {"data": [event]}
+        self.capture(5_000)
+        waiting, = self.cards.project(5_000)[0]
+        self.assertEqual(("waiting", None), (waiting.ongoing.phase, waiting.ongoing.wake_at_ms))
+        self.native.automation_response = {"data": [event, event]}
+        self.capture(6_000)
+        self.native.automation_response = None
+        self.capture(23_000)
+        active, history, _ = self.cards.project(23_000)
+        self.assertFalse(active)
+        self.assertTrue(all(c.terminal_status is None for c in history))
+        self.native.automation_response = {"data": [event]}
+        self.capture(30_000)
+        self.assertEqual("waiting", self.cards.project(30_000)[0][0].ongoing.phase)
+        self.native.automation_response = {"data": [
+            {**event, "id": "foreign", "action": {"type": "prompt", "to": {"session": "someone-else"}}},
+            {**event, "status": "paused"}]}
+        self.capture(35_000)
+        end, = self.cards.project(35_000)[0]
+        self.assertEqual("completed", end.terminal_status)
+
+    def test_returned_child_shell_precedes_timer_and_releases_to_event_wait(self):
+        self.enable_automations()
+        sid, child = self.root.session_id, "ses_current_child"
+        self.native.automation_response = {"data": [{"id": "event", "sessionID": sid,
+            "action": {"type": "prompt", "to": {"session": sid}}, "time": {"created": 3400},
+            "status": "active", "runCount": 0, "trigger": {"type": "event"}}]}
+        parent = self.native.messages[sid][1]
+        parent["content"] = [{"id": "launch", "type": "tool", "name": "task",
+            "time": {"created": 3200, "ran": 3250, "completed": 3900},
+            "state": {"status": "completed", "metadata": {"sessionId": child}}}]
+        self.native.messages[child] = [
+            {"id": "cu", "type": "user", "text": "fixture", "time": {"created": 3300}},
+            {**parent, "id": "ca", "time": {"created": 3350, "completed": 3700},
+             "content": [{"id": "shell", "type": "tool", "name": "shell", "callID": "call",
+                          "time": {"created": 3450, "ran": 3500, "completed": 3600},
+                          "state": {"status": "completed", "input": {"background": True},
+                                    "metadata": {"shellID": "job", "status": "running"}}}]}]
+        self.native.shells = [{"id": "job", "status": "running", "metadata": {"sessionID": child}}]
+        self.capture(5_000)
+        card, = self.cards.project(5_000)[0]
+        self.assertEqual("background", card.ongoing.phase)
+        self.assertIn("descendant shell", card.ongoing.awaits.lower())
+        self.native.messages[child].append({"type": "synthetic", "id": "done", "time": {"created": 5500},
+            "metadata": {"shellID": "job", "source": "shell", "state": "completed", "exit": 0}})
+        self.native.shells = []
+        self.capture(6_000)
+        waiting, = self.cards.project(6_000)[0]
+        self.assertEqual(("waiting", None), (waiting.ongoing.phase, waiting.ongoing.wake_at_ms))
+
     def test_qualified_concurrent_shells_publish_at_call_age_not_execution_age(self):
         # Both shells have just begun executing. Only the first has had a visible
         # Running call for ten seconds; the second crosses that threshold on a tick.
@@ -172,12 +265,12 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         initial = self.row(4000)
         snapshot = self.source.load_session_snapshot(self.root.session_id)
         partial = replace(snapshot, messages=(), parts=(), events=(), invocations=(), complete=False)
-        with patch.object(OpenCodeV2Source, "load_session_snapshot", return_value=partial):
+        with patch.object(OpenCodeV2Source, "load_live_session_snapshot", return_value=partial):
             self.capture(10_000)
         self.assertEqual(initial, self.row(10_000))
         self.assertEqual("partial", self.cards.project(10_000)[0][0].state)
         self.assertEqual("partial", self.cards.project(10_000)[2])
-        with patch.object(OpenCodeV2Source, "load_session_snapshot", side_effect=SourceUnavailableError("offline")):
+        with patch.object(OpenCodeV2Source, "load_live_session_snapshot", side_effect=SourceUnavailableError("offline")):
             self.capture(20_000)
         self.assertTrue(self.row(20_000).in_progress, "last known state is not invented success")
         self.assertEqual("retrying", self.cards.project(20_000)[0][0].state)

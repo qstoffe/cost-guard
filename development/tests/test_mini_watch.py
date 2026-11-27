@@ -225,7 +225,8 @@ class MiniWatchTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "optional JS VM unavailable")
     def test_app_owned_window_races_health_settings_and_independent_dom(self):
         payload = {"state": "running", "view": project_live(replace(self.frame,
-            active_cards=tuple(replace(card, session_id=f"session-{index}") for index, card in enumerate(self.cards)),
+            active_cards=tuple(replace(card, session_id=f"session-{index}", ongoing=self.frame.active_cards[0].ongoing)
+                               for index, card in enumerate(self.cards)),
             history_cards=(), running=running_prompts(self.cards, "observed"))).to_json()}
         result = subprocess.run([shutil.which("node"), "development/tests/integration/mini_watch.cjs"],
             cwd=ROOT, input=json.dumps(payload), text=True, encoding="utf-8", capture_output=True, timeout=15)

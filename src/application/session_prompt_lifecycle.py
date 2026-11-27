@@ -1,7 +1,9 @@
 """SessionCatalog prompt admission and same-prompt terminal handoff."""
 from dataclasses import dataclass, replace
 
-PROMPT_FRESHNESS_MS = 15_000
+from src.domain.models import ONGOING_EVIDENCE_GRACE_MS, OngoingStatus
+
+PROMPT_FRESHNESS_MS = ONGOING_EVIDENCE_GRACE_MS
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +16,7 @@ class PromptEvidence:
     ended: bool = False
     revision: str | None = None
     outcome: str | None = None
+    ongoing: OngoingStatus | None = None
 
     @property
     def identity(self):

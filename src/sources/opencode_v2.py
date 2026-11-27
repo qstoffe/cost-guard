@@ -48,6 +48,7 @@ from .opencode_v2_normalization import (
     normalize_message_bundle, normalize_request_invocations, optional_positive_int, safe_int,
 )
 from .opencode_v2_background import background_activities, running_jobs
+from .opencode_v2_continuation import scheduled_continuations
 from .opencode_v2_diagnostics import summarize_v2_diagnostics
 from .opencode_v2_events import normalize_event
 from .opencode_v2_interruptions import LiveInterruptionReasons
@@ -161,6 +162,9 @@ class OpenCodeV2Source:
         self._catalog_before_hint = None
         self._catalog_index: V2CatalogIndex | None = None
         self._message_lock = threading.Lock()
+        self._continuation_lock = threading.Lock()
+        self._continuation_observation = (None, 0.0, ())
+        self._probed_version = None
         self.metrics = AcquisitionMetrics(generation="v2")
         self._skill_origin_cache: dict[str, dict[str, str]] = {}
         self._catalog_listed_at = 0.0
@@ -292,9 +296,12 @@ class OpenCodeV2Source:
             origin._current_endpoint()
             epoch = origin.observation_epoch
             evidence = origin._interruptions.copy()
+            probed_version = origin._probed_version
         with self._connection_lock:
             self._current_endpoint()
             same = epoch is not None and self.observation_epoch == epoch
+            if same and probed_version is not None and probed_version[0] == epoch:
+                self._probed_version = probed_version
             keep = reuse_catalog and same and self._interruptions.equivalent(evidence)
             self._interruptions = evidence if same else LiveInterruptionReasons()
             if not keep:
@@ -378,7 +385,9 @@ class OpenCodeV2Source:
 
     def probe(self) -> IntegrationHealth:
         try:
-            info = self._client().json("/api/info", phase="probe")
+            client = self._client()
+            epoch = self.observation_epoch
+            info = client.json("/api/info", phase="probe")
             if not isinstance(info, Mapping):
                 raise SourceSchemaError("OpenCode V2 health response is unsupported", phase="probe", generation="v2")
             version = info.get("version")
@@ -390,6 +399,7 @@ class OpenCodeV2Source:
             return IntegrationHealth(exc.code != FailureCode.REGISTRATION_MISSING, False,
                                      str(exc), exc.code.value, exc.phase, exc.exception_type, exc.http_status)
         self._connectivity.version = version[:24] if all(c.isdigit() or c == "." for c in version) else "2.x"
+        self._probed_version = epoch, version
         self._connectivity.succeeded()
         return IntegrationHealth(True, True, f"OpenCode V2 service {self._connectivity.version} is reachable")
 
@@ -562,6 +572,24 @@ class OpenCodeV2Source:
         """Native running state is independent of age; unsupported state fails open."""
         return frozenset(session_id for session_id, item in self._index().by_id.items() if item.active is not False)
 
+    def current_continuations(self):
+        with self._connection_lock:
+            client = self._client()
+            version = client.endpoint.version
+            if self._probed_version is not None and self._probed_version[0] == self.observation_epoch:
+                version = self._probed_version[1]
+        # First verified service contract. Older builds do not expose this registry.
+        parts = (version or '').split('+', 1)[0].split('-', 1)[0].split('.')
+        if (len(parts) == 3 and all(part.isascii() and 0 < len(part) <= 6 and part.isdecimal() for part in parts)
+                and tuple(map(int, parts)) < (2, 4, 2)):
+            return ()
+        with self._continuation_lock:
+            previous, observed, pending = self._continuation_observation
+            if client is not previous or time.monotonic() - observed >= 1:
+                pending = scheduled_continuations(client)
+                self._continuation_observation = client, time.monotonic(), pending
+            return pending
+
     def _revision(self, tree: Sequence[_NativeSession]) -> str:
         started = time.perf_counter()
         self.metrics.add("revision_calculations")
@@ -708,12 +736,20 @@ class OpenCodeV2Source:
 
     @observed("snapshot")
     def load_session_snapshot(self, session_id: str) -> SessionSnapshot:
+        return self._load_session_snapshot(session_id, observe_continuations=False)
+
+    @observed("snapshot")
+    def load_live_session_snapshot(self, session_id: str) -> SessionSnapshot:
+        return self._load_session_snapshot(session_id, observe_continuations=True)
+
+    def _load_session_snapshot(self, session_id: str, *, observe_continuations: bool) -> SessionSnapshot:
         with self._connection_lock:
             self._client()
             epoch = self._evidence_epoch
         snapshot = load_snapshots(self, (session_id,),
             brackets=self._card_trees.bracket if self._card_trees is not None else None,
-            parallel_members=self._scalar_member_reads)[session_id]
+            parallel_members=self._scalar_member_reads,
+            observe_continuations=observe_continuations)[session_id]
         with self._connection_lock:
             self._current_endpoint()
             if epoch != self._evidence_epoch:
@@ -768,7 +804,8 @@ class OpenCodeV2Source:
         failures = {}
         snapshots = load_snapshots(self, session_ids, workers=len(session_ids), progress=progress,
             available_only=True, failures=failures, on_root=on_root,
-            brackets=self._card_trees.bracket if self._card_trees is not None else None)
+            brackets=self._card_trees.bracket if self._card_trees is not None else None,
+            observe_continuations=True)
         with self._connection_lock:
             self._current_endpoint()
             if epoch != self._evidence_epoch:

@@ -75,6 +75,8 @@ def card(value, now_ms):
     context = value.session_context
     cost = value.session_cost
     return record(session_id=value.session_id, title=value.title, focal_id=value.focal_id,
+        ongoing=None if value.ongoing is None else fields(value.ongoing, "phase wake_at_ms awaits"),
+        terminal_status=value.terminal_status, terminal_until_ms=value.terminal_until_ms,
         activity_scope=value.activity_scope,
         invocation_verified=value.invocation_verified,
         rows=tuple(card_row(row, now_ms, value.invocation_verified if value.invocation_verified is not None else value.state == "observed",

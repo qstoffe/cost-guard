@@ -8,6 +8,7 @@ from dataclasses import dataclass, field, replace
 
 from src.analysis.session_activity import activity_fields
 from src.domain import EventKind
+from src.domain.models import OngoingStatus
 from src.reports.sampling import AnalyzedRoot
 from .session_history import analyze_observed
 from .prompt_rows import PromptRowProjector
@@ -33,6 +34,7 @@ class WatchCapture:
     catalog_prompt: tuple | None = None
     catalog_prompt_ends: dict = field(default_factory=dict)
     source_epoch: str | None = None
+    ongoing: OngoingStatus | None = None
 
     @property
     def history_row(self):
@@ -89,7 +91,8 @@ def running_context_rows(rows, context, comparable_ids):
 
 def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defer_guidance=False):
     if fresh is None:
-        fresh = service.source.load_session_snapshot(root.session_id)
+        load = getattr(service.source, 'load_live_session_snapshot', service.source.load_session_snapshot)
+        fresh = load(root.session_id)
     source_epoch = getattr(service.source, 'observation_epoch', None)
     snapshot, bundle, retained = analyze_observed(service, previous, fresh)
     item = AnalyzedRoot(root, bundle, False, snapshot)
@@ -142,7 +145,7 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
     intervals = (tuple((record.prompt_time_ms, record.execution_duration_ms, record.in_progress)
         for record in bundle.prompts) + tuple((record.created_at_ms, record.duration_ms, False)
                  for record in bundle.compactions)) if fresh.complete else ()
-    catalog_prompt = None
+    catalog_prompt = ongoing = None
     ended = {}
     if fresh.complete:
         # The display may retain old rows, but only the fresh tree can bind
@@ -151,9 +154,10 @@ def capture_rows(service, root, previous=None, focal_ids=(), *, fresh=None, defe
                                    on_prompt_ends=ended.update if not retained else None)
         if activity['running']:
             catalog_prompt = (activity['activity_prompt_id'], activity['prompt_started_ms'])
+            ongoing = activity.get('ongoing')
     return WatchCapture(root.session_id, root.title or root.session_id, tuple(rows),
         max((record.prompt_time_ms for record in records), default=0), service.now_ms, retained,
         frozenset(event.event_id for event in fresh.events),
         context, fresh.complete, fresh,
         mini_context_handoffs(projector, rows) if fresh.complete and not retained else (),
-        intervals, frozenset(comparable_ids), catalog_prompt, ended, source_epoch), item
+        intervals, frozenset(comparable_ids), catalog_prompt, ended, source_epoch, ongoing), item

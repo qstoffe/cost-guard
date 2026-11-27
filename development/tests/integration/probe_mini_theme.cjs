@@ -17,22 +17,23 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
       const value=style(n).color;n.remove();return value;};
     return {normal:style(v.body).color,running:token('--watch-running'),success:token('--watch-success'),error:token('--error'),
        rows:[...v.promptRows.values()].map(row=>({id:row.dataset.id,cls:row.className,color:style(row).color,
-         activity:row.cells[0].textContent,indicator:row.querySelector('.mini-activity-running').textContent,
-         decorative:row.querySelector('.mini-activity-running').getAttribute('aria-hidden'),
-         focusable:row.querySelector('.mini-activity-running').tabIndex,
-         values:[...row.cells].map(cell=>style(cell.firstElementChild||cell).color),
+          phase:row.statusIcon.dataset.phase,iconColor:style(row.statusIcon).color,
+          stroke:row.statusIcon.querySelector('path')?style(row.statusIcon.querySelector('path')).stroke:null,
+          hidden:row.statusIcon.hidden,indicator:row.statusIcon.textContent,
+          values:[...row.cells].map((cell,i)=>style(i===0?row.time:cell.firstElementChild||cell).color),
          exceeded:row.cells[4].classList.contains('mini-context-exceeded'),label:row.getAttribute('aria-label'),
         same:row.dataset.id!=='mini-lifecycle-4'||row===window.lifecycleRow})),
       fullHistory:[...document.querySelectorAll('.watch-history tbody tr')].map(row=>row.className),
       fullActive:[...document.querySelectorAll('.watch-active tbody tr')].map(row=>row.className)};})()`);
-  const check=async(cls='',label='Completed',same=true)=>{
+   const check=async(cls='',label='',same=true,phase='')=>{
     const value=await inspect(),row=value.rows.find(row=>row.id==='mini-lifecycle-4');
     assert.equal(value.rows.length,5);assert.equal(new Set(value.rows.map(row=>row.id)).size,5);
     assert.ok(row);assert.equal(row.cls,cls);assert.ok(row.label.includes(label));if(same)assert.equal(row.same,true);
      for(const item of value.rows) {
-       assert.equal(item.indicator,item===row&&cls==='mini-running'?'▶ ':'');
-       assert.equal(item.activity.startsWith('▶ '),item===row&&cls==='mini-running');
-       assert.equal(item.decorative,'true');assert.equal(item.focusable,-1);
+        assert.equal(item.phase,item===row?phase:'');
+        assert.equal(item.hidden,item!==row||!phase);
+         assert.equal(item.indicator,item===row&&phase==='running'?'▶':'');
+         if(item.stroke)assert.equal(item.stroke,item.iconColor,'the painted outline uses the status color');
       const expected=item===row&&cls?value[cls.replace('mini-','')]:value.normal;
        assert.equal(item.color,expected);
         item.values.forEach((color,index)=>assert.equal(color,index===4&&!(item===row&&cls)?
@@ -40,8 +41,8 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
           'Verified running/success/error colors all five cells; neutral history Ctx keeps its independent policy'));
     }
     assert.ok(value.fullHistory.every(cls=>cls===''),'Full Watch history stays neutral');
-     assert.deepEqual(value.fullActive,cls==='mini-running'?['watch-running']:[],
-       'Full Watch renders positively running prompts only');
+      assert.deepEqual(value.fullActive,cls?[cls.replace('mini-','watch-')]:[],
+        'Full Watch uses the same ongoing and recently finished visibility');
     return value;
   };
   for(const [theme,color] of [['classic','light'],['classic','dark'],['web','light'],['web','dark']]) {
@@ -54,10 +55,19 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
       const cold=await check();assert.notEqual(cold.normal,cold.success);assert.notEqual(cold.normal,cold.error);
       assert.ok(cold.rows.every(row=>row.cls===''));
        await publish('running');await until(`miniWatch.view.promptRows.get('mini-lifecycle-4')?.className==='mini-running'`);
-       await check('mini-running','Running');
+        await check('mini-running','Running',true,'running');
        if(width===650&&unit==='credits')await capture(`running-activity-${theme}-${color}`);
-      await publish('success');await until(`miniWatch.view.promptRows.get('mini-lifecycle-4')?.className==='mini-success'`);
-      await check('mini-success');
+       if(width===650&&unit==='credits') {
+         const colors=[];
+         for(const [phase,label] of [['running','Running'],['background','Background activity'],['waiting','Scheduled / Waiting']]) {
+           await publish(phase);
+           const data=await check('mini-running',label,true,phase);
+           colors.push(data.rows.find(r=>r.id==='mini-lifecycle-4').iconColor);
+         }
+         assert.equal(new Set(colors).size,3,'three independently distinguishable ongoing icons');
+       }
+       await publish('success');await until(`miniWatch.view.promptRows.get('mini-lifecycle-4')?.className==='mini-success'`);
+       await check('mini-success','Completed',true,'completed');
       await publish('history-success');await until(`miniWatch.view.promptRows.get('mini-lifecycle-4')?.className===''`);
       await check();
       await evaluate(`ReportView.setUnit('${unit==='credits'?'usd':'credits'}');miniWatch.settings()`);await check();
@@ -67,17 +77,17 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
       await check();
       for(const phase of ['retry','retry','history-success']) {await publish(phase);await check();}
       await evaluate(`miniWatch.render();miniWatch.syncTheme();miniWatch.settings()`);await check();
-      await close();await open();await check('','Completed',false);
+       await close();await open();await check('','',false);
       await evaluate(`window.lifecycleRow=miniWatch.view.promptRows.get('mini-lifecycle-4')`);
       for(const [phase,label] of [['aborted','Aborted'],['error','Error']]) {
-        await publish('running');await check('mini-running','Running');
-        await publish(phase);await check('mini-error',label);
-        await publish('history-'+phase);await check('',label);
+         await publish('running');await check('mini-running','Running',true,'running');
+         await publish(phase);await check(phase==='aborted'?'mini-error':'',label,true,phase==='aborted'?'aborted':'');
+         await publish('history-'+phase);await check('',phase==='error'?label:'');
       }
       await publish('unverified');await check('','Unverified');
       await publish('invalidated');await until('miniWatch.view.promptRows.size===0');
       await publish('pending');assert.equal(await evaluate('miniWatch.view.promptRows.size'),0);
-      await publish('cold');await check('','Completed',false);
+       await publish('cold');await check('','',false);
       layouts.push({case:`lifecycle-${theme}-${color}-${width}-${unit}`,cold,final:await inspect()});
       if(width===650&&unit==='credits')await capture(`neutral-history-${theme}-${color}`);
       await close();
@@ -85,5 +95,5 @@ module.exports=async function colors({evaluate,until,fixture,command,sessionId,o
   }
   await fixture('running');await until('liveValue.view.active_cards.length===2');
   await evaluate(`ReportView.setUnit('credits');miniWatch.settings()`);
-  checks.push('Decorative play cue only on verified running Activity; immediate success/error/abort removal, neutral history, retained/repeated SSE, reopen, unverified and proof invalidation/arrival; computed all-cell foregrounds in Classic/Web light/dark × Credits/USD × 650/280 widths; Full Watch classes unchanged');
+   checks.push('All five lifecycle icons in native Document PiP, independent ongoing colors, Full Watch parity, neutral history, retained/repeated SSE, reopen, unverified and invalidated observations across Classic/Web themes, units and widths.');
 };

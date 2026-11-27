@@ -484,12 +484,30 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-history-table tfoot td:nth-child(6) > span { display: inline-block; min-inline-size: 8ch; }
 .session-history-table td:nth-child(10) > span { display: inline-block; min-inline-size: 11ch; }
 .sessions-table .session-name, .session-preview { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-catalog-table td:has(> .session-lifecycle-icon:not([hidden])) { display: flex; align-items: center; }
+.session-catalog-table td > .session-lifecycle-icon { flex-shrink: 0; }
 .session-prompt-label { display: flex; align-items: baseline; gap: .45em; min-width: 0; max-width: 60ch; }
 .session-prompt-label > :not(.session-preview) { flex-shrink: 0; }
 .session-preview { flex: 1; }
 .sessions-table .session-running, .sessions-table .session-running :is(td, a, span, button) { color: var(--watch-running); }
 .sessions-table .session-completed, .sessions-table .session-completed :is(td, a, span, button) { color: var(--watch-success); }
 .sessions-table .session-aborted, .sessions-table .session-aborted :is(td, a, span, button) { color: var(--error); }
+.session-lifecycle-icon:not([hidden]) {
+  display: inline-flex; align-items: center; justify-content: center;
+  vertical-align: middle; width: 1em; margin-inline-end: .3em; line-height: 1;
+  color: var(--lifecycle-color, var(--watch-running)) !important;
+}
+.session-lifecycle-icon svg {
+  width: 1em; height: 1em; fill: none; stroke: var(--lifecycle-color, var(--watch-running)); stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.session-lifecycle-icon[data-phase="running"] { font-size: .75em; }
+.session-lifecycle-icon[data-phase="background"] { --lifecycle-color: var(--accent); }
+.session-lifecycle-icon[data-phase="waiting"] { --lifecycle-color: var(--warn); }
+.session-lifecycle-icon[data-phase="completed"] { --lifecycle-color: var(--watch-success); }
+.session-lifecycle-icon[data-phase="aborted"] { --lifecycle-color: var(--error); }
+.watch-lifecycle:not(:empty) { margin-inline-start: .55em; font-size: .8em; font-weight: normal; }
+.watch-card h3 a.watch-error-title { color: var(--error); }
 .sessions-table .session-activity-feedback td { grid-column: 1 / -1; color: var(--muted); white-space: normal; }
 .sessions-action-status { margin-block: .45rem; color: var(--muted); }
 .session-metric-pending { color: var(--muted); }

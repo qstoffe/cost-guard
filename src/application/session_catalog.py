@@ -527,14 +527,14 @@ class SessionCatalog:
                 return
             now = self.clock_ms()
             changed = set()
-            for root, revision, captured_at, prompt_id, start, running, finish, ended in evidence:
+            for root, revision, captured_at, prompt_id, start, running, finish, ended, *qualifier in evidence:
                 key = root.session_id
                 if (key not in self.roots or root.provenance != self.roots[key].provenance
                         or not 0 <= now - captured_at <= PROMPT_FRESHNESS_MS
                         or revision != self.revisions.get(key) and not running):
                     continue
-                self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision),
-                                     wake=True)
+                self._record_prompt(key, PromptEvidence(captured_at, prompt_id, start, running, finish, ended, revision,
+                    ongoing=qualifier[0] if qualifier else None), wake=True)
                 accepted = self.prompt_activity.get(key)
                 if (self.archive is not None and costs is not None and key in costs and self._running(key)
                         and source_epoch == self.last_observation.source_epoch
@@ -556,10 +556,18 @@ class SessionCatalog:
                 return
             self.active_snapshots.replace(snapshots, self.lifecycle_cutoff_ms)
 
-    def withdraw_prompts(self, failures):
-        """Terminal Watch read failures invalidate execution, not prove a finish."""
+    def withdraw_prompts(self, failures, *, unobserved=()):
+        """Invalidate lost live evidence without certifying a finish."""
         with self.lock:
             removed = set()
+            if unobserved and self.state == 'observed':
+                now = self.clock_ms()
+                failures = (*failures, *((root, at) for root, revision, at, epoch in unobserved
+                    if root.session_id in self.running_roots
+                    and epoch == self.last_observation.source_epoch
+                    and revision == self.revisions.get(root.session_id)
+                    and 0 <= now - at <= PROMPT_FRESHNESS_MS
+                    and at - self.prompt_activity[root.session_id].observed_ms >= PROMPT_FRESHNESS_MS))
             for root, attempted_at in failures:
                 key = root.session_id
                 if (key in self.running_roots and root.provenance == self.roots[key].provenance
@@ -830,17 +838,21 @@ class SessionCatalog:
                 identity_values = []
                 evidence = []
                 ended_prompts = {}
+                unobserved_continuation = []
                 row, actual = session_summary(service, root, revision, active=active, metrics=self.metrics,
                      fresh_snapshot=fresh_snapshots or finalizing, active_snapshot=active_snapshot,
                     on_stage=lambda stage: self._stage(stage, retrying),
                     on_dependencies=identity_values.extend,
                     on_prompt_ends=ended_prompts.update if active or finalizing else None,
+                    on_continuation_unobserved=lambda: unobserved_continuation.append(True),
                      on_evidence=evidence.append if partition else None,
                     activity_end_ms=min((window.end_ms for window in windows), default=None),
                     on_activity=lambda values, complete: memberships.update(
                         (window, any(in_window(at, window) for at in values)) for window in windows if complete))
                 if scope is not None and source_scope(service.source) != scope:
                     continue
+                if unobserved_continuation and not ended_prompts and actual == revision:
+                    self.withdraw_prompts((), unobserved=((root, revision, prompt_observed_at, epoch),))
                 saved = False
                 unqualified = bool(partition and not active and not row.running and actual == revision)
                 if (unqualified and evidence and isinstance(actual, str) and row.activity_qualified
@@ -991,7 +1003,8 @@ class SessionCatalog:
         revision = self.revisions.get(key)
         prompt = row.prompt_started_ms, row.activity_prompt_id
         if row.running:
-            self._record_prompt(key, PromptEvidence(captured_at, prompt[1], prompt[0], True, None, revision=revision))
+            self._record_prompt(key, PromptEvidence(captured_at, prompt[1], prompt[0], True, None,
+                revision=revision, ongoing=row.ongoing))
         elif row.activity_qualified and (not historical or not self._running(key)):
             previous = self.prompt_activity.get(key)
             if self._running(key) and previous.identity != prompt:
@@ -1006,7 +1019,7 @@ class SessionCatalog:
         if lifecycle is None:
             lifecycle = {row.session_id: row for row in self._rows(row.session_id for row in rows)}
         return tuple(replace(row, **{name: getattr(lifecycle[row.session_id], name)
-            for name in ('running', 'last_activity_ms', 'prompt_started_ms', 'activity_prompt_id')})
+             for name in ('running', 'last_activity_ms', 'prompt_started_ms', 'activity_prompt_id', 'ongoing')})
             if row.running or row.session_id in self.prompt_activity else row for row in rows)
 
     def _rows(self, keys, *, compatible_archive=False):
@@ -1022,6 +1035,7 @@ class SessionCatalog:
             activity = value.last_activity_ms
             prompt = self.prompt_activity.get(key)
             running = self._running(key)
+            ongoing = prompt.ongoing if running else None
             started, prompt_id = value.prompt_started_ms, value.activity_prompt_id
             if prompt is not None and (prompt.running or value.activity_prompt_id == prompt.prompt_id
                     or key in self.recent_finishes or not self._activity_current(key) or value.running):
@@ -1039,9 +1053,10 @@ class SessionCatalog:
             # Bounded epochs share unchanged immutable facts instead of copying
             # every qualified row again for each burst's new ordering.
             if (title != value.title or activity != value.last_activity_ms or started != value.prompt_started_ms
-                    or running != value.running or archived != value.archived or prompt_id != value.activity_prompt_id):
+                    or running != value.running or archived != value.archived or prompt_id != value.activity_prompt_id
+                    or ongoing != value.ongoing):
                 value = replace(value, title=title, last_activity_ms=activity, prompt_started_ms=started,
-                                activity_prompt_id=prompt_id, running=running, archived=archived)
+                                activity_prompt_id=prompt_id, running=running, archived=archived, ongoing=ongoing)
             rows.append(value)
         return rows
 

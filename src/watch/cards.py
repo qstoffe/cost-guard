@@ -9,6 +9,8 @@ from .session_costs import SessionCostState
 from .history_publication import HistoryPublication
 from .recent_finished import RecentFinished
 from .card_workers import CardRequest
+from src.cache.session_projection import TERMINAL_HIGHLIGHT_MS
+from src.domain.models import ONGOING_EVIDENCE_GRACE_MS
 from src.sources.errors import SourceConcurrentChangeError, SourceDataError, SourceError
 from src.reports.session_history import retain_unverified_row, unverified_refresh
 from src.reports.watch_context import retain_session_context
@@ -29,6 +31,9 @@ class CardSession:
     snapshot: object = None
     tools: dict = field(default_factory=dict)
     terminals: dict = field(default_factory=dict)
+    live_prompt: tuple[str, int] | None = None
+    live_observed_ms: int = 0
+    terminal_highlight: tuple[str, int, str] | None = None
     admission_order: int = 0
     state: str = "loading"
     latest_ms: int | None = None
@@ -126,7 +131,10 @@ class WatchCards:
                         entry.source_status.clear()
                     entry.terminal_failure = False
                     entry.retry_at_ms = entry.failures = 0
-                elif (entry.capture is not None and any(row.in_progress or row.execution_unverified for row in entry.capture.rows)) or entry.source_status.failed_at is not None or entry.history_status.failed_at is not None:
+                elif (entry.live_prompt is not None
+                      or entry.capture is not None and any(
+                          row.in_progress or row.execution_unverified for row in entry.capture.rows)
+                      or entry.source_status.failed_at is not None or entry.history_status.failed_at is not None):
                     entry.refresh_requested = True
         self.catalogued = True
 
@@ -188,11 +196,12 @@ class WatchCards:
             current = {row.event_id: row for row in capture.rows}
             for key, old in previous.items():
                 row = current.get(key)
-                # A missing source row is not completion evidence.
+                # Internal retention includes errors and unverified endings.
                 if old.in_progress and row is not None and not row.in_progress:
                     entry.terminals[key] = now_ms
                 if row is not None and row.in_progress:
                     entry.terminals.pop(key, None)
+            self._observe_lifecycle(entry, capture, snapshot)
             newly_running = [row for key, row in current.items() if row.in_progress and key not in previous]
             for row in newly_running:
                 for key in tuple(entry.terminals):
@@ -256,13 +265,41 @@ class WatchCards:
         entry.failures += 1
         entry.retry_at_ms = now_ms + min(120_000, 5_000 * 2 ** min(5, entry.failures - 1))
 
+    @staticmethod
+    def _observe_lifecycle(entry, capture, snapshot):
+        if not capture.authoritative:
+            return
+        if capture.catalog_prompt is not None:
+            entry.live_prompt = capture.catalog_prompt
+            entry.live_observed_ms = capture.observed_at_ms
+            entry.terminal_highlight = None
+        elif entry.live_prompt is not None:
+            key, started = entry.live_prompt
+            outcome = capture.catalog_prompt_ends.get((started, key))
+            if outcome in ('completed', 'aborted'):
+                entry.terminal_highlight = key, capture.observed_at_ms, outcome
+            elif (snapshot is not None and snapshot.continuations is None
+                  and capture.observed_at_ms - entry.live_observed_ms < ONGOING_EVIDENCE_GRACE_MS):
+                # The previous assignment is still under observation, but a
+                # failed registry read cannot renew its badge or prove an end.
+                return
+            entry.live_prompt = None
+
+    @staticmethod
+    def _terminal_highlight(entry, now_ms):
+        highlight = entry.terminal_highlight
+        return highlight if highlight and 0 <= now_ms - highlight[1] < TERMINAL_HIGHLIGHT_MS else None
+
     def _focals(self, entry, now_ms):
         if entry.capture is None:
             return ()
-        running = [row for row in entry.capture.rows if row.in_progress or row.execution_unverified]
-        recent = [row for row in entry.capture.rows if not row.in_progress and not row.execution_unverified and
-            row.event_id in entry.terminals and
-            0 <= now_ms - entry.terminals[row.event_id] < self.recent_ms]
+        focal = entry.live_prompt[0] if entry.live_prompt else None
+        highlight = self._terminal_highlight(entry, now_ms)
+        running = [row for row in entry.capture.rows
+                   if row.event_id == focal or row.in_progress or row.execution_unverified]
+        recent = [row for row in entry.capture.rows if row.event_id != focal and not row.in_progress and not row.execution_unverified and
+            (highlight and row.event_id == highlight[0] or row.event_id in entry.terminals and
+             0 <= now_ms - entry.terminals[row.event_id] < self.recent_ms)]
         return tuple(running + recent)
 
     def historical_ids(self, now_ms):
@@ -431,6 +468,15 @@ class WatchCards:
         representative = representative or (focal if focal is not None else capture.history_row)
         invocation_verified = (entry.invocation_generation == entry.generation
             and entry.source_status.failed_at is None and state != 'unavailable')
+        ongoing = None
+        terminal_status = terminal_until_ms = None
+        if focal is not None and entry.source_status.failed_at is None:
+            if capture.catalog_prompt == (focal.event_id, focal.at_ms):
+                ongoing = capture.ongoing
+            highlight = self._terminal_highlight(entry, now_ms)
+            if ongoing is None and highlight and highlight[0] == focal.event_id and not focal.execution_unverified:
+                _, seen, terminal_status = highlight
+                terminal_until_ms = seen + TERMINAL_HIGHLIGHT_MS
         rows = (representative,) if representative is not None else ()
         projected = []
         for row in rows:
@@ -486,7 +532,8 @@ class WatchCards:
             session_duration_ms=accumulated_duration((start,
                 max(duration or 0, now_ms - start) if running and (state == 'observed' or invocation_verified) else duration)
                 for start, duration, running in capture.duration_intervals)
-                if capture.duration_intervals and state != 'unavailable' else None)
+                 if capture.duration_intervals and state != 'unavailable' else None,
+             ongoing=ongoing, terminal_status=terminal_status, terminal_until_ms=terminal_until_ms)
 
     def project(self, now_ms):
         active = []
@@ -503,6 +550,8 @@ class WatchCards:
         visible = [entry for key, entry in self.sessions.items()
             if key in self.active_candidates or self._focals(entry, now_ms)]
         failed = any(entry.source_status.state(retained=entry.capture is not None) == "unavailable" for entry in visible)
-        partial = any(entry.state == "partial" or entry.source_status.failed_at is not None for entry in visible)
+        partial = any(entry.state == "partial" or entry.source_status.failed_at is not None
+                      or entry.live_prompt is not None and entry.snapshot is not None
+                      and entry.snapshot.continuations is None for entry in visible)
         state = "unavailable" if failed else "loading" if pending else "partial" if partial else "observed"
         return tuple(item[-1] for item in sorted(active, key=lambda item: item[:3])), tuple(history), state

@@ -426,17 +426,14 @@ const WatchView = (() => {
   function costGroups(value, session = false) {
     return ReportView.costGroups(value, session);
   }
-  function promptDetails(item, highlight) {
+  function promptDetails(item, highlight, {heading, footnote = ''} = {}) {
     const prompt = item?.prompt;
-    const groups = (prompt?.prompt_number == null ? '' : `Prompt #${prompt.prompt_number}\n`) + costGroups(prompt);
+    const title = heading ?? (prompt?.prompt_number == null ? '' : `Prompt #${prompt.prompt_number}`);
+    const groups = (title ? `${title}\n` : '') + costGroups(prompt);
     const duration = display(item, 'watch_duration_ms');
-    if (!duration || duration === 'N/A') return groups;
+    if (!duration || duration === 'N/A') return groups + footnote;
     const start = groups + '\n\nDuration: ';
-    return highlight && duration !== 'N/A' ? ContextHelp.runningDuration(start, duration, '') : start + duration;
-  }
-  function promptRole(prompt) {
-    return !prompt ? '' : prompt.in_progress ? 'running' : prompt.aborted || prompt.has_error ? 'error' :
-      prompt.completed_successfully ? 'success' : '';
+    return highlight ? ContextHelp.runningDuration(start, duration, footnote) : start + duration + footnote;
   }
   const columns = [
     ['Started', 'When this prompt started, in local time. Hover or focus the clock for the full date.'],
@@ -528,7 +525,10 @@ const WatchView = (() => {
   class Card {
     constructor(historical) {
       this.root = el('article', undefined, 'watch-card');
-      this.title = el('a'); const heading = el('h3'); heading.append(this.title);
+      this.title = el('a');
+      this.statusIcon = el('span');
+      this.statusText = el('span', '', 'watch-lifecycle');
+      const heading = el('h3'); heading.append(this.statusIcon, this.title, this.statusText);
       this.message = el('p', undefined, 'detail'); this.message.setAttribute('role', 'status');
       this.sourceStatus = new ReportView.LiveStatus();
       const scroll = el('div', undefined, 'watch-table-scroll');
@@ -560,10 +560,14 @@ const WatchView = (() => {
     update(value, historical, sourceNotice, clock) {
       this.value = value;
       this.root.dataset.session = value.session_id;
-      text(this.title, value.title || value.session_id);
+      const title = value.title || value.session_id;
+      const status = historical ? null : ReportView.lifecycle(value, clock.zone, clock.now);
+      text(this.title, title);
+      ReportView.sessionLifecycle(this.statusIcon, this.title, status, title);
+      text(this.statusText, status?.description || '');
       if (/^[A-Za-z0-9_-]{1,200}$/.test(value.session_id)) this.title.href = '#/sessions/' + value.session_id;
-      const focalRole = historical ? '' : promptRole(value.rows.find(item => item.prompt.event_id === value.focal_id)?.prompt);
-      this.title.className = ['running', 'success'].includes(focalRole) ? `watch-${focalRole}-title` : '';
+      const statusRole = status ? {running: 'running', completed: 'success', aborted: 'error'}[status.row] : '';
+      this.title.className = statusRole ? `watch-${statusRole}-title` : '';
       const hasRows = value.rows.length > 0;
       const retryDelayed = this.sourceStatus.update(value.state === 'observed', value.observed_at_ms,
         Date.now(), hasRows ? 60000 : 30000);
@@ -575,12 +579,14 @@ const WatchView = (() => {
         reconcile(this.body, value.rows.map(item => {
           const prompt = item.prompt, row = old.get(prompt.event_id) || el('tr');
           row.dataset.id = prompt.event_id;
-          const signature = JSON.stringify([item, historical, value.state, value.session_summary?.context]);
+          const signature = JSON.stringify([item, historical, status?.phase, value.state, value.session_summary?.context]);
           if (row.signature !== signature) {
             const focal = !historical && prompt.event_id === value.focal_id;
-            const role = focal ? promptRole(prompt) : '';
+            const role = focal ? statusRole : '';
             row.className = role ? `watch-${role}` : '';
-            const outcome = prompt.execution_unverified ? 'Unverified' : prompt.in_progress ? prompt.subagent_active ? 'Running (subagent activity)' : 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' : prompt.completed_successfully ? 'Completed' : 'Ended';
+            const outcome = focal && status ? status.label : prompt.execution_unverified ? 'Unverified' :
+              prompt.in_progress ? 'Running' : prompt.aborted ? 'Aborted' : prompt.has_error ? 'Error' :
+              prompt.completed_successfully ? 'Completed' : 'Ended';
             const reason = !prompt.in_progress && {quota_limit: 'quota limit', rate_limit: 'rate limit',
               tool_call_limit: 'tool-call limit', step_limit: 'step limit', user: 'by user'}[prompt.abort_reason];
             row.setAttribute('aria-label', `Prompt ${prompt.prompt_number} · ${outcome}${reason ? ' · ' + reason : ''}`);
@@ -590,7 +596,8 @@ const WatchView = (() => {
             invocationText(label.children[0], '#' + prompt.prompt_number + (prompt.execution_unverified ? ' · Unverified' : ''));
             invocationText(label.children[1], prompt.preview || '');
             if (prompt.execution_unverified) ContextHelp.value(label, 'Unfinished request; this OpenCode process reports no active execution. Another server may own it. End time and execution duration are unknown.');
-            else if (prompt.subagent_active) ContextHelp.value(label, `Running: causally linked subagent activity. Parent attempt: ${prompt.parent_outcome || 'ongoing'}${prompt.abort_reason ? ' · ' + prompt.abort_reason : ''}.`);
+            else if (prompt.subagent_active) ContextHelp.value(label, `Causally linked subagent activity. Parent attempt: ${prompt.parent_outcome || 'ongoing'}${prompt.abort_reason ? ' · ' + prompt.abort_reason : ''}.`);
+            else ContextHelp.clearValue(label);
             const started = metricValue(row, 0, display(prompt, historical ? 'finished_clock' : 'clock'),
               !historical || prompt.completed_at_ms != null ? display(prompt, historical ? 'finished_date_time' : 'date_time') : '');
             const model = metricValue(row, 3, item.model + (prompt.linked_agent_count ? '*' : ''), display(prompt, 'model_detail_help'));
@@ -708,8 +715,11 @@ const WatchView = (() => {
     update(result) {
       this.costs ||= new ReportView.CostDisplay();
       const view = costProjection(result.view, this.costs, result.source_generation);
+      const clock = {now: Date.now(), zone: view.timezone_id};
       const active = (view.active_cards || []).map(card => ({...card,
-        rows: card.rows.filter(row => row.prompt.in_progress && !row.prompt.execution_unverified)}))
+        rows: card.rows.filter(row => row.prompt.event_id === card.focal_id &&
+          (ReportView.lifecycle(card, clock.zone, clock.now) ||
+           row.prompt.in_progress && !row.prompt.execution_unverified))}))
         .filter(card => card.rows.length);
       // A healthy host/stream retrying its source is not a disconnected stream.
       // Host health owns actionable failures; never duplicate them as table prose
@@ -719,12 +729,10 @@ const WatchView = (() => {
       // Only observed prompt membership establishes empty success. Independent
       // history/accounts/daily acquisition and elapsed time say nothing about it.
       const noRunning = result.state === 'running' && this.state.connection === 'Live connected.' && view.cards_state === 'observed' &&
-        !active.some(card => card.rows.some(row => row.prompt.in_progress));
-      const unverified = view.active_cards?.some(card => card.rows.some(row => row.prompt.execution_unverified));
+        active.length === 0;
       text(this.empty, noRunning ? 'No running prompts' : '');
       this.empty.hidden = !this.empty.textContent;
       const keep = new Set();
-      const clock = {now: view.now_ms, zone: view.timezone_id};
       for (const [parent, values, historical] of [[this.active, active, false]]) {
         const wanted = values.map(value => {
           const key = JSON.stringify([value.activity_scope, value.session_id, value.focal_id || 'history']); keep.add(key);

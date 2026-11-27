@@ -49,7 +49,7 @@ def _catalog_cost_offer(entry, revision):
 
 
 def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
-    evidence, ends, failures, snapshots, costs = [], [], [], {}, {}
+    evidence, ends, failures, unobserved, snapshots, costs = [], [], [], [], {}, {}
     for entry in cards.sessions.values():
         if (entry.snapshot is None or entry.capture is None or not entry.capture.authoritative
                 or entry.source_status.failed_at is not None):
@@ -59,7 +59,8 @@ def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
         root, revision, at = entry.snapshot.root, entry.snapshot.source_revision, entry.capture.observed_at_ms
         if entry.capture.catalog_prompt is not None:
             prompt, start = entry.capture.catalog_prompt
-            evidence.append((root, revision, at, prompt, start, True, None, False))
+            fact = (root, revision, at, prompt, start, True, None, False)
+            evidence.append((*fact, entry.capture.ongoing) if entry.capture.ongoing is not None else fact)
             if isinstance(getattr(entry, 'cost', None), SessionCostState) and entry.capture.source_epoch == cards.source_epoch:
                 # An explicit empty offer withdraws incompatible evidence. A
                 # missing capture still says nothing about a previous value.
@@ -70,13 +71,17 @@ def publish_catalog_prompts(catalog, cards, *, offer_snapshots=False):
                 snapshots[root.session_id] = at, entry.cost.evidence
         elif entry.capture.catalog_prompt_ends and entry.verified_generation == entry.generation:
             ends.append((root, revision, at, entry.capture.catalog_prompt_ends, entry.capture.source_epoch))
+        elif entry.snapshot.continuations is None and entry.verified_generation == entry.generation:
+            unobserved.append((root, revision, at, entry.capture.source_epoch))
     if costs:
         catalog.observe_prompts(evidence, source_epoch=cards.source_epoch, costs=costs)
     else:
         catalog.observe_prompts(evidence)
     if ends:
         catalog.observe_prompt_ends(ends)
-    if failures:
+    if unobserved:
+        catalog.withdraw_prompts(failures, unobserved=unobserved)
+    elif failures:
         catalog.withdraw_prompts(failures)
     if offer_snapshots:
         catalog.offer_active_snapshots(cards.source_epoch, snapshots)
@@ -239,7 +244,8 @@ class WebWatchCoordinator(WatchCoordinator):
         if frame is None:
             return None
         running = {card.session_id for card in frame.active_cards
-            if any(row.prompt.in_progress and not row.prompt.execution_unverified for row in card.rows)}
+             if card.ongoing is not None or any(
+                 row.prompt.in_progress and not row.prompt.execution_unverified for row in card.rows)}
         previews = catalog.previews(running, limit=MINI_PREVIEW_LIMIT)
         self.cards.preview_ids = tuple(item.session_id for item in previews)
         published = []

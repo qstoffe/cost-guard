@@ -60,7 +60,11 @@ def observe_catalog(source: SessionSource, *, session_id: str | None = None,
                   else (item.session_id for item in sessions if item.active is not False))
     active = frozenset(root_by_session[item] for item in candidates if item in root_by_session)
     live = (active if getattr(source, "watch_candidates_have_live_evidence", False) else
-            frozenset(root_by_session[item.session_id] for item in sessions if item.active is True and item.session_id in root_by_session))
+             frozenset(root_by_session[item.session_id] for item in sessions if item.active is True and item.session_id in root_by_session))
+    continuation_reader = getattr(source, "current_continuations", None)
+    if continuation_reader is not None:
+        active |= frozenset(root_by_session[item.session_id] for item in continuation_reader() or ()
+                            if item.session_id in root_by_session)
     return CatalogObservation(sessions, roots, root_by_session, revisions, active, live,
                               getattr(source, "observation_epoch", None))
 

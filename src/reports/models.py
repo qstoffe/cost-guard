@@ -6,6 +6,7 @@ native OpenCode/provider payloads.
 """
 from __future__ import annotations
 from src.domain.reference_cost import ReferenceCostIssue
+from src.domain.models import OngoingStatus
 
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -207,6 +208,7 @@ class SessionUsageRow:
     empty_history: bool = False
     ccost_complete: bool | None = None
     ccost_retained: bool = False
+    ongoing: OngoingStatus | None = None
 
 
 @dataclass(frozen=True, slots=True)

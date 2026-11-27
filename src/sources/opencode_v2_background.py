@@ -208,12 +208,13 @@ def background_activities(
                                           invocation_reason=('Conflicting job ownership; command withheld.' if conflict else
                                               'Running registry unobservable; awaiting verified live source.' if registry is None else ''),
                                           invocation_start_kind=start_kind if not conflict and ids is not None and job in ids else '',
+                                          registry_verified=not conflict and ids is not None and job in ids,
                                           invocation_registry_unlinked=bool(not conflict and record.get('sessionID') is None
                                               and isinstance(record.get('command'), str) and record['command']))
         previous = activities.get(identity)
         if previous is not None and previous != activity:
             activity = replace(previous, tool_part_id="", tool_call_id="", invocation_input=(),
                                 invocation_reason='Conflicting job origins; command withheld.',
-                                invocation_start_kind="", invocation_end_observed=False)
+                                invocation_start_kind="", invocation_end_observed=False, registry_verified=False)
         activities[identity] = activity
     return tuple(sorted(activities.values(), key=lambda value: (value.started_at_ms, value.activity_id))), notice_ids

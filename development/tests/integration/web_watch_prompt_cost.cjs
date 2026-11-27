@@ -13,7 +13,10 @@ class Node {
   addEventListener(kind, handler) { this.events[kind] = handler; }
 }
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-for(const card of input.view.active_cards)for(const row of card.rows)row.prompt.in_progress=true;
+// Live publishes one card per focal prompt, even for concurrent prompts in one session.
+input.view.active_cards=input.view.active_cards.flatMap(card=>card.rows.map(row=>({
+  ...card,focal_id:row.prompt.event_id,ongoing:{phase:'running'},
+  rows:[{...row,prompt:{...row.prompt,in_progress:true}}]})));
 input.view.history_state = 'observed'; // This fixture supplies a complete fixed history.
 const context = vm.createContext({input, parent:new Node('div'), document:{createElement:tag => new Node(tag),
   createElementNS:(namespaceURI,tag) => Object.assign(new Node(tag), {namespaceURI})},
@@ -22,15 +25,14 @@ const helpText = require('../fixtures/web_help_vm.cjs')(vm, context);
 for (const name of ['render', 'account-cards', 'watch']) vm.runInContext(fs.readFileSync(`src/web/assets/${name}.js`, 'utf8'), context);
 vm.runInContext('globalThis.state={connection:"Live connected."}; ReportView.renderLive(parent,input,state)', context);
 const cards = [...context.state.watch.cards.values()];
-assert.equal(cards.length, 1, 'completed history has no second Watch table');
 const credits = ['1250', '12', '100', '0', 'N/A', '2', '0', '<0.1', '<0.1', '12', '12', '0', 'N/A', '0', '0', '<0.1'];
 const usd = ['$12.50', '$0.12', '$1.00', '$0.00', 'N/A', '$0.01', '$0.00', '<$0.01', '<$0.01', '$0.12', '$0.12', '$0.00', 'N/A', '$0.00', '$0.00', '<$0.01'];
 const canonical = JSON.stringify(input);
 for (const [unit, expected] of [['credits', credits], ['usd', usd], ['credits', credits]]) {
   vm.runInContext(`ReportView.setUnit('${unit}',parent)`, context);
   vm.runInContext('ReportView.renderLive(parent,input,state)', context);
+  assert.deepEqual(cards.flatMap(card=>card.body.children.map(row=>row.children[5].textContent)),expected);
   for (const card of cards) {
-    assert.deepEqual(card.body.children.map(row => row.children[5].textContent), expected);
     const [button] = card.root.children[2].children[0].children[0].children[0].children[5].children;
     assert.equal(button.textContent, 'CCost');
     const explanation = helpText(button);
