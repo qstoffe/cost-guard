@@ -5,10 +5,12 @@ import unittest
 
 from development.tests.fixtures.pricing_catalog import catalog, threshold_catalog
 from development.tests.fixtures.context_deltas import context_snapshot, context_block
+from development.tests.fixtures.mini_context import handoff_snapshot
 from development.tests.fixtures.session_snapshots import MODEL, make_native_v2_compaction_snapshot, make_uncompacted_snapshot, message, part, prov
 from development.tests.fixtures.watch_runtime import MutableSource, make_service
 from src.analysis import analyze_snapshot
 from src.analysis.context import ContextEpochs, estimate_event_context, estimate_next_context
+from src.application.projection import block as project_block
 from src.domain import ActiveContext, ContextBoundary, EventKind, MessageRole, ModelInvocation, NormalizedEvent, TokenUsage
 from src.reports.prompts import build_prompt_block
 from src.sources.opencode_v2_wire import selection_boundaries
@@ -57,6 +59,14 @@ def project(snapshot, prices=None):
 
 
 class HistoricalContextTests(unittest.TestCase):
+    def test_detail_footer_identifies_retained_context_even_when_owned_by_the_latest_prompt(self):
+        for phase, expected in (("pending", (230_000, "pending")), ("fresh", (235_000, "ready-current"))):
+            with self.subTest(phase=phase):
+                _, block = context_block(handoff_snapshot(phase), catalog())
+                context = project_block(block, details=True).to_json()["session_context"]
+                self.assertEqual("next", context["warning"]["owner_id"])
+                self.assertEqual(expected, (context["watch_next_context_tokens"], context["context_state"]))
+
     def test_single_prompt_retains_its_own_pair_when_no_longer_in_active_history(self):
         for active in (True, False):
             for output in (12_000, 0):

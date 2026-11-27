@@ -22,6 +22,7 @@ const SessionDetail = (() => {
   };
   const validMix = values => Array.isArray(values) && values.length === 4 &&
     values.every(value => Number.isFinite(value) && value >= 0);
+  const tokenCount = new Intl.NumberFormat('en-US');
   const initialReadRetries = 3;
   const restartableReads = new Set(['detail_expired', 'detail_busy', 'detail_read_stale',
     'inconsistent_history', 'inconsistent_activity']);
@@ -90,7 +91,29 @@ const SessionDetail = (() => {
   function promptLabel(value) {
     return `${value.execution_unverified ? '[UNVERIFIED] ' : value.in_progress ? '[RUNNING] ' : ''}#${value.prompt_number ?? '—'}`;
   }
-  function cells(value, modelValue, mixNode) {
+  function contextChangeHelp(data, index, running) {
+    const block = data?.result.view.prompt_blocks[0];
+    const current = block?.rows[index];
+    if (!current) return 'Context change unavailable.';
+    const next = block.rows[index + 1];
+    let nextTokens = next?.incoming_context_tokens;
+    if (!next) {
+      if (block.rows.length !== data.total) return 'Context change pending.';
+      const context = block.session_context;
+      if (running || current.in_progress || context?.context_state === 'pending') return 'Context change pending.';
+      // Older archived detail has the owning prompt but predates the status field.
+      if (!context || context.warning?.owner_id !== current.event_id ||
+          (context.context_state !== undefined && context.context_state !== 'ready-current'))
+        return 'Context change unavailable.';
+      nextTokens = context.watch_next_context_tokens;
+    }
+    if (!Number.isFinite(current.incoming_context_tokens) || !Number.isFinite(nextTokens))
+      return 'Context change unavailable.';
+    const delta = nextTokens - current.incoming_context_tokens;
+    const sign = delta > 0 ? '+' : delta < 0 ? '−' : '';
+    return `Estimated context change: ${sign}${tokenCount.format(Math.abs(delta))} tokens`;
+  }
+  function cells(value, modelValue, mixNode, contextHelp) {
     const label = el('span', undefined, 'session-prompt-label');
     const clock = ContextHelp.value(el('span', value.display?.clock || '—'), value.display?.date_time || 'Start time unavailable');
     const preview = el('span', value.preview || value.label || 'Prompt', 'session-preview');
@@ -112,9 +135,12 @@ const SessionDetail = (() => {
       'CCost can reflect only the known priced portion. N/A: no nonzero token mix.');
     ReportView.valueSlot(mix, value.tokenMixAvailable ? ReportView.display(value, 'token_mix_percent') :
       value.calls > 0 ? '?' : 'N/A', {pending: value.tokenMixPending, field: 'prompt token mix'});
+    const duration = el('span', () => ReportView.display(value, 'duration_ms'));
+    const incomingContext = ContextHelp.value(el('span', () =>
+      value.display?.first_incoming_context_tokens ?? ReportView.display(value, 'incoming_context_tokens')), contextHelp);
     return [label, model, effort, cost,
-       calls, ReportView.display(value, 'duration_ms'),
-       firstContext(value), ReportView.costValue(value, 'incoming_context_ccost'),
+       calls, duration,
+       incomingContext, ReportView.costValue(value, 'incoming_context_ccost'),
        ReportView.costValue(value, 'extra_ccost'), mix];
   }
   class View {
@@ -153,6 +179,7 @@ const SessionDetail = (() => {
       this.activityAnnouncement = el('span', '', 'sr-only'); this.activityAnnouncement.setAttribute('role', 'status');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, this.activityFeedback, foot); scroll.append(table);
       this.values = new Values();
+      this.rowIndexes = new Map();
       this.quotaUsage = typeof AccountCards === 'undefined' ? null : new AccountCards.SessionUsage();
       this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.activityAnnouncement, this.status,
         this.retry, this.liveActivityStatus, this.loader.root, scroll, this.context.root, this.invocations.root, this.activity.root);
@@ -463,6 +490,7 @@ const SessionDetail = (() => {
     }
     invalidateValues() {
       this.values.clear(); this.costs = null; this.costSource = null; this.data = null;
+      this.rowIndexes.clear();
       this.showActivityFeedback(null);
       ContextHelp.dismiss(this.root);
       this.body.replaceChildren(); this.footer.replaceChildren(); this.footerBlock = null;
@@ -492,11 +520,11 @@ const SessionDetail = (() => {
       this.activity.update(data.activity, data.result.view.timezone_id);
       this.updateInvocations(data);
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
-      const wanted = new Set(block.rows.map(row => row.id));
+      this.rowIndexes = new Map(block.rows.map((row, index) => [row.id, index]));
       const anchor = [...this.body.children].find(row => row.getBoundingClientRect().bottom > 0);
       const top = anchor?.getBoundingClientRect().top;
       let deferOrder = false;
-      for (const row of [...this.body.children]) if (!wanted.has(row.dataset.id)) {
+      for (const row of [...this.body.children]) if (!this.rowIndexes.has(row.dataset.id)) {
         if (protectedNode(row)) { this.pendingRender = true; deferOrder = true; }
         else row.remove();
       }
@@ -523,12 +551,13 @@ const SessionDetail = (() => {
         if (data.value_authority?.rows?.[value.event_id] === 'invalidated') ContextHelp.dismiss(row);
         if (row.signature !== signature && protectedRow) this.pendingRender = true;
         if (row.signature !== signature && !protectedRow) {
-          const content = cells(value, () => row.modelValue, row.children[9]?.firstChild);
+          const content = cells(value, () => row.modelValue, row.children[9]?.firstChild, () =>
+            contextChangeHelp(this.data, this.rowIndexes.get(row.dataset.id), row.classList.contains('session-running')));
           content.forEach((item, column) => {
             const td = row.children[column] || el('td');
             // A gesture owns its ancestor chain too: never detach/reparent Model.
             if ((column !== 1 || !model) && td.firstChild !== item)
-              td.replaceChildren(typeof item === 'object' ? item : el('span', () => cellsText(value, column)));
+              td.replaceChildren(item);
             if (!td.parentNode) row.append(td);
           }); row.signature = signature;
         }
@@ -569,6 +598,7 @@ const SessionDetail = (() => {
       const message = running.size ? 'A prompt is running. Its detail is not available yet.' : '';
       ReportView.text(this.liveActivityStatus, message);
       this.liveActivityStatus.hidden = !message;
+      ContextHelp.refresh(this.body);
     }
     updateFooter(block) {
       this.footerBlock = block;
@@ -595,15 +625,6 @@ const SessionDetail = (() => {
       }
       ContextHelp.refresh(this.footer);
     }
-  }
-  // Unit bindings must not manufacture new tooltip DOM for unchanged text cells.
-  function firstContext(row) {
-    return row.display?.first_incoming_context_tokens ?? ReportView.display(row, 'incoming_context_tokens');
-  }
-  function cellsText(row, index) {
-    return [null, row.watch_model || 'N/A', row.watch_effort || 'N/A', null,
-      row.display?.calls ?? String(row.calls ?? 'N/A'), ReportView.display(row, 'duration_ms'), firstContext(row),
-      ...['incoming_context_ccost', 'extra_ccost', 'token_mix_percent'].map(key => ReportView.display(row, key))][index];
   }
   return {View};
 })();

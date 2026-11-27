@@ -1,5 +1,59 @@
 // Authenticated shipped HTTP + canonical synthetic source, then explicit display DTO transitions.
 const assert = require('node:assert/strict');
+
+// The source fixture has first-request counts 20 and 30, both displayed as 1k.
+async function checkIncomingContext({evaluate, until, command}) {
+  assert.deepEqual(await evaluate('[...detail.body.rows].map(r=>r.cells[6].textContent)'), ['1k','1k']);
+  const point = await evaluate(`(()=>{const cell=detail.body.rows[0].cells[6].firstChild;
+    cell.scrollIntoView({block:'center'});const r=cell.getBoundingClientRect();
+    return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+  await command('Input.dispatchMouseEvent', {type:'mouseMoved', ...point});
+  await until(`detail.body.rows[0].cells[6].firstChild.getAttribute('aria-describedby')==='context-help'`);
+  assert.match(await evaluate("document.querySelector('[role=tooltip]:not([hidden])').textContent"), /\+10 tokens/);
+  await command('Input.dispatchMouseEvent', {type:'mouseMoved', x:0, y:0});
+  await command('Input.dispatchKeyEvent', {type:'keyDown', key:'Escape', code:'Escape'});
+  await command('Input.dispatchKeyEvent', {type:'keyUp', key:'Escape', code:'Escape'});
+  // Replay display DTOs synchronously: live polling cannot interleave a genuine
+  // source revision in the middle of the controlled handoff.
+  const result = await evaluate(`(()=>{
+    const original=detail.data, dto=structuredClone(original), block=dto.result.view.prompt_blocks[0];
+    const prompt=(n,count,label)=>({...block.rows[0],id:'row-'+n,event_id:'u'+n,prompt_number:n,
+      incoming_context_tokens:count,in_progress:false,display:{...block.rows[0].display,first_incoming_context_tokens:label}});
+    const paint=()=>detail.update(structuredClone(dto)), ictx=i=>detail.body.rows[i].cells[6].firstChild;
+    const help=()=>document.querySelector('[role=tooltip]:not([hidden])')?.textContent;
+    try {
+      block.rows=[prompt(1,10007,'10k'),prompt(2,11508,'12k'),prompt(3,9000,'9k')];
+      const context=block.session_context={context_state:'ready-current',watch_next_context_tokens:9800,
+        display:{watch_next_context_tokens:'10k'},warning:{owner_id:'u3'}};
+      dto.total=3;paint();
+      const labels=[0,1,2].map(i=>ictx(i).textContent), footer=detail.context.contextValue.textContent;
+      ictx(1).focus();const reduction=help();ictx(2).focus();const final=help();
+      block.rows[2].in_progress=true;paint();const running=help();
+      block.rows[2].in_progress=false;context.context_state='pending';paint();const retained=help();
+      context.context_state='ready-current';context.watch_next_context_tokens=9000;
+      context.display.watch_next_context_tokens='9k';paint();const zero=help();
+      delete context.context_state;context.warning.owner_id='u2';paint();const stale=help();
+      context.warning.owner_id='u3';paint();const legacy=help();
+      block.rows.push(prompt(4,null,'N/A'));dto.total=4;paint();const missing=help();
+      block.rows[3]=prompt(4,9300,'9k');paint();
+      return {labels,footer,reduction,final,running,retained,zero,stale,legacy,missing,next:help(),
+        stillFocused:document.activeElement===ictx(2)};
+    } finally {document.activeElement.blur();detail.update(original);}
+  })()`);
+  assert.deepEqual(result.labels, ['10k','12k','9k']);
+  assert.equal(result.footer, '10k');
+  assert.match(result.reduction, /[−-]2,508 tokens/);
+  assert.match(result.final, /\+800 tokens/);
+  assert.match(result.running, /pending/i);
+  assert.match(result.retained, /pending/i);
+  assert.match(result.zero, /: 0 tokens/);
+  assert.match(result.stale, /unavailable/i);
+  assert.match(result.legacy, /: 0 tokens/);
+  assert.match(result.missing, /unavailable/i);
+  assert.match(result.next, /\+300 tokens/);
+  assert.equal(result.stillFocused, true);
+}
+
 module.exports = async ({evaluate, until, fixture, command}) => {
   const checks=[],layouts=[];
   await fixture('detail-values-source');
@@ -24,6 +78,8 @@ module.exports = async ({evaluate, until, fixture, command}) => {
         state:value.state,pending:value.pending,reason:value.acquisition?.reason,status:detail.status.textContent,
        hidden:detail.status.hidden,loader:detail.loader.root.hidden});};`);
   assert.match(await evaluate('originalMix'),/^\d+\/\d+\/\d+\/\d+$/);
+  await checkIncomingContext({evaluate, until, command});
+  checks.push('Ictx labels, signed adjacent differences and final Context; open help follows pending, settled zero, legacy owner and next prompt without substituting missing data');
   for(const selector of ['detail.body.rows[0].cells[3].firstChild','detail.footer.cells[3].firstChild']) {
     await evaluate(`${selector}.focus()`);
     const costHelp=await evaluate("document.getElementById('context-help').textContent");
