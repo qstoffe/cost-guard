@@ -109,7 +109,7 @@ class SessionPeriodTests(unittest.TestCase):
 
         self.assertEqual(source.load_count, 14)
         self.assertIn('root-0000', catalog.rows, "the oldest-work turn must survive expansion priority")
-        self.assertEqual(len(catalog.leases[today['token']]['navigation'].facts), 13)
+        self.assertEqual(len(catalog.lease_pages.leases[today['token']]['navigation'].facts), 13)
 
     def test_cold_5000_root_sorts_hydrate_only_thirty_today_then_reuse_and_revise(self):
         activities = ([self.now - 1000] * 30 + [self.now - 3 * DAY] * 40 +
@@ -182,7 +182,7 @@ class SessionPeriodTests(unittest.TestCase):
                         self.assertEqual(len(set(ids)), total)
                         catalog.interest(page["token"], False)
                         # Leases are bounded; this test has finished this browser.
-                        catalog.leases.pop(page["token"])
+                        catalog.lease_pages.leases.pop(page["token"])
 
     def test_metadata_candidates_are_provisional_until_event_bounds_are_known(self):
         midnight = timestamp("2026-11-13T00:00:00")
@@ -553,7 +553,7 @@ class SessionPeriodTests(unittest.TestCase):
         source.snapshots["root-0000"] = replace(off_page, source_revision="changed")
         catalog.observe(observe_catalog(source, include_archived_revisions=True))
 
-        with patch.object(catalog, "_population", side_effect=AssertionError("older page rescans live scope")):
+        with patch.object(catalog.lease_pages, "population", side_effect=AssertionError("older page rescans live scope")):
             explicit = catalog_page(catalog, dict(older, applied=1, navigation=2))
             pinned = catalog_page(catalog, dict(older, applied=2))
 

@@ -45,7 +45,7 @@ class SessionsCalendarCacheTests(unittest.TestCase):
                     self.assertFalse(ready["pending_sort"])
                     self.assertEqual(source.load_count, live_count)
                     expected = [f"root-{index:04d}" for index in range(live_count - 1, -1, -1)]
-                    epoch = catalog.leases[first["token"]]["epochs"][ready["epoch"]]
+                    epoch = catalog.lease_pages.leases[first["token"]]["epochs"][ready["epoch"]]
                     self.assertEqual([row.session_id for row in epoch.rows[:live_count]], expected)
                     reads = source.load_count
                     started = time.perf_counter()
@@ -64,7 +64,7 @@ class SessionsCalendarCacheTests(unittest.TestCase):
                         for _ in range((live_count + 3) // 4):
                             catalog.tick(service)
                         current = catalog.page(token=first["token"], period="all", sort="name", direction=-1)
-                        current_epoch = catalog.leases[first["token"]]["epochs"][current["epoch"]]
+                        current_epoch = catalog.lease_pages.leases[first["token"]]["epochs"][current["epoch"]]
                         self.assertEqual([row.session_id for row in current_epoch.rows[:live_count]], expected)
                         self.assertEqual(current["epoch"], ready["epoch"], "unchanged cohort does not drift")
                     churn_reads = source.load_count - reads

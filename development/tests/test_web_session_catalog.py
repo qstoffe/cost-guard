@@ -168,7 +168,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertEqual(120, len(self.catalog._targets()))
         catalog_page(self.catalog, {'action': 'interest', 'token': page['token'], 'visible': False})
         self.assertEqual(25, len(self.catalog._targets()))
-        self.assertIn(page['epoch'], self.catalog.leases[page['token']]['epochs'])
+        self.assertIn(page['epoch'], self.catalog.lease_pages.leases[page['token']]['epochs'])
         self.catalog.interest(page['token'], True)
         self.clock += 91
         self.assertEqual(25, len(self.catalog._targets()), 'expired visibility cannot retain a global sort scan')
@@ -249,7 +249,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertEqual(25, self.catalog.page(token=first['token'], sort="name")['page_ready'])
         self.catalog.interest(first['token'], False)
         self.catalog.tick(self.service)
-        quiet_due = self.catalog.background_due
+        quiet_due = self.catalog.lease_pages.background_due
         self.assertEqual(900, quiet_due)
 
         # A quick visit followed by navigation away is not completed warming.
@@ -258,7 +258,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.clock = 240
         self.assertEqual(0, second['page_ready'])
         self.assertFalse(self.catalog.needed())
-        self.assertEqual(quiet_due, self.catalog.background_due)
+        self.assertEqual(quiet_due, self.catalog.lease_pages.background_due)
         before = self.source.load_count
 
         self.catalog.interest(first['token'], True)
@@ -274,7 +274,7 @@ class SessionCatalogTests(unittest.TestCase):
         self.assertEqual(first['epoch'], ready['epoch'])
         self.assertEqual(25, self.source.load_count - before)
         self.assertEqual(50, len(self.catalog.valid), 'unvisited pages are not hydrated')
-        self.assertLess(self.clock, self.catalog.background_due, 'visible work bypasses the quiet delay')
+        self.assertLess(self.clock, self.catalog.lease_pages.background_due, 'visible work bypasses the quiet delay')
 
     def test_failed_rows_are_unavailable_or_retained_not_endlessly_pending(self):
         first = self.catalog.page()

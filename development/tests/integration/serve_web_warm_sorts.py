@@ -52,7 +52,7 @@ def main():
         if not warm["pending_sort"]:
             break
     assert not warm["pending_sort"]
-    runtime.catalog.leases.clear()
+    runtime.catalog.reset_browsing_leases()
     host.start()
     host.publish_ready()
     print(json.dumps(dict(url=host.browser_url())), flush=True)

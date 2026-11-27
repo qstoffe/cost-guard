@@ -111,4 +111,4 @@ class CatalogPreviewFixture:
 
     def counts(self):
         return dict(reads=self.source.load_count, catalogs=self.source.catalog_count,
-            revisions=self.source.batch_count, leases=len(self.catalog.leases))
+            revisions=self.source.batch_count, leases=len(self.catalog.lease_pages.leases))

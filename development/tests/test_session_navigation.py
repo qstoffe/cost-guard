@@ -52,7 +52,7 @@ class SessionNavigationTests(unittest.TestCase):
             newer = SyntheticMonthSource(326, 1, month_start_ms=self.now - 4_000_000)
             self.source.snapshots.update({key: value for key, value in newer.snapshots.items()
                                           if key not in self.source.snapshots})
-            frozen = self.catalog.leases[first['token']]['navigation']
+            frozen = self.catalog.lease_pages.leases[first['token']]['navigation']
             hot = next(iter(frozen.facts))
             accepted = frozen.facts[hot]
             for sequence in range(76):
@@ -119,7 +119,7 @@ class SessionNavigationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.request(first, navigation=1)
             self.request(first, navigation=2, applied=1)
-            self.assertEqual(self.catalog.leases[first['token']]['navigation'].sequence, 2)
+            self.assertEqual(self.catalog.lease_pages.leases[first['token']]['navigation'].sequence, 2)
 
     def test_deleted_identity_dependency_and_calendar_changes_do_not_reuse_facts(self):
         for change in ('delete', 'provenance', 'source', 'dependencies', 'calendar'):
@@ -136,7 +136,7 @@ class SessionNavigationTests(unittest.TestCase):
                         root = replace(snapshot.root, provenance=replace(snapshot.root.provenance, source_instance='other'))
                         self.source.snapshots[key] = replace(snapshot, root=root, sessions=(root,))
                     elif change == 'source':
-                        self.catalog._invalidate_navigation()
+                        self.catalog.lease_pages.invalidate()
                     elif change == 'dependencies':
                         with patch.object(self.service, '_dependencies', return_value=('changed-authority',)):
                             self.catalog.tick(self.service)
@@ -194,7 +194,7 @@ class SessionNavigationTests(unittest.TestCase):
                             period='all', sort=sort, direction=1)
                         ids.extend(row['session_id'] for row in older['view']['session_usage'])
                     self.assertEqual(ids, [f'root-{index:04d}' for index in range(count)])
-                    self.catalog.leases.pop(page['token'])
+                    self.catalog.lease_pages.leases.pop(page['token'])
             if count:
                 key = f'root-{count - 1:04d}'
                 row = self.catalog.rows[key]
@@ -203,9 +203,9 @@ class SessionNavigationTests(unittest.TestCase):
                 for sort in ('ccost', 'ctx', 'duration', 'model', 'activity'):
                     for direction in (1, -1):
                         page = self.catalog.page(period='all', sort=sort, direction=direction, navigation=1)
-                        epoch = self.catalog.leases[page['token']]['epochs'][page['epoch']]
+                        epoch = self.catalog.lease_pages.leases[page['token']]['epochs'][page['epoch']]
                         self.assertEqual(epoch.rows[-1].session_id, key)
-                        self.catalog.leases.pop(page['token'])
+                        self.catalog.lease_pages.leases.pop(page['token'])
 
     def test_running_first_all_sorts_both_directions_and_overflow_boundaries(self):
         for running_count in (0, 1, 10, 24, 25, 26, 50, 51):
@@ -241,18 +241,18 @@ class SessionNavigationTests(unittest.TestCase):
                         self.assertEqual(ids, running_ids + [f"root-{index:04d}" for index in finished])
                         self.assertEqual(running_flags, [True] * running_count + [False] * 100)
                         self.assertEqual(len(set(ids)), 100 + running_count)
-                        self.catalog.leases.pop(page['token'])
+                        self.catalog.lease_pages.leases.pop(page['token'])
             # Mutable metrics never participate in running-group order.
             for key, row in tuple(self.catalog.rows.items())[:running_count]:
                 self.catalog.rows[key] = replace(row, ccost=Decimal(99999), model="Changed",
                     context_tokens=None, context_qualified=False, model_pending=True, prompt_count=0)
             changed = self.catalog.page(period='all', sort='ccost', direction=1)
-            epoch = self.catalog.leases[changed['token']]['epochs'][changed['epoch']]
+            epoch = self.catalog.lease_pages.leases[changed['token']]['epochs'][changed['epoch']]
             self.assertEqual([row.session_id for row in epoch.rows[:running_count]], running_ids)
             for sort in ('ctx', 'model'):
                 missing = self.catalog.page(period='all', sort=sort, direction=1, navigation=1)
                 self.assertFalse(missing['pending_sort'], "running sort never requires changing metric keys")
-                self.catalog.leases.pop(missing['token'])
+                self.catalog.lease_pages.leases.pop(missing['token'])
 
     def test_running_terminal_reinsertion_and_new_arrival_do_not_shift_pinned_pages(self):
         self.setup_catalog(151)
@@ -278,7 +278,7 @@ class SessionNavigationTests(unittest.TestCase):
         latest = self.request(first, applied=1)
         self.assertNotEqual(latest['epoch'], first['epoch'])
         self.assertEqual(latest['view']['session_usage'][0]['session_id'], 'root-0150')
-        newest = self.catalog.leases[first['token']]['epochs'][latest['epoch']]
+        newest = self.catalog.lease_pages.leases[first['token']]['epochs'][latest['epoch']]
         self.assertEqual(newest.rows[-1].session_id, 'root-0050')
         for offset, expected in zip((25, 50, 75), old_ids):
             pinned = self.request(first, offset=offset, epoch=first['epoch'])
@@ -307,7 +307,7 @@ class SessionNavigationTests(unittest.TestCase):
             self.request(first, cancelled=17)
             with self.assertRaises(ValueError):
                 self.request(first, navigation=17)
-            self.assertIn(ready['epoch'], self.catalog.leases[first['token']]['epochs'])
+            self.assertIn(ready['epoch'], self.catalog.lease_pages.leases[first['token']]['epochs'])
 
     def test_real_summary_supplies_source_event_membership_on_cache_hit_and_miss(self):
         self.setup_catalog(1)
@@ -400,12 +400,12 @@ class SessionNavigationTests(unittest.TestCase):
             for key in ('root-0000', 'root-0042'):
                 self.source.snapshots[key] = replace(self.source.snapshots[key], source_revision='changed')
             self.observe()
-            with patch.object(self.catalog, '_population', side_effect=AssertionError('warm request rescanned scope')):
+            with patch.object(self.catalog.lease_pages, 'population', side_effect=AssertionError('warm request rescanned scope')):
                 back = self.catalog.page(**options, navigation=3, applied=2)
             self.assertTrue(back['page_reused'])
             self.assertEqual((back['epoch'], back['total'], back['progress']['total']), (first['epoch'], 43, 25))
             self.assertEqual((second['total'], len(second['view']['session_usage'])), (43, 18))
-            self.assertIsNone(self.catalog.leases[start['token']].get('navigation'))
+            self.assertIsNone(self.catalog.lease_pages.leases[start['token']].get('navigation'))
             self.assertFalse(back['pending_sort'])
             self.assertEqual(back['view']['session_usage'][0]['metric_state'], 'retained')
             self.assertEqual(len(self.acquired), 43)

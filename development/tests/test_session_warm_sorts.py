@@ -73,7 +73,7 @@ class WarmSortTests(unittest.TestCase):
                         total=page["progress"]["total"], epoch=page["epoch"]))
                     self.assertFalse(page["pending_sort"], (turn, sort, direction, page["progress"]))
                     self.assertEqual((page["progress"]["completed"], page["progress"]["total"]), (48, 48))
-                    epoch = self.catalog.leases[page["token"]]["epochs"][page["epoch"]]
+                    epoch = self.catalog.lease_pages.leases[page["token"]]["epochs"][page["epoch"]]
                     expected = ordered(self.catalog._rows(tuple(self.catalog.roots)), sort, direction)
                     expected = [row.session_id for row in expected if row.session_id not in ("root-0046", "root-0047")]
                     self.assertEqual([row.session_id for row in epoch.rows], expected)
@@ -110,7 +110,7 @@ class WarmSortTests(unittest.TestCase):
             provisional = self.catalog.page(token=activity["token"], passive=True)
             self.assertTrue(provisional["pending_sort"])
             self.assertEqual(provisional["order_state"], "provisional")
-            epoch = self.catalog.leases[activity["token"]]["epochs"][provisional["epoch"]]
+            epoch = self.catalog.lease_pages.leases[activity["token"]]["epochs"][provisional["epoch"]]
             ids = [row.session_id for row in epoch.rows]
             self.assertEqual(ids.index("root-0001"), 45, "qualified start is not an unknown discovery hint")
             self.assertNotIn("root-0001", [row["session_id"] for row in provisional["view"]["session_usage"]])
@@ -196,7 +196,7 @@ class WarmSortTests(unittest.TestCase):
         self.assertIsNone(row.prompt_started_ms)
         self.assertIsNone(row.activity_latest_ms)
         all_time = self.catalog.page(token=page["token"], period="all", applied=self.sequence)
-        epoch = self.catalog.leases[page["token"]]["epochs"][all_time["epoch"]]
+        epoch = self.catalog.lease_pages.leases[page["token"]]["epochs"][all_time["epoch"]]
         self.assertEqual(epoch.rows[-1].session_id, "root-0001")
 
 
