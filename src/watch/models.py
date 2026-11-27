@@ -169,6 +169,8 @@ class WatchCard:
     ongoing: OngoingStatus | None = None
     terminal_status: str | None = None
     terminal_until_ms: int | None = None
+    activity_order_ms: int | None = None
+    activity_order_origin: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -367,6 +367,28 @@ class DisplayHistoryTests(unittest.TestCase):
         self.assertNotIn(' — max', help_by_id['root-0001'])
         self.assertIn('may be incomplete', help_by_id['root-0001'])
 
+    def test_prior_archive_reopens_with_ready_history_and_accepts_new_live_priority(self):
+        archive, first = self.restore('one')
+        source = self.source(1, 3)
+        first.observe(observe_catalog(source, include_archived_revisions=True))
+        self.tick(first, source)
+        with closing(sqlite3.connect(archive.path)) as db, db:
+            # The v5 live table has no distinct session activity ordering clock.
+            db.executescript('''DROP TABLE session_live;
+                CREATE TABLE session_live (run TEXT NOT NULL, item TEXT NOT NULL,
+                    start_ms INTEGER, finish_ms INTEGER, last_activity_ms INTEGER, latest_activity_ms INTEGER,
+                    payload TEXT NOT NULL, finalizing INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(run, item)) WITHOUT ROWID;
+                PRAGMA user_version=5;''')
+
+        _, next_catalog = self.restore('two')
+        row = SessionUsageRow('live', 'New', 'Model', False, None, 1, running=True)
+        self.assertTrue(next_catalog.archive.update_runtime(state='observed', terminal=False,
+            reset_pending=True, pending={}, live={'live': (row, self.now, None)}))
+        result = next_catalog.page(period='all')['view']['session_usage']
+        self.assertEqual([('live', 1, True), ('root-0000', 3, False)],
+                         [(r['session_id'], r['prompt_count'], r['running']) for r in result])
+
     def test_cutover_retires_only_owned_legacy_files_without_import_and_preserves_next_start(self):
         cache_dir = self.directory / 'cache'
         instance = self.directory / 'instance'
@@ -989,6 +1011,55 @@ class DisplayHistoryTests(unittest.TestCase):
         recovered = catalog.page(period='today')
         self.assertTrue(recovered['history_progress']['complete'])
         self.assertEqual({recent, arrival, gap}, {r['session_id'] for r in recovered['view']['session_usage']})
+
+    def test_recent_ends_share_ongoing_activity_order_independently_of_name_sort(self):
+        from src.domain.models import OngoingStatus
+
+        source = self.source(8, 1)
+        _, catalog = self.restore('one')
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        for _ in range(4):
+            self.tick(catalog, source)
+        base = self.now - 1000
+        # Four ongoing starts, two future terminal rows; all activity fits one second.
+        evidence = []
+        for index, start, phase in ((1, 100, 'running'), (2, 40, 'running'), (3, 200, 'background'),
+                                    (4, 250, 'waiting'), (5, 50, 'running'), (6, 300, 'running')):
+            snapshot = make_root_snapshot(index, 1, month_start_ms=base + start - index * 60_000)
+            root = replace(snapshot.root, active=True)
+            snapshot = replace(snapshot, root=root, sessions=(root,), source_revision=f'live-{index}')
+            key = snapshot.root.session_id
+            source.snapshots[key] = snapshot
+            evidence.append((snapshot.root, snapshot.source_revision, self.now, snapshot.events[0].event_id,
+                             base + start, True, None, False, OngoingStatus(phase)))
+        catalog.observe(observe_catalog(source, include_archived_revisions=True))
+        catalog.observe_prompts(evidence)
+        # Observe both ends after every start. Their own finishes, not their
+        # starts or observation times, bracket them between the ongoing rows.
+        for key, finish, outcome in (('root-0002', 200, TerminalOutcome.SUCCESS),
+                                     ('root-0005', 150, TerminalOutcome.CANCELLATION)):
+            self.now += 10
+            snapshot = source.snapshots[key]
+            end = base + finish
+            root = replace(snapshot.root, active=False)
+            final = replace(snapshot, root=root, sessions=(root,), complete=True, source_revision='ended',
+                messages=(*snapshot.messages[:-1], replace(snapshot.messages[-1],
+                completed_at_ms=end, termination=TerminalEvidence(end, outcome))),
+                invocations=(replace(snapshot.invocations[0], completed_at_ms=end),))
+            source.snapshots[key] = final
+            catalog.observe(observe_catalog(source, include_archived_revisions=True))
+            capture, _ = capture_rows(report_service(source, self.cache, self.now, self.pricing),
+                                      final.root, fresh=final)
+            publish_verified_capture(catalog, final, capture)
+
+        for direction, history in ((1, [0, 7]), (-1, [7, 0])):
+            page = catalog.page(period='all', sort='name', direction=direction)
+            rows = page['view']['session_usage']
+            self.assertEqual(8, page['total'])
+            self.assertEqual([f'root-{index:04d}' for index in (6, 4, 3, 2, 5, 1, *history)],
+                             [row['session_id'] for row in rows])
+            self.assertEqual(['running', 'waiting', 'background', 'completed', 'aborted', 'running'],
+                             [row.get('terminal_status') or row['ongoing']['phase'] for row in rows[:6]])
 
     def test_short_prompt_discovered_and_finished_before_history_catches_up(self):
         from concurrent.futures import ThreadPoolExecutor

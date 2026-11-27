@@ -68,12 +68,17 @@ def create_runtime_schema(db):
         latest_activity_ms INTEGER,
         payload TEXT NOT NULL,
         finalizing INTEGER NOT NULL DEFAULT 0,
+        activity_order_ms INTEGER,
         PRIMARY KEY(run, item)
     ) WITHOUT ROWID''')
 
 
 def upgrade_runtime_schema(db):
     db.execute('ALTER TABLE session_live ADD COLUMN finalizing INTEGER NOT NULL DEFAULT 0')
+
+
+def add_runtime_activity_order(db):
+    db.execute('ALTER TABLE session_live ADD COLUMN activity_order_ms INTEGER')
 
 
 def _decimal_key(amount):
@@ -174,7 +179,7 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
     with closing(db.execute(f'''WITH
         args(run, requested, size) AS (VALUES (?, ?, ?)),
         live AS (
-            SELECT item, start_ms, finish_ms, EXISTS (
+            SELECT item, start_ms, finish_ms, coalesce(start_ms, activity_order_ms) AS order_ms, EXISTS (
                 SELECT 1 FROM ready_sessions WHERE ready_sessions.item=session_live.item
             ) AS saved {live_title}
             FROM session_live WHERE run=(SELECT run FROM args)
@@ -203,7 +208,7 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
             FROM history_slice
         ),
         live_page AS (
-            SELECT *, row_number() OVER (ORDER BY start_ms IS NULL, start_ms DESC, finish_ms DESC, item) AS ordinal
+            SELECT *, row_number() OVER (ORDER BY order_ms DESC, item DESC) AS ordinal
             FROM matching_live
         )
         SELECT live_count + history_count, offset, saved_count + history_count,
@@ -247,10 +252,11 @@ def update_runtime(db, run, *, state, terminal, reset_pending, pending, live):
             db.execute('DELETE FROM session_live WHERE run=? AND item=?', (run, key))
         else:
             db.execute('''INSERT INTO session_live (run, item, start_ms, finish_ms, last_activity_ms,
-                                                     latest_activity_ms, payload, finalizing) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                             latest_activity_ms, payload, finalizing, activity_order_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run, item) DO UPDATE SET start_ms=excluded.start_ms, finish_ms=excluded.finish_ms,
                     last_activity_ms=excluded.last_activity_ms, latest_activity_ms=excluded.latest_activity_ms,
-                    payload=excluded.payload, finalizing=excluded.finalizing''', (run, key, *value))
+                    payload=excluded.payload, finalizing=excluded.finalizing,
+                    activity_order_ms=excluded.activity_order_ms''', (run, key, *value))
 
 
 def close_runtime(db, run):

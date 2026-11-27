@@ -12,22 +12,23 @@ from .session_catalog_scope import (
     live_activity_order, provisional_order, retained_positions,
 )
 from .session_navigation import Navigation
+from .session_previews import terminal_activity
 from .session_row_sort import sort_value
 
 
 ARRIVAL_SLOTS = 5
 
 
-def ordered(rows, key, direction, recent_finishes=None):
+def ordered(rows, key, direction, recent_activity=None):
     # Stable value sorting preserves ascending IDs for ties in either direction.
     # Extract each value once; unknown values stay last, including descending.
-    running, finishing, known, unknown = [], [], [], []
+    priority, known, unknown = [], [], []
     for row in sorted(rows, key=lambda row: row.session_id):
         if row.running and type(row.prompt_started_ms) is int and row.prompt_started_ms > 0:
-            running.append(row)
+            priority.append((row.prompt_started_ms, row))
             continue
-        if recent_finishes and row.session_id in recent_finishes:
-            finishing.append(row)
+        if recent_activity is not None and row.session_id in recent_activity:
+            priority.append((recent_activity[row.session_id], row))
             continue
         value = sort_value(row, key)
         if value is None:
@@ -35,10 +36,8 @@ def ordered(rows, key, direction, recent_finishes=None):
         else:
             known.append((value, row))
     known.sort(key=lambda item: item[0], reverse=direction == -1)
-    running.sort(key=lambda row: -row.prompt_started_ms)
-    if finishing:
-        finishing.sort(key=lambda row: -recent_finishes[row.session_id])
-    return tuple(running) + tuple(finishing) + tuple(row for _, row in known) + tuple(unknown)
+    priority.sort(key=lambda item: (item[0] or 0, item[1].session_id), reverse=True)
+    return tuple(row for _, row in priority + known) + tuple(unknown)
 
 
 def _progress(catalog, sort, pending, selected, indexed, pinned, candidates, *, scope):
@@ -167,6 +166,9 @@ def epoch_page(self, pages, *, token, offset, sort, direction, epoch, period, na
         order = -1 if pending and not live_page else direction
         cache_key = window.identity, applied, order, pending, live_page
         recent = self.recent_finishes
+        now = self.clock_ms()
+        recent_activity = {key: terminal_activity(self, key, self.prompt_activity[key].watch_finish_ms, now)[0]
+                           for key in recent}
         members = event_members(candidates, window, display_rows, event_current, recent)
         latest, previous = next(((key, value) for key, value in reversed(lease["epochs"].items())
             if (value.sort, value.direction, value.window.identity) == (applied, order, window.identity)),
@@ -197,14 +199,14 @@ def epoch_page(self, pages, *, token, offset, sort, direction, epoch, period, na
             members = tuple(key for key in members if display_rows[key].running or key in recent or qualified(key))
         signature = (tuple((key, metadata.get(key), display_rows[key], event_current(key))
                             for key in (*members, *positions, *arrivals)), tuple(positions.items()), arrivals,
-                     tuple(recent.items()))
+                      tuple(recent_activity.items()))
         cached = pages.orders.get(cache_key)
         if nav is not None and navigation is not None and not pending:
-            rows = ordered(self._with_lifecycle(nav.rows, display_rows), sort, direction, recent)
+            rows = ordered(self._with_lifecycle(nav.rows, display_rows), sort, direction, recent_activity)
         elif cached and cached[0] == signature:
             rows = cached[1]
         else:
-            rows = ordered((display_rows[key] for key in members), applied, order, recent)
+            rows = ordered((display_rows[key] for key in members), applied, order, recent_activity)
             front = tuple(row for row in rows if row.running or row.session_id in recent)
             tail = tuple(row for row in rows if not row.running and row.session_id not in recent)
             if pending and (applied, order) == ("activity", -1):

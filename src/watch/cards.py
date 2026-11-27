@@ -275,9 +275,9 @@ class WatchCards:
             entry.terminal_highlight = None
         elif entry.live_prompt is not None:
             key, started = entry.live_prompt
-            outcome = capture.catalog_prompt_ends.get((started, key))
-            if outcome in ('completed', 'aborted'):
-                entry.terminal_highlight = key, capture.observed_at_ms, outcome
+            ended = capture.catalog_prompt_ends.get((started, key))
+            if ended is not None and ended.outcome in ('completed', 'aborted'):
+                entry.terminal_highlight = key, capture.observed_at_ms, ended.outcome
             elif (snapshot is not None and snapshot.continuations is None
                   and capture.observed_at_ms - entry.live_observed_ms < ONGOING_EVIDENCE_GRACE_MS):
                 # The previous assignment is still under observation, but a

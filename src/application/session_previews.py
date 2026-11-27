@@ -9,6 +9,19 @@ from src.watch.models import SessionPreview
 MINI_PREVIEW_LIMIT = 15
 
 
+def preview_activity(catalog, key, now):
+    current = catalog._activity_current(key)
+    at = catalog.rows[key].last_activity_ms if current else catalog.activity.get(key)
+    return (at if type(at) is int and 0 < at <= now else None), current
+
+
+def terminal_activity(catalog, key, watch_finish_ms, now):
+    fallback, from_events = preview_activity(catalog, key, now)
+    if fallback is not None and (watch_finish_ms is None or (from_events and fallback > watch_finish_ms)):
+        return fallback, 'events' if from_events else 'catalog'
+    return watch_finish_ms, None
+
+
 def live_previews(catalog, excluded, limit):
     """Reuse current scalar facts, not a browser's pinned epoch.
 
@@ -32,9 +45,7 @@ def live_previews(catalog, excluded, limit):
         current = key in catalog.valid and catalog.valid[key][0] == catalog.revisions.get(key) and not rejected
         if key in excluded or catalog._running(key):
             return None
-        activity_current = catalog._activity_current(key)
-        at = row.last_activity_ms if activity_current else catalog.activity.get(key)
-        at = at if type(at) is int and 0 < at <= now else None
+        at, activity_current = preview_activity(catalog, key, now)
         scope = total_scope(key)
         previous = None if rejected else catalog.preview_totals.get(key)
         total = (row.ccost if current and row is not None and row.complete else
