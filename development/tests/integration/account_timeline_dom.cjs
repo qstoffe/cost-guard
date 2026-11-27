@@ -61,6 +61,7 @@ const point = {amount: '100', display: {credits: '100', usd: '$1.00'}};
 const first = {id: '00000000', account: 'Account A',
   points: [point, null], total: point, peak: '100', ticks: [{amount: '0', display: {credits: '0', usd: '$0.00'}}, point]};
 const second = {...first, id: '00000008', account: 'Account B'};
+const contents = node => node.textContent + node.children.map(contents).join('');
 const start = Date.UTC(2026, 10, 1), day = 86_400_000;
 const frame = (scope, revision, pending, series, initial = pending, acquiring = true, price = 'price') =>
   ({scope, revision, acquiring,
@@ -72,7 +73,8 @@ async function check() {
   const calls = [];
   let demand = 0;
   const chart = new context.View((path, request, signal) =>
-    new Promise(resolve => calls.push({path, request, signal, resolve})), () => demand++);
+    new Promise(resolve => calls.push({path, request, signal, resolve})), () => demand++,
+    id => id === first.id ? '74' : '32');
   chart.active(true);
   chart.setScope('old');
   const old = chart.refresh();
@@ -110,9 +112,9 @@ async function check() {
   assert.equal(chart.tipTitle.textContent, '2026-11-02 Monday');
   assert.equal(chart.tipState.textContent, '');
   assert.equal(chart.announce.textContent, '2026-11-02 Monday. Account A: —. Account B: —');
-  assert.equal(chart.selectedLegend.children[0].children[2].textContent, '100');
+  assert.equal(contents(chart.selectedLegend.children[0]), 'Account A (74)');
   chart.inspect(null);
-  assert.equal(chart.selectedLegend.children[0].children[2].textContent, '100', 'closing the tooltip never clears totals');
+  assert.equal(contents(chart.selectedLegend.children[0]), 'Account A (74)', 'closing the tooltip never clears Monthly');
   chart.choose(1);
   const check = chart.entries.get(second.id).input;
   assert.equal(check.checked, true, 'every available account starts selected');
@@ -138,9 +140,7 @@ async function check() {
   check.checked = true;
   check.events.change();
   assert.match(chart.entries.get(second.id).name.textContent, /^Renamed account/);
-  assert.match(chart.selectedLegend.children[0].children[1].textContent, /^Renamed account/);
-  assert.equal(chart.selectedLegend.children[0].children[2].textContent, 'Provider billing-period total:');
-  assert.equal(chart.selectedLegend.children[0].children[4].textContent, 'Observed OpenCode subtotal: 100');
+  assert.deepEqual(chart.selectedLegend.children.map(contents), ['Renamed account (32)', 'Account A (74)']);
 
   const provisional = chart.refresh();
   const estimated = {amount: '0.00001', display: {credits: '~<0.1', usd: '~<$0.01'}};
@@ -316,7 +316,7 @@ async function checkPeriodLoading() {
   assert.ok(chart.historyError.hidden, 'a passive cache read is not a failed user selection');
 }
 
-async function checkLegendTotals() {
+async function checkBucketAmounts() {
   const cases = [
     ['Exact', point, '100', '$1.00'],
     ['Partial', {amount: '123', display: {credits: '~123', usd: '~$1.23'}}, '123', '$1.23'],
@@ -337,10 +337,6 @@ async function checkLegendTotals() {
   for (const [displayUnit, column] of [['credits', 2], ['usd', 3]]) {
     unit = displayUnit;
     chart.draw();
-    const cells = chart.selectedLegend.children.map(row => row.children[2]);
-    assert.deepEqual(cells.map(cell => cell.children[0]?.textContent ?? cell.textContent),
-      cases.map(row => row[column]), displayUnit);
-    assert.equal(cells.at(-1).children[1].textContent, 'Total unavailable');
     chart.choose(0);
     assert.deepEqual(chart.tipValues.children.map(row => row.children[2].textContent), cases.map(row => row[column]));
     for (const row of cases) assert.ok(chart.announce.textContent.includes(`${row[0]}: ${row[column]}`));
@@ -387,5 +383,5 @@ async function checkOverlayRanks() {
   }
 }
 
-check().then(checkWaitingProgress).then(checkOverlayRanks).then(checkLegendTotals).then(checkPeriodLoading)
+check().then(checkWaitingProgress).then(checkOverlayRanks).then(checkBucketAmounts).then(checkPeriodLoading)
   .catch(error => { console.error(error); process.exitCode = 1; });

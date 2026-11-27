@@ -205,5 +205,5 @@ module.exports = async ({command,evaluate,until,owner,mini,checks,layouts}) => {
   }
   checks.push('AI Stats DOM: stable field-named spinners, blocked/recovering states, both units, incomplete zero retains, qualified decrease/zero replaces, period isolation');
   checks.push('Exact first line and scope in focused Full/Mini, Accounts card, Sessions/Detail and AI Stats heading popovers');
-  await require('./probe_ccost_reports.cjs')({evaluate,owner,heading,checks});
+  await require('./probe_ccost_reports.cjs')({evaluate,until,owner,heading,checks});
 };

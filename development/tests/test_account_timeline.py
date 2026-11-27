@@ -147,6 +147,7 @@ class TimelineProjectionTests(unittest.TestCase):
         series, = chart['series']
         self.assertTrue(series['provider_monthly_total'])
         self.assertTrue(series['provider_window_matches'])
+        self.assertTrue(series['discrepancy_comparable'])
         self.assertEqual('$7.95', series['month_total']['display']['usd'])
         self.assertEqual('$0.40', series['observed_total']['display']['usd'])
         self.assertEqual(['40', '0', '0', '0', '0'], [p['amount'] for p in series['points'][:5]])
@@ -158,8 +159,17 @@ class TimelineProjectionTests(unittest.TestCase):
         local = timeline_view('month', NOV_5, 'Europe/Stockholm', roster, index,
                               first_covered_ms=NOV_1 - DAY_MS, gaps=()).to_json()['series'][0]
         self.assertFalse(local['provider_window_matches'])
+        self.assertFalse(local['discrepancy_comparable'])
         self.assertEqual('$7.95', local['month_total']['display']['usd'])
         self.assertEqual('$0.45', local['observed_total']['display']['usd'])
+
+        for history, gaps in [(None, ()), (index, ((NOV_1 + DAY_MS, NOV_5),))]:
+            with self.subTest(missing_index=history is None):
+                row, = timeline_view('month', NOV_5, 'UTC', roster, history,
+                                     first_covered_ms=NOV_1, gaps=gaps).to_json()['series']
+                self.assertFalse(row['discrepancy_comparable'])
+                self.assertEqual(None if history is None else '~$0.40',
+                                 row['observed_total'] and row['observed_total']['display']['usd'])
 
     def test_covered_zero_differs_from_partial_pricing_attribution_and_source_gaps(self):
         a, b = subscription(identity='first'), subscription(identity='second')

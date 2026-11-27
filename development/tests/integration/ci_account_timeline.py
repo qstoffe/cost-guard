@@ -5,6 +5,7 @@ from collections import Counter
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 import shutil
 import sys
@@ -80,18 +81,13 @@ def replace_geometry(page, period, now, zone, width=20, *, sample=None):
         chart.schedule = () => {};
         const sample = seed ?? chart.view.series.find(row => row.points.some(point => Number(point?.amount) > 0));
         const peak = sample.points.find(point => Number(point?.amount) > 0);
-        const totals = [
-            {amount: '123456', display: {credits: '123456', usd: '$1234.56'}},
-            {amount: '123', display: {credits: '~123', usd: '~$1.23'}},
-            {amount: '0.01', display: {credits: '~<0.1', usd: '~<$0.01'}},
-            {amount: '0', display: {credits: '0', usd: '$0.00'}},
-            null,
-        ];
+        // Synthetic accounts are not live cards. Include a nontrivial amount
+        // beside the long names when measuring layout at narrow widths.
+        chart.monthlyCost = () => '$1234.56';
         const series = Array.from({length: width}, (_, i) => ({...sample,
             id: (i + 1).toString(16).padStart(8, '0'),
             account: i === width - 1 ? `Provider${'UnbrokenQuotaName'.repeat(4)}${i + 1}` :
                 i % 3 ? `Provider · ${i % 3 === 1 ? 'Weekly' : 'Model daily'} quota ${i + 1}` : `Account ${i + 1}`,
-            total: totals[i % totals.length],
             peak: sample.peak, ticks: sample.ticks, points: window.buckets.map(() => peak)}));
         const view = {period, timezone_id: zone, ...window, series, pending_buckets: []};
         chart.period = period;
@@ -129,30 +125,29 @@ def assert_legend_geometry(selected, *, compact=False, wraps=False):
         const bounds = list.getBoundingClientRect();
         const range = document.createRange();
         const rows = [...list.children].map(row => {
-            const [, name, value] = row.children;
-            const label = name.getBoundingClientRect(), cell = value.getBoundingClientRect();
+            const value = row.querySelector('.account-timeline-legend-value');
+            const name = value.previousElementSibling;
             range.selectNodeContents(name);
             const lines = [...range.getClientRects()];
-            range.selectNodeContents(value.firstElementChild ?? value);
-            const cost = range.getBoundingClientRect();
-            return {column: cell.left, right: cost.right, labelRight: Math.max(...lines.map(line => line.right)),
-                wrapped: lines.length > 1,
-                fit: lines.every(line => line.left >= label.left - 1 && line.right <= label.right + 1) &&
-                    cost.width > 0 && cost.left >= cell.left - 1 && cost.right <= bounds.right + 1 &&
+            range.selectNodeContents(value);
+            const [cost, ...extra] = range.getClientRects();
+            const last = lines.at(-1);
+            return {wrapped: lines.length > 1 || Math.abs(cost.top - last.top) > 1,
+                gap: cost.left - last.right,
+                fit: !extra.length && [...lines, cost].every(line =>
+                    line.left >= plot.left - 1 && line.right <= plot.right + 1) && cost.width > 0 &&
                     getComputedStyle(value).fontVariantNumeric === 'tabular-nums'};
         });
-        const [{column, right}] = rows;
         return {
             fit: bounds.right <= plot.right + 1 && rows.every(row => row.fit),
-            aligned: rows.every(row => Math.abs(row.right - right) < 1 && Math.abs(row.column - column) < 1),
-            gap: column - Math.max(...rows.map(row => row.labelRight)),
+            adjacent: rows.every(row => row.gap > 0 && row.gap < 16),
             room: plot.right - bounds.right,
             wrapped: rows.some(row => row.wrapped),
         };
     }''')
-    assert layout['fit'] and layout['aligned'] and layout['gap'] >= 3, layout
+    assert layout['fit'], layout
     if compact:
-        assert layout['room'] >= 32 and layout['gap'] <= 16 and not layout['wrapped'], layout
+        assert layout['room'] >= 32 and layout['adjacent'] and not layout['wrapped'], layout
     if wraps:
         assert layout['wrapped'], layout
 
@@ -280,14 +275,6 @@ def stress_plot(page, chart, screenshots, *, sample):
     if screenshots:
         page.screenshot(path=screenshots / '03-chooser.png', animations='disabled')
     page.keyboard.press('Escape')
-
-    totals = selected.locator('.account-timeline-legend-value')
-    for unit, expected in (
-        ('credits', ['123456', '123', '<0.1', '0', '—']),
-        ('usd', ['$1234.56', '$1.23', '<$0.01', '$0.00', '—']),
-    ):
-        page.evaluate('(unit) => { ReportView.setUnit(unit); current.accountTimeline.draw(); }', unit)
-        assert totals.evaluate_all("cells => cells.map(cell => (cell.firstElementChild ?? cell).textContent)") == expected * 4
 
     layouts = []
     holiday_inks = []
@@ -451,12 +438,16 @@ def stress_plot(page, chart, screenshots, *, sample):
 
 
 @contextmanager
-def chart_fixture(browser, root, source_setup=ChartSource):
+def chart_fixture(browser, root, source_setup=ChartSource, *, monthly=False):
     config = root / 'config/default-config.jsonc'
     config.parent.mkdir(exist_ok=True)
     if not config.exists():
         shutil.copyfile(ROOT / 'config/default-config.jsonc', config)
     high = subscription('github-copilot')
+    if monthly:
+        quota = QuotaComponent('Monthly', 'fixed', used=Decimal(795), limit=Decimal(1000),
+                               unit='AI credits', reset_at_ms=NOV_1 + 30 * DAY_MS)
+        high = replace(high, quotas=(*high.quotas, quota))
     high = replace(high, quotas=(*high.quotas, QuotaComponent('Model weekly', scope='model', model_id='GPT-Test'),
                                  *(QuotaComponent(f'Quota {i:02}') for i in range(1, 14))))
     low = replace(subscription('github-copilot', identity='second'), quotas=())
@@ -612,7 +603,7 @@ def check(browser, root, screenshots=None):
         expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05 05:00')
         assert rows.evaluate_all('''rows => rows.every((row, i) => row.getBoundingClientRect().top >=
             (i ? rows[i - 1] : row.parentElement.previousElementSibling).getBoundingClientRect().bottom)''')
-        expect(rows.filter(has_text=low_label)).to_have_text(f'{low_label}$601.00')
+        expect(rows.filter(has_text=low_label)).to_have_text(f'{low_label} (?)')
         stable_totals = total.all_text_contents()
         assert 'checkbox' in chart.aria_snapshot()
         page.keyboard.press('Escape')
@@ -739,12 +730,7 @@ def check(browser, root, screenshots=None):
                 Number(value.view.series.find(row => row.id === before.id)?.peak) > before.peak;
         }""", arg=before, timeout=30_000)
         expect(range_line).to_have_text('Range: 2026-11-05 00:00–05:01')
-        assert total.inner_text() != before_total
-        usd_total = total.inner_text()
-        page.evaluate("() => { ReportView.setUnit('credits'); current.accountTimeline.draw(); }")
-        assert '$' not in total.inner_text()
-        page.evaluate("() => { ReportView.setUnit('usd'); current.accountTimeline.draw(); }")
-        expect(total).to_have_text(usd_total)
+        expect(total).to_have_text(before_total)
         assert page.evaluate('window.liveCueFlashes') == 0
         assert source.timeline_reads[live_key] == 1 and sum(source.timeline_reads.values()) == 15
 
@@ -764,6 +750,37 @@ def check(browser, root, screenshots=None):
               f'{sum(source.timeline_reads.values())} history root reads, {len(provider_refreshes)} quota refresh; '
               f'card-ready → first paint {(first_paint - card_seen) * 1000:.0f} ms, '
               f'card-ready → complete chart paint {(completed_paint - card_seen) * 1000:.0f} ms (gated reads)')
+
+
+def check_monthly_card(browser, root):
+    """Give the card an actual fixed quota without prewarming the separate staged-acquisition fixture."""
+    from playwright.sync_api import expect
+
+    with chart_fixture(browser, root, monthly=True) as (page, host, _, source, *_):
+        source.first_read.set()
+        source.continue_history.set()
+        page.goto(host.browser_url())
+        page.get_by_role('link', name='Accounts', exact=True).click()
+        chart = page.get_by_role('region', name='CCost', exact=True)
+        name = 'GitHub Copilot Plus · account 1'
+        card = page.locator('.watch-account-grid .account-card').filter(has=page.get_by_role('heading', name=name))
+        card_month = card.locator('.watch-quota-summary').filter(has_text='Monthly').locator('.watch-period-cost')
+        monthly_row = chart.get_by_role('listitem').filter(has_text=name)
+        for period, label, unit, mode, amount in [
+            ('month', 'This month', 'usd', 'used', '$7.95'),
+            ('today', 'Today', 'credits', 'used', '795'),
+            ('7-days', '7 days', 'usd', 'remaining', '$2.05'),
+            ('30-days', '30 days', 'usd', 'used', '$7.95'),
+        ]:
+            chart.get_by_role('button', name=label, exact=True).click()
+            page.wait_for_function('period => current.accountTimeline.view?.period === period', arg=period)
+            page.evaluate('''([unit, mode]) => {
+                ReportView.setQuotaMode(mode); ReportView.setUnit(unit, current.accounts.root);
+                current.accountTimeline.draw();
+            }''', [unit, mode])
+            expect(card_month).to_have_text(f'({amount})')
+            expect(monthly_row).to_have_text(f'{name} ({amount})')
+        print('Monthly legend PASS: visible card matches across all four chart periods, units and used/remaining')
 
 
 def check_period_help(browser, root):
@@ -877,11 +894,9 @@ def check_best_effort(browser, root):
         point = low['points'][2]
         assert 0 < float(point['amount']) < 0.1 and point['display'] == {'usd': '~<$0.01', 'credits': '~<0.1'}, point
         total = chart.get_by_role('listitem').filter(has_text=low['account']).locator('.account-timeline-legend-value')
-        for unit in ('credits', 'usd'):
-            qualified = low['total']['display'][unit]
-            assert qualified.startswith('~') and float(low['total']['amount']) > 0, low['total']
-            page.evaluate('(unit) => { ReportView.setUnit(unit); current.accountTimeline.draw(); }', unit)
-            expect(total).to_have_text(qualified.removeprefix('~'))
+        assert low['total']['display']['usd'].startswith('~') and float(low['total']['amount']) > 0, low['total']
+        expect(total).to_have_text('(?)')
+        expect(total).not_to_have_class(re.compile('help-value'))
         target = plot.locator('.account-timeline-target[data-slot="2"]')
         tip = chart.locator('.account-timeline-tip')
         status = chart.get_by_role('status')
@@ -917,6 +932,9 @@ def main():
         try:
             root = Path(directory)
             check(browser, root, options.screenshots)
+            monthly = root / 'monthly'
+            monthly.mkdir()
+            check_monthly_card(browser, monthly)
             best_effort = root / 'best-effort'
             best_effort.mkdir()
             check_best_effort(browser, best_effort)

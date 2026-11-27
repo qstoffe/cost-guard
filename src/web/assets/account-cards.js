@@ -6,6 +6,7 @@ const AccountCards = (() => {
   // This flag comes from the existing normalized native-period calculation.
   // Missing period evidence is unknown, not proof of a native monthly window.
   const monthlyApplicable = quota => quota.ccost_reference?.monthly_applicable !== false;
+  const quotaCost = row => display(row.quota, 'ccost_' + ReportView.quotaView(row.quota, row).mode);
   const gridRow = (node, row) => node.style.setProperty('grid-row', String(row));
   function physicalWidth(root, resized) {
     let resolution;
@@ -60,7 +61,7 @@ const AccountCards = (() => {
     const summary = () => quota().unlimited ? 'Unlimited' : view().percent === '—' ? '—' : view().percent + ' ' + view().mode;
     const label = el('div'); label.append(el('span', () => `${ReportView.quotaLabel(quota())} · ${summary()}`));
     ReportView.bind(label, () => label.className = 'watch-quota-summary metric-value' + (view().exhausted ? ' watch-quota-exhausted' : ''));
-    label.append(el('span', () => ` (${display(quota(), 'ccost_' + view().mode)})`, 'watch-period-cost'));
+    label.append(el('span', () => ` (${quotaCost(value())})`, 'watch-period-cost'));
     const capacity = capacityLine(false), monthly = capacityLine(true);
     const spacer = el('div', undefined, 'watch-capacity-spacer'); spacer.setAttribute('aria-hidden', 'true');
     if (quota().quota_display?.used.note || quota().quota_display?.remaining.note)
@@ -219,6 +220,14 @@ const AccountCards = (() => {
         parent.replaceChildren(this.root);
         this.align();
       }
+    }
+    monthlyCost(id) {
+      for (const {value} of this.cards.values()) {
+        if (value.observation.id !== id) continue;
+        const monthly = [value.primary, ...value.secondary].find(row => !monthlyApplicable(row.quota));
+        return monthly ? quotaCost(monthly) : '?';
+      }
+      return '?';
     }
     align() {
       // Share semantic slots at every ordinal, within this physical comparison row.
