@@ -343,7 +343,8 @@ const WatchView = (() => {
     reconcile(target.list, [...wanted, ...tail]);
   }
   class HistoryActivity {
-    constructor(loadMore) {
+    constructor(loadMore, {expanded = false} = {}) {
+      this.expanded = expanded;
       this.root = el('div', undefined, 'watch-activity session-activity');
       this.tools = disclosure(); this.skills = disclosure();
       this.note = el('p', undefined, 'detail');
@@ -356,7 +357,7 @@ const WatchView = (() => {
     }
     update(value, zone) {
       if (this.scope !== value?.scope) {
-        this.tools.node.open = false; this.skills.node.open = false;
+        this.tools.node.open = this.skills.node.open = this.expanded && !!value;
         drawTools(this.tools, [], [], [], [], 0, 'invalidated');
       }
       this.scope = value?.scope;
@@ -520,7 +521,11 @@ const WatchView = (() => {
       this.root = this.summary = el('div', undefined, 'watch-session-summary');
       this.root.append(contextParts(this));
     }
-    update(value) { drawContext(this, value); }
+    update(value) {
+      drawContext(this, value);
+      if (value?.context_state === 'pending' && this.contextObservation?.watch_next_context_tokens == null)
+        ReportView.valueSlot(this.contextValue, '', {pending: true, field: 'session context'});
+    }
   }
   class Card {
     constructor(historical) {

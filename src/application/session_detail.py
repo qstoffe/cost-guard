@@ -514,10 +514,13 @@ class SessionDetails:
             quota = session_quota_usage(entry.get('quota_evidence'), accounts, source, now,
                 stale=stale or status['phase'] == 'failed', capacity_cache=self.quota_capacities,
                 ccost_display_unit=entry.get('ccost_display_unit', 'credits'))
+        quota_state = ('ready' if quota is not None else
+                       'unavailable' if unavailable or status['phase'] == 'failed' or
+                       status['phase'] == 'ready' and self.quota_context is not None else 'pending')
         running_ids = sorted(key for key, value in entry.get('prompt_activity', {}).items() if value[0] and not value[1])
         frame = dict(revision=entry['revision'], generation=entry['generation'], observed=entry['observed_at_ms'],
             partition=self.partition, state=entry['state'], validated=entry.get('validated'),
-            unavailable=unavailable, acquisition=status, quota_usage=quota,
+             unavailable=unavailable, acquisition=status, quota_usage=quota, quota_state=quota_state,
             export_available=not unavailable and bool(entry.get('export_identity')),
             activity_revision=entry.get('activity_revision'),
              running=bool(running_ids), running_ids=running_ids,
@@ -554,19 +557,24 @@ class SessionDetails:
 
     def export(self, token, source, cancelled):
         identity = self.export_identity(token)
+        return self.export_admitted(identity, source, cancelled)
+
+    def export_selection(self, token, binding):
+        """Resolve the leased session independently of its analytical projection."""
+        with self.lease_lock:
+            lease = self._touch_lease(token)
+            return (*binding, lease['session_id'])
+
+    @staticmethod
+    def export_admitted(identity, source, cancelled):
         capability = getattr(source, 'export_session_tree', None)
         if not identity or not callable(capability):
             raise SessionExportError('export_unavailable')
         source_id, instance, epoch, session_id = identity
         if (source_id, instance) != (source.source_id, source.source_instance):
             raise SessionExportError('export_source_changed')
-        def retired():
-            try:
-                return cancelled() or self.export_identity(token) != identity
-            except KeyError:
-                return True
-        payload = build_analysis_zip(lambda cancelled: capability(session_id, epoch, cancelled), retired)
-        if retired():
+        payload = build_analysis_zip(lambda check: capability(session_id, epoch, check), cancelled)
+        if cancelled():
             raise SessionExportError('export_cancelled')
         return payload, f'opencode-{session_id}-analysis.zip'
 
@@ -645,7 +653,8 @@ class SessionDetails:
                 status = dict(phase='failed', reason='detail_not_admitted', retry_available=True)
             return dict(state=read.frame.get('state', 'loading'), pending=True, result=None, acquisition=status,
                          values_invalidated=bool(status and status['reason'] in INVALID_REASONS),
-                         activity_refresh=read.frame.get('activity_refresh'),
+                          activity_refresh=read.frame.get('activity_refresh'),
+                          quota_state=read.frame.get('quota_state', 'pending'),
                          live_activity=proof)
         status = read.acquisition
         runtime = read.frame if read.runtime else None
@@ -654,6 +663,8 @@ class SessionDetails:
                                   runtime=runtime, size=size)
         if begin and mode == 'live':
             response['live_activity'] = current_activity(read.fact, proof)
+            quota_state = read.frame.get('quota_state', 'pending')
+            response['quota_state'] = quota_state if runtime or quota_state != 'ready' else 'unavailable'
             response['running_unverified'] = bool(runtime and runtime['running'] and
                 self.clock() - runtime['validated'] > 300 and not response['live_activity'])
         if response['export_available']:
@@ -725,7 +736,9 @@ class SessionDetails:
                      ccost_display_unit=capture["ccost_display_unit"])
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
              **(dict(activity_refresh=activity_refresh, activity_revision=capture['activity_revision']) if begin else {}),
-            **(dict(quota_usage=usage) if not chunk else {}),
+            **(dict(quota_usage=usage, quota_state='ready' if usage is not None else
+                    'pending' if acquisition['phase'] not in ('ready', 'failed') else 'unavailable')
+               if not chunk else {}),
             values_invalidated=invalidated,
             value_authority=authority,
             **(dict(activity=activity_summary(capture["activity"])) if not chunk else {}),

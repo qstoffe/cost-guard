@@ -51,7 +51,9 @@ async function main() {
   });
   const handlers = {};
   const location = {hash: '#bootstrap=' + input.credential};
-  const history = {replaceState: (_, __, value) => { location.hash = value.slice(value.indexOf('#')); }};
+  const history = {state:null, replaceState(state, _, value) {
+    this.state=state; if (value !== undefined) location.hash=value.slice(value.indexOf('#'));
+  }};
   let cookie = '', requests = 0, offline = false;
    const reportKinds = [];
   const bootstrapStatuses = [];
@@ -253,13 +255,14 @@ async function main() {
    const sessionLink = all(ids.result, 'a').find(node => node.href === '#/sessions/root-0001');
   assert.ok(sessionLink, 'session locator links are reachable on the last page');
   navigate('sessions/root-0000');
-   await until(() => all(ids.result, 'tbody')[0]?.children.length === 151);
+   const historyTable = () => ids.result.querySelector('.session-history-table');
+   await until(() => historyTable()?.querySelector('tbody')?.children.length === 151);
    const snapshot = ids.result.textContent;
    assert.match(snapshot, /\[RUNNING\]/);
-  const headers = all(ids.result, 'th').map(node => node.textContent);
+  const headers = all(historyTable(), 'th').map(node => node.textContent);
    assert.deepEqual(headers, ['Prompt', 'Model', 'Effort', 'CCost', 'Calls', 'Duration', 'Ictx', 'Ictx CCost', 'Extra CCost', 'Token Mix %']);
   const totals = all(ids.result, 'tfoot')[0].textContent;
-   assert.equal(all(ids.result, 'tbody')[0].children.length, 151);
+   assert.equal(historyTable().querySelector('tbody').children.length, 151);
   assert.equal(all(ids.result, 'tfoot')[0].textContent, totals);
    assert.match(ids.result.textContent, /\[RUNNING\]/);
   const frozen = ids.result.textContent, count = requests;
@@ -269,13 +272,13 @@ async function main() {
    navigate(olderPage.slice(2)); // Back-equivalent hash event restores the same list page.
    await until(() => ids.result.textContent.includes('51–55 of 55'));
   navigate('sessions/root-0000');
-   await until(() => all(ids.result, 'tbody')[0]?.children.length === 151);
+   await until(() => historyTable()?.querySelector('tbody')?.children.length === 151);
   const last = ids.result.textContent;
    offline = true;
    await until(() => !vm.runInContext('current.detail.busy', context));
    await vm.runInContext('current.detail.load()', context);
      assert.equal(vm.runInContext('current.detail.status.textContent', context), '');
-   assert.equal(all(ids.result, 'tbody')[0].children.length, 151);
+   assert.equal(historyTable().querySelector('tbody').children.length, 151);
   assert.equal(ids.result.getAttribute('aria-busy'), 'false');
   assert.equal(all(ids.result, 'progress').length, 1, 'detail retains its keyed progress node');
   assert.equal(vm.runInContext('current.detail.loader.root.hidden', context), true, 'retained history never shows initial progress');
@@ -285,7 +288,7 @@ async function main() {
     assert.equal(vm.runInContext('current.detail.retry.hidden', context), true);
   navigate('sessions/root-0001');
    await until(() => vm.runInContext('current.detail.data?.total', context) === 0);
-   assert.equal(all(ids.result, 'tbody')[0].children.length, 0);
+   assert.equal(historyTable().querySelector('tbody').children.length, 0);
   navigate('live');
   assert.equal(location.hash, '#/watch', 'legacy global Live is replaced, not pushed');
   assert.equal(ids.heading.textContent, 'Watch');

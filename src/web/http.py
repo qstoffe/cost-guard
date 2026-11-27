@@ -18,7 +18,7 @@ from .instance_state import checkout_identity
 from .settings import SettingsError, WebSettings
 from .session_catalog import catalog_page
 from .dispatch_http import handle as handle_dispatch
-from .session_export import SessionExports
+from .session_export import SessionExports, export_status
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
              "/control-focus.js": ("control-focus.js", "text/javascript; charset=utf-8"),
@@ -168,6 +168,7 @@ class LoopbackServer(HTTPServer):
     def server_close(self):
         super().server_close()
         self._pool.shutdown(wait=True, cancel_futures=True)
+        self.exports.close()
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -513,6 +514,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                         value["mode"] not in ("snapshot", "live")):
                     raise ValueError()
                 result = {"token": owner.open(value["session_id"], value["mode"])}
+                if value["mode"] == "live":
+                    result.update(export_status(self, result["token"]))
             elif action == "activity" and set(value) == {"action", "token", "revision", "offset"}:
                 if (not isinstance(value["token"], str) or not isinstance(value["revision"], str)
                         or len(value["revision"]) > 64 or type(value["offset"]) is not int
@@ -540,6 +543,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                         raise ValueError()
                     result = owner.page(value["token"], offset, value.get("revision"), value.get("anchor"),
                                          begin=action == "begin", chunk=action == "chunk", size=size)
+                    if action == "begin":
+                        result.update(export_status(self, value["token"]))
+                        live = self.server.lifecycle.live
+                        if getattr(live, 'source_failure', None) or getattr(getattr(live, 'driver', None), 'terminal', False):
+                            result['quota_state'] = 'unavailable'
                 else:
                     raise ValueError()
             else:

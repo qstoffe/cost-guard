@@ -10,6 +10,7 @@ const heading = document.getElementById('heading');
 const views = new Map(); // Bounded page-memory only; never browser storage/history payloads.
 const sessionsNav = document.querySelector('nav a[href="#/sessions"]');
 let rememberedSession = null;
+let sessionWorkspace = null;
 let csrf = null;
 let current = null;
 let liveConnection = null;
@@ -41,6 +42,43 @@ function archiveReadable() {
 }
 function historyBlocked() {
   return hostState.terminal || (hostState.sourceBlocked && !archiveHistory);
+}
+function visibleCatalog(state = current) {
+  return state?.detail ? sessionWorkspace?.catalog : state?.catalog;
+}
+
+function showSessionWorkspace(detail) {
+  if (!sessionWorkspace) {
+    const root = ReportView.element('div', undefined, 'session-workspace');
+    const panel = ReportView.element('details', undefined, 'session-workspace-panel');
+    panel.open = window.matchMedia('(min-width: 58rem)').matches;
+    const catalogMount = ReportView.element('div');
+    panel.append(ReportView.element('summary', 'Sessions'), catalogMount);
+    const detailMount = ReportView.element('div', undefined, 'session-workspace-detail');
+    root.append(panel, detailMount);
+    const catalog = new SessionsCatalog.View(api, {archive: archiveHistory, compact: true,
+      setDestination: list => {
+        if (!current?.detail) return;
+        history.replaceState({...history.state, sessionsReturn: {detail: location.hash, list}}, '');
+        current.detail.returnTo(list);
+      }});
+    sessionWorkspace = {root, catalogMount, detailMount, catalog};
+  }
+  const {root, catalogMount, detailMount, catalog} = sessionWorkspace;
+  const origin = history.state?.sessionsReturn;
+  const list = origin?.detail === location.hash ? origin.list : '#/sessions';
+  detail.returnTo(list);
+  if (root.parentNode !== output) output.replaceChildren(root);
+  catalog.select(detail.id, list);
+  ReportView.syncUnits(catalog.root);
+  if (!historyBlocked()) {
+    catalog.sourceHealth(hostState.sourceBlocked || hostState.sourceOutage, false);
+    catalog.attach(catalogMount);
+    detail.attach(detailMount);
+  } else {
+    if (catalog.root.parentNode !== catalogMount) catalogMount.replaceChildren(catalog.root);
+    if (detail.root.parentNode !== detailMount) detailMount.replaceChildren(detail.root);
+  }
 }
 function reportReadable(state) {
   return hostState.writable || (automaticHistory(state) && archiveReadable());
@@ -126,7 +164,7 @@ function reconcileForeground(hiddenOrRecovery) {
   if (!current || !csrf || document.hidden || hostState.terminal) return;
   const state = current;
   const activated = performance.now();
-  state.catalog?.catchUp(activated, hiddenOrRecovery);
+  visibleCatalog(state)?.catchUp(activated, hiddenOrRecovery);
   if (!historyBlocked()) state.detail?.catchUp(activated, hiddenOrRecovery);
   state.accountTimeline?.catchUp();
   if (!historical(state) || !reportReadable(state)) return;
@@ -280,6 +318,7 @@ function connectionStatus(message, state = {}) {
       view.accountTimeline?.invalidate();
     }
   }
+  sessionWorkspace?.catalog.sourceHealth(blocked || hostState.sourceBlocked || hostState.sourceOutage, blocked);
   document.getElementById('scope-controls').inert = !hostState.writable;
   if (current) show(current);
   if (!wasWritable && hostState.writable || !couldReadHistory && archiveReadable()) {
@@ -303,12 +342,12 @@ async function api(path, value, signal, attachment = false) {
   const options = {credentials: 'same-origin', cache: 'no-store'};
   if (value !== undefined) Object.assign(options, {method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CG-CSRF': csrf || ''}, body: JSON.stringify(value)});
-  if (attachment) options.headers['X-CG-Instance'] = hostInstance || '';
+  if (path === '/api/detail/export') options.headers['X-CG-Instance'] = hostInstance || '';
   // Only a visible, actually selected view renews disposable history retention.
   // Hidden polling, passive host warming and diagnostic API clients do not.
   const viewed = path === '/api/interest' ? value?.visible === true : !document.hidden && (
     path === '/api/data' && value?.request === current?.request ||
-    path === '/api/jobs/' + current?.active || path === '/api/sessions' && current?.section === 'sessions' ||
+     path === '/api/jobs/' + current?.active || path === '/api/sessions' && current?.section === 'sessions' ||
     path === '/api/detail' && current?.detail);
   if (viewed) options.headers = {...options.headers, 'X-CG-Viewed': '1'};
   const controller = new AbortController();
@@ -316,12 +355,13 @@ async function api(path, value, signal, attachment = false) {
   const aborted = () => controller.abort();
   if (signal?.aborted) controller.abort();
   else signal?.addEventListener('abort', aborted, {once: true});
-  // ZIPs allow up to 240 s of preparation plus the bounded response transfer.
   let timedOut = false;
-  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, attachment ? 270000 : 5000);
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, attachment ? 20000 : 5000);
   const detail = path === '/api/detail';
   try {
     const response = await fetch(path, options).catch(cause => {
+      if (!signal?.aborted && path === '/api/detail/export')
+        throw retryableReadError('export_transport_unavailable', cause);
       if (signal?.aborted || !detail && !['/api/data', '/api/reports'].includes(path) && !path.startsWith('/api/jobs/')) throw cause;
       throw retryableReadError(detail ? 'detail_transport_unavailable' : 'report_transport_unavailable', cause);
     });
@@ -357,16 +397,18 @@ async function api(path, value, signal, attachment = false) {
       const disposition = response.headers.get('Content-Disposition') || '';
       const filename = /^attachment; filename="(opencode-ses_[A-Za-z0-9_-]{1,160}-analysis\.zip)"$/.exec(disposition)?.[1];
       const length = Number(response.headers.get('Content-Length'));
-      // Keep this in sync with MAX_ARCHIVE_BYTES on the server.
-      if (!identity || !filename || !Number.isInteger(length) || length <= 0 || length > 64 * 1024 * 1024 ||
+      if (!identity || !filename || !Number.isInteger(length) || length <= 0 || length > 1024 * 1024 ||
           response.headers.get('Content-Type') !== 'application/zip') throw new Error('export_invalid_response');
-      const blob = await response.blob();
+      const blob = await response.blob().catch(cause => {
+        if (signal?.aborted) throw cause;
+        throw retryableReadError('export_transport_unavailable', cause);
+      });
       if (blob.size !== length || controller.signal.aborted || hostState.terminal) throw new Error('export_invalid_response');
       return {blob, filename};
     }
     return data;
   } catch (error) {
-    if (attachment && timedOut) throw new Error('export_timed_out', {cause: error});
+    if (attachment && timedOut) throw retryableReadError('export_timed_out', error);
     throw error;
   } finally { clearTimeout(timeout); signal?.removeEventListener('abort', aborted); }
 }
@@ -430,8 +472,7 @@ function show(state) {
   }
   if (state.detail) {
     ReportView.syncUnits(state.detail.root);
-    if (!historyBlocked()) state.detail.attach(output);
-    else output.replaceChildren(state.detail.root);
+    showSessionWorkspace(state.detail);
   } else if (state.catalog) {
     ReportView.syncUnits(state.catalog.root);
     if (!historyBlocked()) state.catalog.attach(output);
@@ -760,14 +801,15 @@ function navigate() {
         request ? (demand ? 'Loading the host-owned report…' : 'Capture/Refresh to acquire this report.') : 'Choose a report scope.'});
   }
   const previous = current;
-  if (current?.detail) {
+  if (current?.detail && current !== views.get(key)) {
     current.detailScroll = window.scrollY;
     current.detailFocus = current.detail.root.contains(document.activeElement) ? document.activeElement : null;
   }
-  if (current?.detail) current.detail.detach();
+  if (current?.detail && current !== views.get(key)) current.detail.detach();
   current = views.get(key);
   if (current !== previous) {
     previous?.catalog?.detach();
+    if (!match && previous?.detail) sessionWorkspace?.catalog.detach();
     previous?.accountTimeline?.active(false);
     if (previous?.stats) ReportLoading.endHistorySelection(previous.stats);
     if (previous?.tokenMix) ReportLoading.endHistorySelection(previous.tokenMix);
@@ -793,12 +835,6 @@ function navigate() {
       () => hostState.kind === 'connected' && !hostState.sourceBlocked ? liveValue : null);
     current.message = '';
   }
-  if (match && current.detail) {
-    // Origin belongs to this history entry, not a cached detail or global preference.
-    // Reload/Back/Forward retain it; Watch, pasted URLs and new tabs do not inherit it.
-    const origin = history.state?.sessionsReturn;
-    current.detail.back.href = origin?.detail === location.hash ? origin.list : '#/sessions';
-  }
    if (route.catalog && csrf && sessionDetailAvailable && typeof SessionsCatalog !== 'undefined') {
     if (!current.catalog) {
       current.catalog = new SessionsCatalog.View(api, {archive: archiveHistory});
@@ -808,7 +844,7 @@ function navigate() {
      current.request = null; current.message = '';
    }
    if ((match || route.catalog) && csrf && !sessionDetailAvailable) current.message = 'Live session source unavailable.';
-  document.getElementById('search').disabled = !!current.detail;
+   document.getElementById('search').disabled = !!current.detail || !!current.catalog?.search;
   show(current);
   if (csrf && !hostState.terminal && current.stats && (current !== previous || !current.stats.databaseRefresh))
     current.stats.refreshDatabaseSizes();
@@ -865,8 +901,8 @@ async function connect() {
           current.stats.refreshDatabaseSizes();
         miniWatch?.update(liveValue);
          if (reconnected) reconcileForeground(true);
-         const sessionsPeriod = current?.catalog?.period;
-         current?.catalog?.wake(sessionsCache ? `sessions:${sessionsPeriod}:${
+          const catalog = visibleCatalog(), sessionsPeriod = catalog?.period;
+          catalog?.wake(sessionsCache ? `sessions:${sessionsPeriod}:${
            sessionsCache.periods?.[sessionsPeriod] ?? sessionsCache.revision}` :
           historyHints?.catalog_hint ?? value?.catalog_hint);
          current?.detail?.wake(historyHints?.detail_hints ?? value?.detail_hints);
@@ -904,13 +940,15 @@ refresh.addEventListener('click', () => {
 });
 output.addEventListener('click', event => {
   const link = event.target.closest?.('a.session-name');
-  if (!current?.catalog || !link || event.defaultPrevented || event.button !== 0 ||
+  const catalog = visibleCatalog();
+  if (!catalog || !link || event.defaultPrevented || event.button !== 0 ||
       event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
   const detail = link.getAttribute('href');
   if (!/^#\/sessions\/[A-Za-z0-9_-]{1,200}$/.test(detail)) return;
   event.preventDefault();
-  // Push one ordinary entry, carrying only canonical filters (never offset/epoch/data).
-  history.pushState({sessionsReturn: {detail, list: current.catalog.firstPageDestination()}}, '', detail);
+  if (detail === location.hash) return;
+  const list = catalog.compact ? catalog.compactDestination : catalog.rememberedDestination();
+  history.pushState({sessionsReturn: {detail, list}}, '', detail);
   navigate(); // pushState does not emit hashchange; native Back/Forward still does.
 });
 window.addEventListener('hashchange', () => {
@@ -953,7 +991,7 @@ if (sessionsNav) {
 window.addEventListener('offline', () => connectionStatus('OFFLINE — last observation retained, not live. Check the connection and reload to retry.', {kind: 'offline', writable: false}));
 window.addEventListener('online', () => liveConnection?.resync(true));
 document.addEventListener('visibilitychange', () => {
-  current?.catalog?.interest();
+  visibleCatalog()?.interest();
   current?.accountTimeline?.active(!document.hidden && !!csrf && (hostState.writable || archiveReadable()));
   if (document.hidden) { needsForegroundRead = true; wasHidden = true; }
   else activateForeground();

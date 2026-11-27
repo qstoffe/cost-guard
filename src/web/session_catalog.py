@@ -12,11 +12,12 @@ def catalog_page(owner, value):
             raise ValueError('invalid_request')
         owner.interest(value['token'], value['visible'])
         return {'status': 'accepted'}
-    if set(value) - {"token", "offset", "sort", "direction", "epoch", "period", "navigation", "applied", "cancelled", "passive"}:
+    if set(value) - {"token", "offset", "sort", "direction", "epoch", "period", "navigation", "applied", "cancelled", "passive", "query"}:
         raise ValueError("invalid_request")
     offset = value.get("offset", 0)
     direction = value.get("direction", -1)
     if (type(offset) is not int or offset < 0 or offset > 1_000_000 or offset % PAGE_SIZE
+            or not isinstance(value.get("query", ""), str) or len(value.get("query", "")) > 200
             or type(value.get("passive", False)) is not bool
             or value.get("passive", False) and (offset != 0 or value.get("navigation") is not None)
             or type(direction) is not int or direction not in (-1, 1)

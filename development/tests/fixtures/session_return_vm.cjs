@@ -18,15 +18,18 @@ const context = vm.createContext({
   },sessionsNav:nav[0],rememberedSession:null,views:new Map(),current:null,heading:element('heading'),
   csrf:'synthetic',archiveHistory:true,hostState:{terminal:false},historyBlocked:()=>false,sessionDetailAvailable:true,
   output:{addEventListener(_,handler){this.click=handler;}},demand:null,
-  show(){},enterCachedReport(){},scheduleCachedReport(){},firstReport(){},focusReport(){},
+  show(state){if(state.detail) context.showSessionWorkspace(state.detail);},enterCachedReport(){},scheduleCachedReport(){},firstReport(){},focusReport(){},
   window:{scrollY:250,scrollTo(){}},api(){},
   SessionDetail:{View:class {
     constructor(_,id){this.id=id;this.root={contains:()=>false};this.back={href:'#/sessions'};this.detaches=0;}
-    detach(){this.detaches++;}
+     detach(){this.detaches++;}
+     attach(){} returnTo(list){this.back.href=list;}
   }},
   SessionsCatalog:{View:class {configure(){} detach(){} sourceHealth(){}}},
-  settingsView:{read(){}},URLSearchParams
+  settingsView:{read(){}},URLSearchParams,ReportView:{syncUnits(){}}
 });
+context.sessionWorkspace={root:{parentNode:context.output},catalog:{select(){},sourceHealth(){},attach(){},detach(){}}};
+vm.runInContext(app.slice(app.indexOf('function visibleCatalog('),app.indexOf('function reportReadable(')),context);
 vm.runInContext(fs.readFileSync('src/web/assets/reports.js','utf8'),context);
 const start=app.indexOf('function navigate() {'), end=app.indexOf('\nasync function connect()',start);
 vm.runInContext(app.slice(start,end),context);
@@ -55,7 +58,7 @@ assert.equal(context.current.detail,first);
 const clickStart=app.indexOf("output.addEventListener('click',");
 vm.runInContext(app.slice(clickStart,app.indexOf("\nwindow.addEventListener('hashchange'",clickStart)),context);
 route('#/sessions?period=all&sort=name&direction=1&offset=25&epoch=old');
-context.current.catalog.firstPageDestination=()=>'#/sessions?period=all&sort=name&direction=1';
+context.current.catalog.rememberedDestination=()=>context.location.hash;
 const link={getAttribute:()=> '#/sessions/detail-A',hasAttribute:()=>false};
 const click = changes => {
   let prevented=false;
@@ -69,7 +72,7 @@ for(const modifiers of [{ctrlKey:true},{metaKey:true},{shiftKey:true},{altKey:tr
 }
 assert.equal(click(),true);
 assert.equal(context.current.detail,first);
-assert.equal(first.back.href,'#/sessions?period=all&sort=name&direction=1');
+assert.equal(first.back.href,'#/sessions?period=all&sort=name&direction=1&offset=25&epoch=old');
 const origin=context.history.state;
 context.navigate(); // Same entry, including a repeated connection/route notification.
 assert.equal(first.back.href,origin.sessionsReturn.list);

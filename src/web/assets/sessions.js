@@ -18,15 +18,17 @@ const SessionsCatalog = (() => {
     return node.contains(document.activeElement) || Boolean(selected && !selected.isCollapsed &&
       (node.contains(selected.anchorNode) || node.contains(selected.focusNode)));
   }
-  function destination(offset, epoch, sort, direction, period) {
+  function destination(offset, epoch, sort, direction, period, query) {
     const params = new URLSearchParams({period, sort, direction: String(direction)});
     if (offset) params.set('offset', String(offset));
     if (epoch) params.set('epoch', epoch);
+    if (query) params.set('q', query);
     return '#/sessions?' + params;
   }
   class View {
-    constructor(api, {archive = false} = {}) {
-      Object.assign(this, {api, archive, token: null, data: null, attached: false, busy: false, generation: 0, navigationSequence: Date.now()});
+    constructor(api, {archive = false, compact = false, setDestination = null} = {}) {
+      Object.assign(this, {api, archive, compact, setDestination, token: null, data: null,
+        attached: false, busy: false, generation: 0, navigationSequence: Date.now()});
       this.root = el('div', undefined, 'sessions-catalog'); this.root.setAttribute('aria-label', 'Sessions catalog');
       this.status = el('p', undefined, 'sessions-action-status'); this.status.setAttribute('role', 'status');
       this.status.setAttribute('aria-atomic', 'false'); this.status.hidden = true;
@@ -40,20 +42,21 @@ const SessionsCatalog = (() => {
       this.periodButtons = periods.map(([key, label]) => {
         const button = el('button', label); button.type = 'button';
         if (typeof PeriodHelp !== 'undefined') PeriodHelp.attach(button, key);
-        button.addEventListener('click', () => this.navigateTo(destination(0, null, this.sort, this.direction, key), null, 'period'));
+        button.addEventListener('click', () =>
+          this.navigateTo(destination(0, null, this.sort, this.direction, key, this.query), null, 'period'));
         this.periods.append(button); return {key, button};
       });
       const pan = el('div', undefined, 'sessions-table-pan'); pan.tabIndex = 0;
       pan.setAttribute('role', 'region'); pan.setAttribute('aria-label', 'Sessions');
       const table = el('table', undefined, 'sessions-table session-catalog-table');
       const head = el('thead'), header = el('tr'); this.headers = [];
-      for (const [key, name, help] of columns) {
+      for (const [key, name, help] of (compact ? columns.slice(0, 2) : columns)) {
         const th = el('th'), button = el('button', name); th.scope = 'col';
         const label = ContextHelp.heading(button, help + (key === 'activity' ? '' :
           '\nRunning sessions appear first, newest prompt start first.'), key === 'ctx');
         button.addEventListener('click', () => {
           const direction = this.sort === key ? -this.direction : key === 'activity' ? -1 : 1;
-          this.navigateTo(destination(0, null, key, direction, this.period), null, 'sort');
+          this.navigateTo(destination(0, null, key, direction, this.period, this.query), null, 'sort');
         });
         th.append(button); header.append(th); this.headers.push({key, name, th, label});
       }
@@ -71,6 +74,20 @@ const SessionsCatalog = (() => {
       for (const event of ['focusin', 'pointerdown']) document.addEventListener(event, event => {
         if (this.actionFocus && event.target !== this.actionFocus) this.actionFocus = null;
       });
+      if (archive) {
+        this.search = el('input');
+        this.search.type = 'search'; this.search.maxLength = 200;
+        const label = el('label', 'Search sessions', 'sessions-catalog-search');
+        label.append(this.search); this.root.append(label);
+        this.search.addEventListener('input', () => {
+          clearTimeout(this.searchTimer);
+          this.searchTimer = setTimeout(() => {
+            const query = this.search.value.trim();
+            if (query !== this.query)
+              this.navigateTo(destination(0, null, this.sort, this.direction, this.period, query), null, 'search');
+          }, 250);
+        });
+      }
       this.root.append(this.periods, this.status, pan, pager);
     }
     pageButton(label) {
@@ -82,14 +99,24 @@ const SessionsCatalog = (() => {
       return button;
     }
     navigateTo(target, button = null, kind = null) {
-      if (target === location.hash) return;
-      if (kind === 'page' && this.offset === 0 && this.data?.offset === 0 && !this.operation &&
+      if (target === (this.compact ? this.compactDestination : location.hash)) return;
+      if (!this.compact && kind === 'page' && this.offset === 0 && this.data?.offset === 0 && !this.operation &&
           (this.data.order_state === 'verified' || this.data.candidate_navigation)) {
         // Back must name the actual page being left, not ask for a cold latest.
         history.replaceState(history.state, '', this.rememberedDestination());
       }
       this.userAction = {destination: target, button, kind, started: performance.now()};
-      location.hash = target;
+      if (this.compact) {
+        this.canonicalize(target);
+        this.configure(new URLSearchParams(target.split('?')[1]));
+        this.poll();
+      } else location.hash = target;
+    }
+    canonicalize(target) {
+      if (this.compact) {
+        this.compactDestination = target;
+        this.setDestination(target);
+      } else history.replaceState(history.state, '', target);
     }
     clearStatus() {
       ReportView.text(this.statusTask, '');
@@ -101,27 +128,34 @@ const SessionsCatalog = (() => {
       const sort = columns.some(([key]) => key === params?.get('sort')) ? params.get('sort') : 'activity';
       const direction = params?.get('direction') === '1' ? 1 : -1;
       const period = params?.has('period') ? params.get('period') : 'today';
+      const query = this.archive ? (params?.get('q') || '').trim().slice(0, 200) : '';
       // Repeated route notifications cannot erase pending intent or a failure.
       if (offset === this.offset && epoch === this.epoch &&
-        sort === this.sort && direction === this.direction && period === this.period) {
+        sort === this.sort && direction === this.direction && period === this.period && query === this.query) {
         if (!params?.has('period')) {
           if (this.operation) this.canonicalPeriod = true;
-          else history.replaceState(history.state, '', destination(offset, epoch, sort, direction, period));
+          else this.canonicalize(destination(offset, epoch, sort, direction, period, query));
         }
         return;
       }
-      const action = this.userAction?.destination === location.hash ? this.userAction : null;
+      const action = this.userAction?.destination === (this.compact ? this.compactDestination : location.hash) ?
+        this.userAction : null;
       this.userAction = null;
       if (this.operation?.navigation) this.cancelledNavigation = this.operation.navigation;
       this.actionFocus = null; this.retire();
       this.clearStatus();
       if (this.period != null && period !== this.period)
         ReportLoading.beginHistorySelection(this, this.periodButton(period), action?.started);
-      Object.assign(this, {offset, epoch, sort, direction, period});
+      Object.assign(this, {offset, epoch, sort, direction, period, query});
+      if (this.search && this.search.value.trim() !== query) {
+        clearTimeout(this.searchTimer);
+        this.search.value = query;
+      }
       this.canonicalPeriod = !params?.has('period');
       this.periodSelection();
       const changedPeriod = this.data && period !== this.data.period;
-      const changedOrder = this.data && (sort !== this.data.sort || direction !== this.data.direction || changedPeriod);
+      const changedOrder = this.data && (sort !== this.data.sort || direction !== this.data.direction ||
+        changedPeriod || query !== this.renderedQuery);
       this.operation = action || offset || epoch || changedOrder ? {kind: action?.kind || (changedPeriod ? 'period' : this.data && this.sort === this.data.sort &&
         this.direction === this.data.direction ? 'page' : 'sort'),
         userInitiated: Boolean(action), button: action?.button, navigation: action ? ++this.navigationSequence : null,
@@ -155,7 +189,18 @@ const SessionsCatalog = (() => {
       return this.firstPageDestination();
     }
     sectionDestination() { return this.data?.offset ? this.rememberedDestination() : this.firstPageDestination(); }
-    firstPageDestination() { return destination(0, null, this.sort, this.direction, this.period); }
+    firstPageDestination() { return destination(0, null, this.sort, this.direction, this.period, this.query); }
+    select(id, route) {
+      this.selectedId = id;
+      this.compactDestination = route;
+      this.configure(new URLSearchParams(route.split('?')[1]));
+      for (const row of this.body.children) this.markSelected(row);
+    }
+    markSelected(row) {
+      if (!this.compact) return;
+      if (row.dataset.id === this.selectedId) row.name.setAttribute('aria-current', 'page');
+      else row.name.removeAttribute('aria-current');
+    }
     attach(parent) {
       if (this.root.parentNode !== parent) parent.replaceChildren(this.root);
       if (!this.attached) {
@@ -167,6 +212,7 @@ const SessionsCatalog = (() => {
     }
     detach() {
       this.attached = false; this.actionFocus = null;
+      clearTimeout(this.searchTimer);
       ReportLoading.endHistorySelection(this);
       if (this.userAction?.destination !== location.hash) this.userAction = null;
       this.interest(false); this.retire();
@@ -232,7 +278,8 @@ const SessionsCatalog = (() => {
       const previous = this.data;
       this.offset = previous?.offset || 0;
       this.epoch = this.offset ? previous.epoch : null;
-      if (previous) Object.assign(this, {period: previous.period, sort: previous.sort, direction: previous.direction});
+      if (previous) Object.assign(this, {period: previous.period, sort: previous.sort,
+        direction: previous.direction, query: this.renderedQuery});
       this.periodSelection(); this.canonicalPeriod = true;
     }
     async load(foreground) {
@@ -261,7 +308,8 @@ const SessionsCatalog = (() => {
           return Promise.race([this.api('/api/sessions', {token: this.token, offset: this.offset,
             epoch: requestedEpoch, sort: this.sort, direction: this.direction, period: this.period, passive,
             navigation: this.operation?.navigation || null, applied: this.appliedNavigation || null,
-            cancelled: this.cancelledNavigation || null}, flight.controller.signal), deadline]);
+             cancelled: this.cancelledNavigation || null, ...(this.query ? {query: this.query} : {})},
+             flight.controller.signal), deadline]);
         };
         let data;
         try { data = await request(); }
@@ -327,12 +375,15 @@ const SessionsCatalog = (() => {
       const operation = this.operation;
       operation.pending = !operation.failed;
       if (!operation.userInitiated) { this.pagerBusy(); return; }
-      if ((this.archive || this.data?.cache_first) && !operation.failed) { this.pagerBusy(); return; }
+      if ((this.archive || this.data?.cache_first) && !operation.failed && operation.kind !== 'search') {
+        this.pagerBusy(); return;
+      }
       const before = operation.kind === 'page' ? null : this.pan;
       if (this.status.nextSibling !== before) this.root.insertBefore(this.status, before);
       const name = columns.find(([key]) => key === this.sort)[1];
       const task = operation.kind === 'period' ? `Loading sessions in ${periods.find(([key]) => key === this.period)?.[1] || this.period}` :
-        operation.kind === 'page' ? `Loading Sessions page ${Math.floor(this.offset / 25) + 1}` : `Sorting sessions by ${name}`;
+        operation.kind === 'page' ? `Loading Sessions page ${Math.floor(this.offset / 25) + 1}` :
+          operation.kind === 'search' ? 'Searching sessions' : `Sorting sessions by ${name}`;
       ReportView.text(this.statusTask, task);
       const count = operation.count;
       ReportView.text(this.statusCount, !operation.failed && !message && count ?
@@ -431,12 +482,13 @@ const SessionsCatalog = (() => {
         this.body.replaceChildren();
       }
       this.data = data;
+      this.renderedQuery = this.query;
       this.renderTimezone = data.view.timezone_id;
       this.offset = data.offset;
       if (this.recovering || this.canonicalPeriod || data.cache_first && (this.epoch !== data.epoch && data.offset > 0) ||
           data.passive && this.epoch && data.epoch !== this.epoch) {
         this.epoch = data.offset || this.epoch && data.order_state === 'verified' ? data.epoch : null;
-        history.replaceState(history.state, '', destination(data.offset, this.epoch, this.sort, this.direction, this.period));
+        this.canonicalize(destination(data.offset, this.epoch, this.sort, this.direction, this.period, this.query));
         this.recovering = false;
         this.canonicalPeriod = false;
       }
@@ -476,7 +528,7 @@ const SessionsCatalog = (() => {
     }
     pageDestination(data, offset) {
       return destination(offset, offset || data.order_state === 'verified' || data.candidate_navigation ? data.epoch : null,
-        data.sort, data.direction, data.period);
+        data.sort, data.direction, data.period, this.query);
     }
     numberedPages(data) {
       const pages = Math.max(1, Math.ceil(data.total / data.size)), current = Math.floor(data.offset / data.size) + 1;
@@ -590,13 +642,14 @@ const SessionsCatalog = (() => {
             row.name.focus?.({preventScroll: true});
             ContextHelp.dismiss(row.name);
           };
-          row.metrics = Array.from({length: 5}, () => el('span'));
+          row.metrics = this.compact ? [] : Array.from({length: 5}, () => el('span'));
           const cells = [row.activity, row.name, ...row.metrics];
           row.replaceChildren(...cells.map(content => { const td = el('td'); td.append(typeof content === 'object' ? content : el('span', content)); return td; }));
           row.name.parentNode.insertBefore(row.statusIcon, row.name);
           row.activity.after(row.finalizationMarker);
         }
         this.activity(row);
+        this.markSelected(row);
         ReportView.text(row.titleNode, value.title);
         const model = (value.model !== 'N/A' && value.model) || value.selected_display_model;
         const amounts = [

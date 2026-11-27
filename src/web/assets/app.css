@@ -482,7 +482,7 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-catalog-table td:has(.metric-spinner) { text-align: center; }
 .session-history-table { grid-template-columns: minmax(32ch, 1fr) repeat(9, max-content);
   width: max-content; min-width: 0; max-width: 100%; }
-.session-detail > .sessions-table-pan { width: fit-content; max-width: 100%; }
+.session-detail .sessions-table-pan { width: fit-content; max-width: 100%; }
 .sessions-table thead, .sessions-table tbody, .sessions-table tfoot,
 .sessions-table tr { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .sessions-table th, .sessions-table td { min-width: 0; white-space: nowrap; text-align: left; }
@@ -558,11 +558,47 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-detail > .report-loading { flex: 1; }
 .session-detail > .report-loading[hidden] { display: none; }
 .session-detail h1 { margin-block: .75rem .25rem; overflow-wrap: anywhere; }
+.session-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+.session-workspace-panel, .session-detail-card { min-width: 0; margin: 0; padding: var(--space-3);
+  background: var(--surface); border: 1px solid var(--line); border-radius: .55rem; }
+.session-workspace-panel > summary { font-weight: 700; font-size: 1rem; }
+.session-workspace-detail { min-width: 0; }
+@media (min-width: 58rem) {
+  .session-workspace { grid-template-columns: clamp(15rem, 24vw, 22rem) minmax(0, 1fr); align-items: start; }
+  .session-workspace-panel { position: sticky; top: var(--space-3); max-height: calc(100dvh - 2rem); overflow: auto; }
+}
+.sessions-catalog-search { display: grid; gap: .25rem; margin-block: var(--space-3); width: min(100%, 22rem); }
+.sessions-catalog-search input { min-width: 0; }
+.session-workspace-panel .session-catalog-table { min-width: 0; grid-template-columns: minmax(6ch, .7fr) minmax(0, 1fr); }
+.session-workspace-panel .session-name { white-space: normal; overflow-wrap: anywhere; }
+.session-workspace-panel th button { white-space: normal; }
+.session-workspace-panel .session-name[aria-current="page"] {
+  background: var(--accent-soft); outline: 1px solid var(--accent); outline-offset: -1px; border-radius: .2rem;
+}
+.session-workspace-panel .page-navigation { grid-template-columns: auto 1fr auto; }
+.session-workspace-panel .sessions-page-numbers { display: none; }
+.session-workspace-panel .page-navigation > button:last-child { grid-column: 3; }
+.session-detail-navigation { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.session-close { display: inline-grid; place-items: center; flex: none; min-width: 2.75rem;
+  min-height: 2.75rem; font-size: 1.6rem; color: var(--error); text-decoration: none; }
+.session-indicator-heading > :last-child:not(:empty) { margin-inline-start: .45em; }
+.session-detail-card, .session-detail .session-quota-usage { margin-block: var(--space-3); }
+.session-detail-card h2 { margin-block: 0 .5rem; }
+.session-detail-overview dl { display: grid; gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr)); }
+.session-detail-overview dt { color: var(--muted); font-size: .85rem; }
+.session-detail-overview dd { margin: .2rem 0 0; font-weight: 650; }
+.session-detail-activity .session-activity { display: grid; gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }
+.session-detail-activity .session-activity > details { margin: 0; padding: .6rem; min-width: 0;
+  border: 1px solid var(--line); border-radius: .4rem; overflow-wrap: anywhere; }
+.session-detail-activity .session-activity[hidden], .session-detail-activity .detail:empty { display: none; }
 .session-export { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-block: .5rem; }
 .session-export > span { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
-.session-export > button { min-height: 2rem; padding: .25rem .65rem; font-size: .8rem; }
+.session-export > button { display: inline-flex; align-items: center; justify-content: space-between;
+  gap: .5rem; min-height: 2rem; padding: .25rem .65rem; font-size: .8rem; }
 .session-export > [role="status"]:empty { display: none; }
-.session-export > .metric-spinner[hidden] { display: none; }
+.session-export [hidden], .session-detail-card[hidden] { display: none; }
 .session-detail .watch-session-summary { margin-block: .75rem; border: 0; padding: 0; }
 .account-subscription { box-shadow: none; font-size: .85rem; max-width: var(--watch-account-width, 448px);
   min-width: 0; padding: 0 0 .8rem; text-align: left; overflow-wrap: anywhere; }

@@ -291,13 +291,14 @@ def _display_row(key, data, *, provisional=False):
         return recover_summary(key, data)
 
 
-def cached_page(archive, *, token, offset, sort, direction, period, navigation, now, zone, unit):
+def cached_page(archive, *, token, offset, sort, direction, period, navigation, now, zone, unit, query=''):
     """One committed snapshot for ready rows, Live overlays and period coverage."""
     window = catalog_window(period, zone, now)
     try:
         total, offset, facts, live, cached, runtime, pending = archive.storage.sessions_page(
             offset=offset, size=PAGE_SIZE, sort=sort, direction=direction, start_ms=window.start_ms,
-            end_ms=window.end_ms, run=archive.run, finish_cutoff=now - TERMINAL_HIGHLIGHT_MS + 1)
+            end_ms=window.end_ms, run=archive.run, finish_cutoff=now - TERMINAL_HIGHLIGHT_MS + 1,
+            query=query)
     except (sqlite3.Error, OSError):
         total, offset, facts, live, cached, runtime, pending = 0, 0, (), (), None, ('cache_recovering', False), (False, 0)
     shown = []
