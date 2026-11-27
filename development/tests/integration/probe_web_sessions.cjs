@@ -346,7 +346,13 @@ async function main() {
         console.log(JSON.stringify({outcome:evidence.outcome,checks}));
          return;
        }
-       if (mode === '--dates-only') {
+        if (mode === '--detail-running') {
+          checks.push(...await require('./probe_detail_running.cjs')({evaluate, until, fixture}));
+          assert.deepEqual(errors, []);
+          evidence = {outcome:'PASS', browser:version.product, checks};
+          console.log(JSON.stringify(evidence)); return;
+        }
+        if (mode === '--dates-only') {
          await evaluate(`location.hash='#/sessions'`);
          await until('current.catalog?.data?.view.session_usage.length===25');
          const describedActivity = `(() => {

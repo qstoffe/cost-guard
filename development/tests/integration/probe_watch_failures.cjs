@@ -47,10 +47,12 @@ module.exports = async (evaluate, command, session) => {
     const removed=group.jobs.size===1 && call.input.textContent==='' && !call.node.open;
     Object.assign(tool,saved); ReportView.renderLive(document.getElementById('result'), INPUT, state);
     const current=group.jobs.values().next().value; current.node.open=true;
-    const prompt=INPUT.view.active_cards[0].rows[0].prompt; prompt.in_progress=false;
+    // Withdraw the published card; ending its foreground prompt alone does
+    // not establish that its background lifecycle has ended.
+    const completed=INPUT.view.active_cards.shift();
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
     const terminal=!card.root.isConnected && !current.node.open && current.input.textContent==='';
-    prompt.in_progress=true; state.connection='Disconnected';
+    INPUT.view.active_cards.unshift(completed); state.connection='Disconnected';
     ReportView.renderLive(document.getElementById('result'), INPUT, state);
     const replacement=[...state.watch.cards.values()].find(c=>c.value.session_id==='root');
     const cleared=current.input.textContent==='' && group.jobs.size===0 &&

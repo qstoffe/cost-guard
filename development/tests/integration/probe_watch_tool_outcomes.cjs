@@ -121,14 +121,16 @@ async function main() {
        const screenshot = await command('Page.captureScreenshot', {format: 'png'}, sessionId);
       await fs.writeFile(path.join(output, theme + '-' + width + '.png'), Buffer.from(screenshot.data, 'base64'));
       const ended = await evaluate(`(() => {
-         document.activeElement?.blur(); const row=INPUT.view.active_cards[0].rows[0];
-         const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root');
+          document.activeElement?.blur(); const source=INPUT.view.active_cards[0], row=source.rows[0];
+          const card=[...state.watch.cards.values()].find(c=>c.value.session_id==='root');
+         Object.assign(source,{ongoing:null,running:false,terminal_status:'completed',terminal_until_ms:Date.now()+30000});
         row.prompt.in_progress=false; row.prompt.completed_successfully=true;
         row.tool.running_tool=''; row.tool.running_ms=0; row.tool.background_kinds=[];
         ReportView.renderLive(document.getElementById('result'), INPUT, state);
          return {hidden:card.running.hidden, text:card.running.textContent, backgroundHidden:card.background.hidden,
-           removed:!card.root.isConnected, jobs:card.runningDetail.jobs.size}; })()`);
-       assert.deepEqual(ended, {hidden: true, text: '', backgroundHidden: true, removed: true, jobs: 0});
+            terminalCard:card.root.isConnected && !!card.root.querySelector('[data-phase="completed"]'),
+            jobs:card.runningDetail.jobs.size}; })()`);
+       assert.deepEqual(ended, {hidden: true, text: '', backgroundHidden: true, terminalCard: true, jobs: 0});
          cases.push({theme, width, ...facts, disclosures, invocation, failures, helpAccessible: true, terminalCleared: true});
       await command('Target.closeTarget', {targetId});
     }
