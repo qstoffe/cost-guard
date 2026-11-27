@@ -411,18 +411,28 @@ const AccountCards = (() => {
       this.root = el('section', undefined, 'session-quota-usage');
       this.root.setAttribute('aria-label', 'Session Quota Usage');
       this.grid = el('div', undefined, 'account-grid watch-account-grid session-quota-grid');
-      this.root.append(el('h2', 'Session Quota Usage'), this.grid);
+      const heading = el('h2', 'Session Quota Usage', 'session-indicator-heading');
+      this.feedback = el('span'); heading.append(this.feedback);
+      this.empty = el('p', '', 'detail'); this.empty.setAttribute('role', 'status');
+      this.root.append(heading, this.empty, this.grid);
       this.cards = new Map(); this.root.hidden = true;
       physicalWidth(this.root, () => {});
     }
-    update(value) {
+    update(value, state = 'unavailable') {
+      this.root.hidden = false;
+      const pending = state === 'pending' || !this.settled && value?.accounts.some(item =>
+        item.quotas.some(quota => quota.state === 'pending'));
+      if (!pending) this.settled = true;
+      ReportView.valueSlot(this.feedback, '', {pending, field: 'session quota usage'});
+      if (pending && !value && this.cards.size) return;
       if (!value || this.scope !== value.scope) {
         this.cards.clear(); this.grid.replaceChildren();
       }
       this.scope = value?.scope;
       const accounts = (value?.accounts || []).map(item => ({...item,
         quotas: item.quotas.filter(quota => quota.contribution !== 'zero')})).filter(item => item.quotas.length);
-      this.root.hidden = !accounts.length;
+      ReportView.text(this.empty, accounts.length || pending ? '' : state === 'ready' ?
+        'No applicable quota usage was recorded.' : 'Session quota usage unavailable.');
       const wanted = new Set();
       for (const item of accounts) {
         const key = JSON.stringify([item.observation.provider_id, item.observation.id]);

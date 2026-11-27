@@ -21,12 +21,14 @@ from development.tests.fixtures.web_help_reports import HelpAuditJobs
 from development.tests.fixtures.watch_summary import summary_watch
 from src.application.live_projection import project_live
 from src.application.session_detail import SessionDetails
+from src.application.session_catalog import SessionCatalog
 from src.web.host import WebHost
 
 
 class ExportRuntime:
     def __init__(self, service, publish):
         self.details = SessionDetails()
+        self.catalog = SessionCatalog()
         self.driver = SimpleNamespace(coordinator=SimpleNamespace(report_service=service))
         self.stopping = Event()
         self.service, self.publish = service, publish
@@ -78,6 +80,7 @@ def main():
             for field in ('messages', 'parts', 'events', 'invocations')})
         source.source_id, source.source_instance = native.source_id, native.source_instance
         source.observation_epoch, source.export_session_tree = native.observation_epoch, native.export_session_tree
+        source.refresh_observation_epoch = native.refresh_observation_epoch
         state.tree[LEAF]['messages'] = [{'id': 'msg_error', 'type': 'assistant',
             'error': 'E_FIXTURE: password=synthetic-fixture-value; retry'}]
         expected = deepcopy(state.tree)
@@ -87,6 +90,18 @@ def main():
         service = report_service(test, source)
         host = WebHost(config, jobs=HelpAuditJobs())
         host.live = ExportRuntime(service, host.events.publish)
+        quota_ready = Event()
+        page = host.live.details.page
+        def quota_page(*args, **kwargs):
+            result = page(*args, **kwargs)
+            if kwargs.get('begin'):
+                result['quota_state'] = 'ready' if quota_ready.is_set() else 'pending'
+                result['quota_usage'] = {'scope': 'fixture', 'accounts': [{
+                    'observation': {'id': 'test', 'label': 'Late subscription', 'provider_id': 'test'},
+                    'quotas': [{'id': 'weekly', 'label': 'weekly', 'contribution': 'positive', 'percent': '17%'}]
+                }]} if quota_ready.is_set() else None
+            return result
+        host.live.details.page = quota_page
         host.start(); host.publish_ready()
         print(json.dumps({'url': host.browser_url(), 'session': SESSION}), flush=True)
         try:
@@ -102,6 +117,8 @@ def main():
                     state.before_export = lambda _: time.sleep(.16)
                 elif command == 'remove-delay':
                     state.before_export = None
+                elif command == 'publish-quota':
+                    quota_ready.set()
                 elif command == 'check-downloads':
                     files = sorted((config / 'downloads').glob('*.zip'))
                     for downloaded in files:

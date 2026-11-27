@@ -149,13 +149,21 @@ def _page_rows(encoded):
     return [tuple(row[1:]) for row in sorted(json.loads(encoded))]
 
 
-def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, run, finish_cutoff):
+def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, run, finish_cutoff, query=''):
     """Read coverage, counts and the visible slice in one SQLite result row."""
     column = SORT_COLUMNS[sort]
     order = 'DESC' if direction == -1 else 'ASC'
     ready_window, ready_bounds = _ready_window(start_ms, end_ms)
     # The same eligible live set shadows history for both count and page.
     history = f'{ready_window} AND item NOT IN (SELECT item FROM live)'
+    live_title, live_filter, live_bounds = '', '1', ()
+    if query:
+        db.create_function('casefold', 1, lambda title: (title or '').casefold(), deterministic=True)
+        live_title = ", casefold(json_extract(payload, '$.title')) AS title_key"
+        live_filter = '(instr(title_key, ?) OR instr(lower(item), ?))'
+        live_bounds = (query, query)
+        history += ' AND (instr(title_key, ?) OR instr(lower(item), ?))'
+        ready_bounds += live_bounds
     pending_window, pending_bounds = '1', ()
     if start_ms is not None:
         pending_window = '(activity_ms IS NULL OR (activity_ms>=? AND activity_ms<?))'
@@ -168,15 +176,16 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
         live AS (
             SELECT item, start_ms, finish_ms, EXISTS (
                 SELECT 1 FROM ready_sessions WHERE ready_sessions.item=session_live.item
-            ) AS saved
+            ) AS saved {live_title}
             FROM session_live WHERE run=(SELECT run FROM args)
               -- Like Running, unfinished handoffs span local calendar boundaries.
               AND (start_ms < ? OR (finish_ms < ? AND (finalizing OR finish_ms >= ?)))
         ),
+        matching_live AS (SELECT * FROM live WHERE {live_filter}),
         counts AS (
             SELECT count(*) AS live_count, coalesce(sum(saved), 0) AS saved_count,
                    (SELECT count(*) FROM ready_sessions WHERE {history}) AS history_count
-            FROM live
+            FROM matching_live
         ),
         position AS (
             SELECT counts.*, size, min(requested, (max(0, live_count + history_count - 1) / size) * size) AS offset
@@ -195,7 +204,7 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
         ),
         live_page AS (
             SELECT *, row_number() OVER (ORDER BY start_ms IS NULL, start_ms DESC, finish_ms DESC, item) AS ordinal
-            FROM live
+            FROM matching_live
         )
         SELECT live_count + history_count, offset, saved_count + history_count,
             runtime.state, runtime.terminal,
@@ -212,7 +221,7 @@ def read_runtime_page(db, *, offset, size, sort, direction, start_ms, end_ms, ru
              WHERE page.ordinal > position.offset AND page.ordinal <= position.offset + position.size)
         FROM position CROSS JOIN args
         LEFT JOIN session_runtime AS runtime ON runtime.run=args.run''',
-        (run, offset, size, end_ms, end_ms, finish_cutoff, *ready_bounds, *ready_bounds,
+         (run, offset, size, end_ms, end_ms, finish_cutoff, *live_bounds, *ready_bounds, *ready_bounds,
           *pending_bounds, *pending_bounds, SESSIONS_DOMAIN))) as cursor:
         row = cursor.fetchone()
     total, offset, cached, state, terminal, complete, unavailable, historical, live = row

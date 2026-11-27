@@ -36,9 +36,9 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
     });
     initialDOM.observe(output,{attributes:true,subtree:true,childList:true,characterData:true});
     location.hash='#/sessions/root-0000'`);
-  await until('current.detail?.data?.total===1001 || (current.detail && !current.detail.status.hidden)');
-  assert.equal(await evaluate('current.detail.body.rows.length'),1001,'the cold table must appear without intervention');
-  await until('current.detail?.data?.total===1001 && !current.detail.busy');
+  // The total is announced with the first usable rows. A stale later chunk
+  // must recover autonomously, without another click or a forced poll.
+  await until('current.detail?.body.rows.length===1001 && !current.detail.busy');
   const trace=await evaluate('initialDOM.disconnect();window.fetch=normalFetch;initialRead');
   assert.deepEqual(trace.replies,[[410,'detail_expired'],[409,'detail_read_stale']]);
   assert.equal(trace.opens,2,'only the expired lease needs reopening');
@@ -184,10 +184,12 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
   }
   checks.push('cold foreground failure keeps nontechnical, spaced and accessible Try again; never appears on populated history');
   await run(`window.quietExport=new SessionExport.Action(async()=>{throw new Error('export_source_unavailable')},'synthetic');
-    output.replaceChildren(quietExport.root);quietExport.update('synthetic',false,'Synthetic');`);
-  assert.equal(await evaluate('quietExport.notice.textContent==="" && quietExport.button.disabled'),true);
-  await run(`quietExport.update('synthetic',true,'Synthetic');quietExport.button.click();`);
+    output.replaceChildren(quietExport.root);quietExport.update('synthetic','unavailable');`);
+  assert.equal(await evaluate('quietExport.button.disabled && quietExport.notice.textContent.includes("unavailable")'),true);
+  await run(`const picker=window.showSaveFilePicker;
+    try{window.showSaveFilePicker=undefined;quietExport.update('synthetic','ready','scope');await quietExport.activate();}
+    finally{window.showSaveFilePicker=picker;}`);
   assert.equal(await evaluate('quietExport.notice.textContent'),'The selected OpenCode source is unavailable. Retry when it is ready.');
-  checks.push('Export passive availability remains quiet/disabled; explicit synthetic failure preserves a truthful actionable outcome without a dialog or file write');
+  checks.push('Genuine export blocker is explained and disabled; explicit synthetic failure has a truthful outcome without a dialog or file write');
   return {checks,layouts};
 };

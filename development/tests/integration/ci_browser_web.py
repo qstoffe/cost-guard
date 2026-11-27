@@ -183,13 +183,13 @@ def main():
                 expect(page.locator("#heading")).to_contain_text("Accounts")
                 evidence["checks"].append("rendered navigation and browser Back/Forward")
                 page.goto(origin + "/#/sessions/root")
-                expect(page.locator("#result tbody tr").first).to_be_visible(timeout=30000)
+                history = page.get_by_role("region", name="Session prompt history")
+                expect(history.locator("tbody tr").first).to_be_visible(timeout=30000)
                 expect(page.locator("#result")).to_contain_text("<script>PRIVATE_TEXT</script>")
                 assert page.locator("#result script").count() == 0
-                assert page.locator("#result table tbody tr").count() > 0
-                assert page.locator("#result th").all_text_contents() == [
+                assert history.locator("th").all_text_contents() == [
                     "Prompt", "Model", "Effort", "CCost", "Calls", "Duration", "Ictx", "Ictx CCost", "Extra CCost", "Token Mix %"]
-                assert page.locator("#result tfoot td").count() == 10
+                assert history.locator("tfoot td").count() == 10
                 expect(page.locator("#result")).to_contain_text("Session ID: root")
                 assert not page.locator(".toolbar").is_visible()
                 evidence["checks"].append("live complete ten-column session history and canonical footer; hostile title remains literal text")
@@ -201,19 +201,19 @@ def main():
                 assert 'inset' in page.get_by_role('main', name='Report content').evaluate("el => getComputedStyle(el).boxShadow")
                 assert not page.locator("#refresh").is_visible()
                 evidence["narrow_layout"] = page.evaluate('''() => {
-                    const heading=document.querySelector('#result h1'), pan=document.querySelector('.sessions-table-pan');
+                    const heading=document.querySelector('#result h1'), pan=document.querySelector('.session-detail-history .sessions-table-pan');
                     return {viewport:innerWidth,page_width:document.documentElement.scrollWidth,
                         heading_width:heading.clientWidth,heading_scroll:heading.scrollWidth,
                         pan_width:pan.clientWidth,table_width:pan.scrollWidth};
                 }''')
                 assert evidence["narrow_layout"]["page_width"] <= evidence["narrow_layout"]["viewport"]
                 assert evidence["narrow_layout"]["heading_scroll"] <= evidence["narrow_layout"]["heading_width"]
-                assert page.locator("th").first.evaluate("el => getComputedStyle(el).position") == "sticky"
+                assert history.locator("th").first.evaluate("el => getComputedStyle(el).position") == "sticky"
                 page.emulate_media(color_scheme="dark", reduced_motion="reduce")
                 expect(page.locator("html")).to_have_attribute("data-theme", "classic")
                 assert page.locator("html").evaluate("el => getComputedStyle(el).getPropertyValue('--bg').trim()") == "#101112"
                 assert page.locator("#refresh").evaluate("el => getComputedStyle(el).transitionDuration") == "0s"
-                help_button = page.locator("#result th button").first
+                help_button = history.locator("th button").first
                 help_button.focus()
                 assert help_button.evaluate("el => getComputedStyle(el).outlineStyle") != "none"
                 page.emulate_media(color_scheme="light", reduced_motion="no-preference")

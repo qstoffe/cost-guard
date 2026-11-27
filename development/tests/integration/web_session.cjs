@@ -52,7 +52,7 @@ async function main() {
   new Node('main').append(view.root);
   await view.load();
   assert.equal(view.root.children.at(-1),view.quotaUsage.root,'summary follows all existing activity');
-  assert.equal(view.root.children.at(-2),view.activity.root);
+  assert.ok(view.activitySection.root.contains(view.activity.root));
   const quotaCard=view.quotaUsage.grid.children[0],quotaRow=quotaCard.children[1];
   assert.match(quotaRow.textContent,/~235%/);
    assert.equal(view.quotaUsage.grid.children.length,2,'unallocatable accounts explain their unknown share');
@@ -67,9 +67,9 @@ async function main() {
   vm.runInContext("ReportView.setUnit('usd');ReportView.syncUnits(view.root)",context);
   assert.equal(quotaRow.textContent,'5-hour~117.5%');
   vm.runInContext("ReportView.setUnit('credits');ReportView.syncUnits(view.root)",context);
-  const quotaValue=page.quota_usage; page.quota_usage=null; await view.load();
+  const quotaValue=page.quota_usage; page.quota_usage=null; page.quota_state='pending'; await view.load();
   assert.equal(view.quotaUsage.grid.children[0],quotaCard,'pending quota refresh retains the last usable card');
-  page.quota_usage=quotaValue;
+  page.quota_usage=quotaValue; page.quota_state='ready';
   const tiny={id:'tiny',label:'weekly GPT-6',contribution:'positive',percent:'~0%'};
   quotaValue.accounts[0].quotas.push(tiny); await view.load();
   assert.equal(quotaCard.children[2].children[0].textContent,'Weekly GPT-6');
@@ -104,9 +104,10 @@ async function main() {
   assert.ok(!/Freeze|Snapshot|Go to row|Refresh|Token Mix order/.test(view.root.textContent));
   const row = view.body.children[10], cell = row.children[0];
   page = input.changed;
-  page.quota_usage={scope:'same-source',accounts:[]};
+  page.quota_usage={scope:'same-source',accounts:[]}; page.quota_state='ready';
   await view.load();
-  assert.equal(view.quotaUsage.root.hidden,true,'observed removal clears old-account cards');
+  assert.equal(view.quotaUsage.grid.children.length,0,'observed removal clears old-account cards');
+  assert.match(view.quotaUsage.empty.textContent,/No applicable quota/);
   assert.equal(view.body.children.length, 101);
   assert.equal(view.body.children[10], row);
   assert.equal(row.children[0], cell, 'unchanged rows keep their text and help DOM');
@@ -149,7 +150,7 @@ async function main() {
    assert.equal(view.retry.hidden, true);
   assert.ok(calls.some(call => call.action === 'chunk' && call.offset === 100));
   assert.equal(scrolls.length, 0, 'stable document geometry never scrolls');
-  offline = false; page.export_available = true;
+  offline = false; page.export_state = 'ready'; page.export_scope = 'scope';
   page.export_name = 'Observed title å.zip';
   page.result.view.prompt_blocks[0].title = 'Observed: title å';
   page.revision = 'renamed-session'; await view.load();
@@ -158,8 +159,8 @@ async function main() {
   view.heading.textContent = 'Editable DOM is not authority';
   await view.load();
   assert.equal(view.exporter.filename,'Observed title å.zip');
-  page.export_available = false; await view.load();
-  assert.equal(view.exporter.filename,'session.zip','source retirement clears the title');
+  page.export_state = 'unavailable'; await view.load();
+  assert.match(view.exporter.notice.textContent,/unavailable/);
   assert.equal(view.exporter.button.disabled,true);
   view.detach();
   assert.ok(calls.some(call => call.action === 'close' && call.token === 'owned'));
@@ -249,16 +250,9 @@ async function main() {
     counted.loader.update = state => { updates.push({percent:state.percent,stage:state.stage,label:state.stageLabel,rows:counted.body.children.length}); original(state); };
     counted.attached = true; await counted.load();
     assert.equal(counted.body.children.length, total);
-    assert.equal(counted.loader.bar.value, 100);
-    assert.equal(updates.at(-1).rows, total, '100 follows the actual DOM application');
-     assert.ok(updates.every((state,index) => !index || state.percent >= updates[index-1].percent));
-     assert.deepEqual(updates.filter(state=>state.label==='Loading session history').map(state=>state.percent),
-       offsets.map(offset=>total ? Math.floor(70+25*Math.min(total,offset+50)/total) : 95));
+    assert.equal(counted.loader.root.hidden,true,'usable rows do not wait for later chunks behind the loader');
     if (total === 220) {
       assert.deepEqual(offsets, [0,50,100,150,200]);
-      assert.deepEqual(updates.filter(state => state.label === 'Loading session history').map(state => [state.percent,state.stage]),
-         [[75,'Loading session history (50 of 220)…'],[81,'Loading session history (100 of 220)…'],
-           [87,'Loading session history (150 of 220)…'],[92,'Loading session history (200 of 220)…'],[95,'Loading session history (220 of 220)…']]);
     }
     const body = counted.body.children[0], bar = counted.loader.bar;
     counted.api = async () => ({state:'loading',pending:true,result:null}); await counted.load();
@@ -285,9 +279,9 @@ async function main() {
     };
     vm.runInContext("globalThis.invalid = new SessionDetail.View(invalidApi, 'invalid')", context);
     const invalid = context.invalid; invalid.attached = true; await invalid.load();
-    assert.equal(invalid.data, null); assert.ok(invalid.loader.bar.value < 100);
+    assert.equal(invalid.body.children.length,25,'only the verified first chunk is visible');
     assert.equal(invalid.scroll.attributes['aria-busy'], 'false'); assert.equal(invalid.loader.root.hidden, true);
-    assert.equal(invalid.status.textContent, 'Could not load. Return to Sessions to try again.');
+    assert.equal(invalid.status.hidden,true,'usable rows remain visible on interrupted acquisition');
     broken = false; await invalid.load(); assert.equal(invalid.body.children.length, 100); invalid.detach();
   }
   for (const failure of ['instance_stopping', 'authentication_required', 'host_identity_changed']) {

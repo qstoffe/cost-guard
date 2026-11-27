@@ -1068,13 +1068,15 @@ class SessionCatalog:
                 and not (sort == 'ctx' and not self.rows[key].context_qualified))
 
     def page(self, *, token=None, offset=0, sort="activity", direction=-1, epoch=None, period="today",
-             navigation=None, applied=None, cancelled=None, passive=False):
+             navigation=None, applied=None, cancelled=None, passive=False, query=''):
         if period not in PERIODS:
             raise ValueError("invalid_request")
         if self.archive is not None:
             return cached_page(self.archive, token=token, offset=offset, sort=sort, direction=direction,
                                period=period, navigation=navigation, now=self.clock_ms(), zone=self.timezone_id,
-                               unit=self.unit)
+                                unit=self.unit, query=query.strip().casefold())
+        if query.strip():
+            raise ValueError('catalog_search_unavailable')
         with self.lock:
             self._expire_recent_finishes()
             return epoch_page(self, token=token, offset=offset, sort=sort, direction=direction,

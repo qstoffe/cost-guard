@@ -251,19 +251,23 @@ class V2HttpClient:
             raise SourceDataError("OpenCode V2 API returned malformed JSON", phase=phase,
                                   exception_type=type(exc).__name__, generation="v2") from exc
 
-    def bounded_json(self, path, *, max_bytes, deadline, cancelled, query=None):
-        """One complete bounded read; absolute deadline also bounds slow drips.
+    def bounded_json(self, path, *, max_bytes, timeout, cancelled, query=None):
+        """Bound header admission and each idle read; cap the complete response.
 
         Used only for native transfer, not ordinary analytical GETs. The reading
         thread owns response/connection cleanup even for an HTTP/1.0 body.
         """
-        connection = self._new_connection(max(0.01, deadline - time.monotonic()))
-        connection.cancelled = lambda: self._cancelled or cancelled() or time.monotonic() >= deadline
+        header_deadline = time.monotonic() + timeout
+        reading_body = False
+        connection = self._new_connection(timeout)
+        connection.cancelled = lambda: (self._cancelled or cancelled()
+                                        or not reading_body and time.monotonic() >= header_deadline)
         try:
             if connection.cancelled():
                 raise SessionExportError('export_cancelled')
             connection.request('GET', self._target(path, query), headers=self._headers())
             response = connection.getresponse()
+            reading_body = True
             if response.status != 200:
                 raise http_failure(response.status, phase='session_export')
             if response.getheader('Content-Type', '').split(';')[0].strip() != 'application/json':
@@ -299,6 +303,8 @@ class V2HttpClient:
                 raise ValueError()
             return value
         except (OSError, http.client.HTTPException) as error:
+            if not reading_body and time.monotonic() >= header_deadline:
+                raise SessionExportError('export_timed_out') from None
             raise transport_failure(error, phase='session_export') from None
         except (ValueError, UnicodeError, RecursionError):
             raise SessionExportError('export_invalid_response') from None

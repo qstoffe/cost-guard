@@ -9,7 +9,7 @@ from .opencode_v2_transport import V2HttpClient
 from .opencode_v2_wire import fetch_global_sessions
 
 MAX_EXPORT_BYTES = 32 * 1024 * 1024  # Per native transfer.
-REQUEST_SECONDS = 15  # Per source response, not the aggregate catalog and tree.
+REQUEST_SECONDS = 15  # Header admission and idle reads from the pinned source.
 SESSION_ID = re.compile(r'ses_[A-Za-z0-9_-]{1,160}\Z')
 EXPORT_ROUTE = '/api/experimental/session/{sessionID}/export'
 
@@ -24,16 +24,19 @@ class ExportReads:
             raise SessionExportError('export_cancelled')
 
     def json(self, path, *, query=None, max_bytes=8 * 1024 * 1024):
-        self.check()
-        deadline = time.monotonic() + REQUEST_SECONDS
-        try:
-            return self.client.bounded_json(path, query=query, max_bytes=max_bytes,
-                                            deadline=deadline, cancelled=self.cancelled)
-        except (SessionExportError, SourceError):
+        for attempt in range(3):
             self.check()
-            if time.monotonic() >= deadline:
-                raise SessionExportError('export_timed_out') from None
-            raise
+            try:
+                return self.client.bounded_json(path, query=query, max_bytes=max_bytes,
+                                                timeout=REQUEST_SECONDS, cancelled=self.cancelled)
+            except (SessionExportError, SourceError) as error:
+                self.check()
+                retryable = error.readiness_retryable if isinstance(error, SourceError) else (
+                    str(error) == 'export_timed_out')
+                if not retryable or attempt == 2:
+                    raise
+                # No member has been published. The same pinned GET can be retried.
+                time.sleep(.2 * (1 + attempt))
 
 
 class CatalogReads:

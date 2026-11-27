@@ -85,7 +85,13 @@ class BrowserSession:
             return ""
 
     def authenticated(self, cookie):
-        supplied = self._credential(cookie)
+        return self.authorized_browser(self._credential(cookie))
+
+    def browser_key(self, cookie):
+        """Internal session binding for requests that own a background operation."""
+        return self._credential(cookie)
+
+    def authorized_browser(self, supplied):
         with self._lock:
             browser = self._browsers.get(supplied)
             return browser is not None and self._clock() < browser.until

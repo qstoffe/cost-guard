@@ -270,6 +270,7 @@ class WebHost:
                             if self.live:
                                 self.live.catalog.enable_warm(self.dispatcher.warm_allowed)
                         self.jobs.tick()
+                        self.server.exports.expire()
                         self.cache_housekeeping.tick(self)
                     progress = self.jobs.updates() if hasattr(self.jobs, "updates") else self.jobs.readiness()
                     self.events.publish("progress", progress)

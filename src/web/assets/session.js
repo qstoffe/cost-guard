@@ -18,6 +18,8 @@ const SessionDetail = (() => {
     3: ['total_ccost', 'session total CCost'],
     4: ['total_calls', 'session total calls'],
     5: ['duration_ms', 'session total duration'],
+    7: ['total_incoming_context_ccost', 'session incoming context CCost'],
+    8: ['total_extra_ccost', 'session extra CCost'],
     9: ['total_token_mix_percent', 'session total token mix']
   };
   const validMix = values => Array.isArray(values) && values.length === 4 &&
@@ -147,13 +149,28 @@ const SessionDetail = (() => {
        incomingContext, ReportView.costValue(value, 'incoming_context_ccost'),
        ReportView.costValue(value, 'extra_ccost'), mix];
   }
+  function section(title, className) {
+    const root = el('section', undefined, `session-detail-card ${className}`);
+    const heading = el('h2', title, 'session-indicator-heading');
+    const feedback = el('span');
+    heading.append(feedback); root.append(heading);
+    return {root, feedback};
+  }
+
   class View {
     constructor(api, id, live = () => null) {
       Object.assign(this, {api, id, live, token: null, data: null, busy: false, attached: false, generation: 0});
       this.root = el('div', undefined, 'session-detail'); this.root.setAttribute('aria-label', 'Session detail');
-      const back = this.back = el('a', '↩ Back to Show All Sessions'); back.href = '#/sessions';
+      const back = this.back = el('a', '↩ Back to Show All Sessions');
       back.setAttribute('aria-label', 'Back to Show All Sessions');
-      this.heading = el('h1');
+      this.closeLink = el('a', '×', 'session-close');
+      this.closeLink.setAttribute('aria-label', 'Close session detail and return to Sessions');
+      this.returnTo('#/sessions');
+      const nav = el('div', undefined, 'session-detail-navigation'); nav.append(back, this.closeLink);
+      const title = el('h1', undefined, 'session-indicator-heading');
+      this.heading = el('span'); this.titleFeedback = el('span');
+      title.append(this.heading, this.titleFeedback);
+      this.initialSettled = new Set();
       this.exporter = typeof SessionExport === 'undefined' ? null : new SessionExport.Action(api, id);
       this.status = el('p', '', 'warning'); this.status.setAttribute('role', 'status'); this.status.hidden = true;
       this.liveActivityStatus = el('p'); this.liveActivityStatus.setAttribute('role', 'status');
@@ -171,7 +188,19 @@ const SessionDetail = (() => {
         if (this.busy) return;
         this.activityLimit += 25; this.activity.more.disabled = true;
         this.poll();
-      });
+      }, {expanded: true});
+      this.overview = section('Session overview', 'session-detail-overview');
+      const totals = el('dl');
+      this.totalNodes = new Map([[3, 'CCost'], [4, 'Calls'], [5, 'Duration'], [9, 'Token Mix %']].map(([index, label]) => {
+        const pair = el('div'), value = el('dd');
+        pair.append(el('dt', label), value); totals.append(pair);
+        return [index, value];
+      }));
+      this.overview.root.append(totals, this.context.root);
+      this.activitySection = section('Tools and Skills', 'session-detail-activity');
+      this.activityEmpty = el('p', '', 'detail');
+      this.activitySection.root.append(this.invocations.root, this.activity.root, this.activityEmpty);
+      this.historySection = section('Prompt history', 'session-detail-history');
       const scroll = el('div', undefined, 'sessions-table-pan');
       this.scroll = scroll;
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
@@ -182,14 +211,19 @@ const SessionDetail = (() => {
       this.activityFeedback = el('tbody');
       this.activityAnnouncement = el('span', '', 'sr-only'); this.activityAnnouncement.setAttribute('role', 'status');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, this.activityFeedback, foot); scroll.append(table);
+      this.historySection.root.append(scroll);
       this.values = new Values();
       this.rowIndexes = new Map();
       this.quotaUsage = typeof AccountCards === 'undefined' ? null : new AccountCards.SessionUsage();
-      this.root.append(back, this.heading, el('p', 'Session ID: ' + id), this.activityAnnouncement, this.status,
-        this.retry, this.liveActivityStatus, this.loader.root, scroll, this.context.root, this.invocations.root, this.activity.root);
+      this.root.append(nav, title, el('p', 'Session ID: ' + id), this.activityAnnouncement, this.status,
+        this.retry, this.liveActivityStatus, this.loader.root, this.overview.root, this.activitySection.root,
+        this.historySection.root);
       if (this.quotaUsage) this.root.append(this.quotaUsage.root);
-      if (this.exporter) this.heading.after(this.exporter.root);
+      if (this.exporter) title.after(this.exporter.root);
       this.loading(); this.freshness();
+    }
+    returnTo(destination) {
+      this.back.href = this.closeLink.href = destination;
     }
     attach(parent) {
       this.freshness();
@@ -283,9 +317,11 @@ const SessionDetail = (() => {
         if (!this.token) {
           this.loading('Opening session…');
           // An issued token belongs to this flight, even if navigation retired it.
-          const {token} = await this.api('/api/detail', {action: 'open', session_id: this.id, mode: 'live'});
+          const {token, export_state, export_scope} = await this.api('/api/detail',
+            {action: 'open', session_id: this.id, mode: 'live'});
           if (!current()) { this.api('/api/detail', {action: 'close', token}).catch(() => {}); return; }
           this.token = token;
+          this.exporter?.update(token, export_state || 'pending', export_scope);
         }
         return read({action: 'begin', token: this.token, offset: 0});
       };
@@ -294,7 +330,7 @@ const SessionDetail = (() => {
         try { data = await begin(); }
         catch (error) {
           if (!current() || error.message !== 'detail_expired') throw error;
-          this.token = null; this.exporter?.close();
+          this.token = null;
           data = await begin();
         }
         if (!current()) return;
@@ -304,17 +340,17 @@ const SessionDetail = (() => {
         if (data.result && this.values.scope && data.value_authority?.scope !== this.values.scope)
           this.invalidateValues();
         this.syncLiveActivity(data, this.data?.activity?.scope);
-        this.exporter?.update(this.token, data.export_available === true, data.export_name);
+        this.exporter?.update(this.token, data.export_state || 'pending', data.export_scope, data.export_name);
+        if (data.result || this.data) this.quotaUsage?.update(data.quota_usage,
+          data.quota_state || (data.quota_usage ? 'ready' : 'unavailable'));
         if (!data.result) {
           this.readFailures = 0;
           this.showActivityFeedback(data.activity_refresh || (this.activityFeedbackState && data.acquisition?.reason
             ? 'unavailable' : null));
           this.sourceStatus(data);
+          this.loadingFeedback(this.data);
           return;
         }
-        // Pending quota publication is not observed nonuse. Host/source
-        // invalidation above still retires the entire retained projection.
-        if (data.quota_usage) this.quotaUsage?.update(data.quota_usage);
         if (this.data?.activity?.scope && data.activity?.scope !== this.data.activity.scope) {
           this.activity.update(null); this.activityLimit = 25; this.data.activity = null;
         }
@@ -328,6 +364,7 @@ const SessionDetail = (() => {
             this.data.result.view.prompt_blocks[0].rows.length === data.total && (this.data.activity?.failures?.length || 0) >=
             Math.min(this.activityLimit, data.activity?.total || 0)) {
           this.showActivityFeedback(data.activity_refresh);
+          this.loadingFeedback(data);
           if (this.pendingRender) this.update(this.data); return;
         }
         const initial = this.data?.revision === data.revision && sameValues ?
@@ -342,11 +379,12 @@ const SessionDetail = (() => {
           }
         };
         validate(rows);
-        if (!this.data && rows.length && rows.length < data.total && data.cache_first) {
+        if (!this.data) {
           const block = data.result.view.prompt_blocks[0];
           this.update({...data, result: {...data.result, view: {...data.result.view,
-            prompt_blocks: [{...block, rows: [...rows]}]}}});
+             prompt_blocks: [{...block, rows: [...rows]}]}}});
         }
+        this.loadingFeedback(data);
         const materialTransfer = this.data?.activity_revision && data.activity_revision &&
           this.data.activity_revision !== data.activity_revision &&
           (rows.length < data.total || (data.activity?.failures?.length || 0) <
@@ -394,6 +432,7 @@ const SessionDetail = (() => {
           this.data.activity = data.activity;
           this.activity.update(data.activity, data.result.view.timezone_id);
         }
+        this.loadingFeedback(data);
       } catch (error) {
         if (this.attached && generation === this.generation) this.readFailed(error);
       } finally {
@@ -403,7 +442,7 @@ const SessionDetail = (() => {
       }
     }
     readFailed(error) {
-      if (error.message === 'detail_expired') { this.token = null; this.exporter?.close(); }
+      if (error.message === 'detail_expired') this.token = null;
       if (invalidatingFailures.has(error.message)) {
         this.invalidateValues(); this.detach();
       } else if ((restartableReads.has(error.message) || !this.data && error.retryable === true) &&
@@ -413,6 +452,8 @@ const SessionDetail = (() => {
         return;
       }
       if (this.activityFeedbackState) this.showActivityFeedback('unavailable');
+      this.loadingFeedback(this.data, true);
+      if (this.data && !this.quotaUsage?.settled) this.quotaUsage?.update(null, 'unavailable');
       this.finishLoading(!this.data);
     }
     finishLoading(failed, retryAvailable = false) {
@@ -489,8 +530,31 @@ const SessionDetail = (() => {
     }
     freshness() {
       if (!this.scroll) return;
-      this.scroll.hidden = !this.data;
-      this.context.root.hidden = !this.data;
+      for (const part of [this.historySection, this.overview, this.activitySection]) part.root.hidden = !this.data;
+      if (this.quotaUsage) this.quotaUsage.root.hidden = !this.data;
+    }
+    loadingFeedback(data, failed = false) {
+      const block = data?.result.view.prompt_blocks[0];
+      if (!block) { ReportView.valueSlot(this.titleFeedback, ''); return; }
+      const pending = (name, active) => {
+        if (!active || failed) this.initialSettled.add(name);
+        return !this.initialSettled.has(name);
+      };
+      const historyIncomplete = block.rows.length < data.total;
+      const history = pending('history', historyIncomplete);
+      const promptValues = pending('prompt values', historyIncomplete || this.pendingPromptValues);
+      const activity = pending('activity', data.activity_refresh === 'pending' ||
+        data.activity?.failures.length < Math.min(this.activityLimit, data.activity?.total || 0));
+      const metrics = pending('metrics', this.footerBlock?.pendingTotals.length);
+      const context = pending('context', block.session_context?.context_state === 'pending');
+      const exporting = pending('export', this.exporter?.state === 'pending');
+      ReportView.valueSlot(this.historySection.feedback, '', {pending: history, field: 'prompt history'});
+      ReportView.valueSlot(this.activitySection.feedback, '', {pending: activity, field: 'tools and skills'});
+      ReportView.valueSlot(this.overview.feedback, '', {pending: context, field: 'session context'});
+      ReportView.valueSlot(this.titleFeedback, '', {
+        pending: history || promptValues || activity || metrics || context || exporting, field: 'session details'
+      });
+      ReportView.text(this.activityEmpty, data.activity || activity ? '' : 'No recorded tool or skill activity is available.');
     }
     invalidateValues() {
       this.values.clear(); this.costs = null; this.costSource = null; this.data = null;
@@ -498,10 +562,16 @@ const SessionDetail = (() => {
       this.showActivityFeedback(null);
       ContextHelp.dismiss(this.root);
       this.body.replaceChildren(); this.footer.replaceChildren(); this.footerBlock = null;
+      for (const total of this.totalNodes.values()) {
+        ReportView.valueSlot(total, '');
+        ContextHelp.clearValue(total);
+      }
+      this.initialSettled.clear();
+      this.loadingFeedback(null);
       this.context.contextObservation = null; this.context.update(null); this.activity.update(null);
       this.invocations.update(null);
       this.syncLiveActivity({});
-      this.exporter?.close(); this.freshness();
+      this.freshness();
       this.quotaUsage?.update(null);
     }
     update(data) {
@@ -518,6 +588,7 @@ const SessionDetail = (() => {
       this.costSource = costSource;
       this.costs ||= new ReportView.CostDisplay();
       const block = this.values.project(data.result.view.prompt_blocks[0], data.value_authority);
+      this.pendingPromptValues = block.rows.some(row => row.tokenMixPending);
       this.pendingRender = false;
       const protectedNode = protection();
       ReportView.text(this.heading, block.title || 'Untitled session'); this.context.update(block.session_context);
@@ -579,6 +650,7 @@ const SessionDetail = (() => {
       this.data = data; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
       this.syncLiveActivity(data);
       this.freshness();
+      this.loadingFeedback(data);
     }
     syncLiveActivity(data, rowScope = data.activity?.scope) {
       const proof = data.live_activity;
@@ -626,6 +698,11 @@ const SessionDetail = (() => {
           '?: the recorded breakdown is incomplete or has no positive denominator. Spinner: acquisition pending.');
         if (!node.parentNode) cell.append(node);
         if (!cell.parentNode) this.footer.append(cell);
+        const total = this.totalNodes.get(index);
+        if (total) {
+          ReportView.valueSlot(total, () => value(index), {pending: block.pendingTotals.includes(key), field});
+          if (index === 3) ContextHelp.value(total, () => ReportView.display(this.footerBlock, 'session_cost_help'));
+        }
       }
       ContextHelp.refresh(this.footer);
     }
