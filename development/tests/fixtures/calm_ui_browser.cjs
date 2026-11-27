@@ -191,7 +191,7 @@ module.exports = async ({evaluate, until, fixture, command, checks = [], layouts
     output.replaceChildren(quietExport.root);quietExport.update('synthetic','unavailable');`);
   assert.equal(await evaluate('quietExport.button.disabled && quietExport.notice.textContent.includes("unavailable")'),true);
   await run(`const picker=window.showSaveFilePicker;
-    try{window.showSaveFilePicker=undefined;quietExport.update('synthetic','ready','scope');await quietExport.activate();}
+    try{window.showSaveFilePicker=undefined;quietExport.update('synthetic','ready','scope','Synthetic session.zip');await quietExport.activate();}
     finally{window.showSaveFilePicker=picker;}`);
   assert.equal(await evaluate('quietExport.notice.textContent'),'The selected OpenCode source is unavailable. Retry when it is ready.');
   checks.push('Genuine export blocker is explained and disabled; explicit synthetic failure has a truthful outcome without a dialog or file write');
