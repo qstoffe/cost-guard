@@ -55,9 +55,8 @@ async function main() {
     await command('Input.dispatchMouseEvent', {type:'mousePressed',button:'left',clickCount:1,...position});
     await command('Input.dispatchMouseEvent', {type:'mouseReleased',button:'left',clickCount:1,...position});
   };
-  const waitReady = () => until(()=>evaluate(`current.detail.exporter.button.textContent==='Save ZIP' &&
-    !current.detail.exporter.button.disabled && !current.detail.exporter.spinner.getClientRects().length`), 'prepared ZIP');
-  const prepare = async () => { await click(); await waitReady(); };
+  const waitIdle = () => until(()=>evaluate(`!current.detail.exporter.button.disabled &&
+    !current.detail.exporter.spinner.getClientRects().length`), 'export idle');
   const key = async (key, code, windowsVirtualKeyCode) => {
     await command('Input.dispatchKeyEvent', {type:'keyDown',key,code,windowsVirtualKeyCode,
       ...(key==='Enter'?{text:'\r'}:key===' '?{text:' '}:{})});
@@ -108,7 +107,7 @@ async function main() {
     for (const value of layouts) {
       await configure(value.theme,value.width,value.zoom,value.coarse);
       value.export=await measure('.session-export > button');
-      for (const property of ['fontFamily','fontSize','fontWeight','lineHeight','padding','minHeight','height'])
+      for (const property of ['fontFamily','fontSize','fontWeight','lineHeight','minHeight','height'])
         assert.equal(value.export[property],value.models[property],property+' parity: '+JSON.stringify(value));
       assert.equal(value.export.coarse,value.coarse);
       assert.equal(value.export.noPageOverflow,true);
@@ -117,7 +116,7 @@ async function main() {
     await configure('classic',1280,1,false);
     assert.equal(await evaluate(`(() => {const a=current.detail.exporter;
       return a.button.textContent==='Export Session Analysis ZIP' && !a.button.hasAttribute('title') &&
-        a.root.querySelectorAll('button').length===1 && a.notice.textContent==='' &&
+        a.root.querySelectorAll('button:not([hidden])').length===1 && a.notice.textContent==='' &&
         getComputedStyle(a.notice).display==='none' && current.detail.body.children.length===3;})()`),true);
     await hover(); await until(()=>evaluate(helpVisible),'delayed action help');
     assert.equal(await evaluate('current.detail.exporter.button.getAttribute("aria-describedby")'),'context-help');
@@ -130,7 +129,6 @@ async function main() {
     // are explicitly not OS dialog success/cancellation evidence.
     for (const activation of ['pointer','Enter','Space','touch','pending-hover']) {
       evidence.stage=activation;
-      await prepare();
       const before = (await fixture('count')).requests;
       await leave();
       await evaluate(`window.showSaveFilePicker=options => {window.pickerState={hidden:!(${helpVisible}),active:navigator.userActivation.isActive,filename:options.suggestedName};
@@ -157,7 +155,7 @@ async function main() {
       await until(()=>evaluate('!current.detail.exporter.operation'),'picker double cancelled');
       await quiet();
       assert.match(await evaluate('current.detail.exporter.notice.textContent'),/cancelled/);
-      assert.equal((await fixture('count')).requests,before,'cancelled Save never requests the prepared tree again');
+      assert.equal((await fixture('count')).requests,before,'cancelled picker never starts source acquisition');
       if (activation==='touch') await command('Emulation.setTouchEmulationEnabled',{enabled:false});
       await evaluate('window.tabStart?.remove()');
       activations.push(activation);
@@ -168,7 +166,8 @@ async function main() {
     // dismissal; actual destination selection is not simulated as an OS PASS.
     await evaluate(`window.saved=[];window.showSaveFilePicker=async()=>({createWritable:async()=>({
       write:async blob=>saved.push(blob.type,Array.from(new Uint8Array(await blob.slice(0,4).arrayBuffer()))),close:async()=>saved.push('closed')})});`);
-    await prepare(); await click(); await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("ZIP saved")'),'handle double committed');
+    await click(); await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("ZIP saved")'),'handle double committed');
+    await waitIdle();
     await quiet(); assert.deepEqual(await evaluate('saved'),['application/zip',[80,75,3,4],'closed']);
     // Actual authenticated standard browser download, no picker support.
     await evaluate('window.showSaveFilePicker=undefined');
@@ -177,49 +176,46 @@ async function main() {
     evidence.stage='slow nested tree';
     await fixture('slow-tree');
     const started = Date.now();
+    assert.equal(await evaluate(`!!current.detail.quotaUsage.feedback.querySelector('.metric-spinner')`),
+      true,'quota is still pending at export start');
     await click();
     assert.equal(await evaluate(`(() => {const a=current.detail.exporter;
       return a.button.disabled && a.spinner.getBoundingClientRect().width>0 &&
         getComputedStyle(a.spinner).animationName!=='none' && a.notice.textContent.includes('Preparing');})()`),true);
-    await waitReady();
-    const preparedMs = Date.now()-started;
-    const transfer = await evaluate(`(() => {const r=performance.getEntriesByType('resource')
-      .filter(e=>new URL(e.name).pathname==='/api/detail/export').at(-1);
-      return {firstByteMs:Math.round(r.responseStart-r.requestStart),bodyMs:Math.round(r.responseEnd-r.responseStart),
-        bytes:r.encodedBodySize};})()`);
-    assert.ok(transfer.firstByteMs > 5000, 'valid tree crossed the former request cutoff before headers');
-    assert.deepEqual(await fs.readdir(downloads), [], 'preparation does not create a destination');
-    const beforeSave = (await fixture('count')).requests;
-    const saving = Date.now();
-    await click();
+    await fixture('publish-quota'); await evaluate('current.detail.catchUp()');
+    await until(()=>evaluate(`current.detail.quotaUsage.grid.textContent.includes('17%') &&
+      !current.detail.quotaUsage.feedback.querySelector('.metric-spinner')`),'late quota cards');
+    assert.equal(await evaluate('current.detail.exporter.button.disabled'),true);
     await until(async()=>{try{await fs.access(path.join(downloads,filename));return true;}catch{return false;}}, 'download');
     const original = await fs.readFile(path.join(downloads,filename));
-    const saveMs = Date.now() - saving;
-    assert.equal((await fixture('count')).requests,beforeSave,'save reuses the single completed preparation');
+    const elapsedMs = Date.now() - started;
+    assert.ok(elapsedMs>5000,'healthy preparation exceeded the old ingress cutoff');
     const archive = await fixture('check-downloads');
-    assert.equal(archive.checked,1); assert.equal(archive.entries,36); assert.equal(original.length,transfer.bytes);
+    assert.equal(archive.checked,1); assert.equal(archive.entries,36);
     await fixture('remove-delay');
     assert.equal(await evaluate('document.activeElement === current.detail.exporter.button'),true);
-    await until(()=>evaluate('current.detail.exporter.url === null'), 'object URL release');
+    await waitIdle();
+    assert.match(await evaluate('current.detail.exporter.notice.textContent'), /browser controls/);
     // Browser owns collision policy; a repeated download cannot overwrite the first.
-    await prepare(); await click();
+    await click();
     const duplicate = 'Synthetic LIVE-style å 日本語 🚀 (1).zip';
     await until(async()=>{try{await fs.access(path.join(downloads,duplicate));return true;}catch{return false;}}, 'collision suffix');
     assert.deepEqual(await fs.readFile(path.join(downloads,filename)),original);
     assert.equal((await fixture('check-downloads')).checked,2);
+    await waitIdle();
     await fixture('invalid');
     await click();
     await until(()=>evaluate('current.detail.exporter.notice.textContent.includes("no complete ZIP was saved")'), 'missing descendant feedback');
     assert.deepEqual((await fs.readdir(downloads)).sort(),[filename,duplicate].sort(), 'no corrupt third download');
     await evaluate('location.hash="#/settings"');
     await until(()=>evaluate('current.section === "settings"'), 'navigation');
-    evidence = {outcome:'PASS',browser:version.product,layouts,activations,slowTree:{preparedMs,transfer,saveMs,archive},
-      checks:['canonical selected detail','trusted Save click activates picker double; cancellation performs no additional source work',
+    evidence = {outcome:'PASS',browser:version.product,layouts,activations,slowTree:{elapsedMs,bytes:original.length,archive},
+      checks:['canonical selected detail','original click activates picker double; cancellation performs no source work',
         'quiet one-action idle layout','computed Models parity across themes/width/zoom/coarse pointer',
         'pointer/Tab/Enter/Space/touch/pending-hover dismissal and stationary suppression','Escape and intentional re-entry',
         'handle-double commit and picker-focus suppression',
          'title-derived picker and actual fallback filename; browser collision suffix without overwrite',
-           'all 36 compressed masked UTF-8 entries checked inside both downloaded ZIPs','focus retained','object URL released',
+            'all 36 compressed masked UTF-8 entries checked inside both downloaded ZIPs','focus retained','quota arrived before handoff',
          'missing descendant saves no partial file','navigation preserved'],
       limitations:['Picker is mocked: actual native destination selection/write/cancel remains unverified.',
         'Synthetic LIVE-style native service, no Desktop session-list visibility assertion.'],

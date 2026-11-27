@@ -1,138 +1,87 @@
-// Deterministic picker ordering, cancellation, write commit and URL lifecycle.
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const vm = require('node:vm');
-const order = [], downloads = [], timers = new Map();
+// Controlled picker, host reads and destination commit. Not a native dialog test.
+const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
+const crypto = require('node:crypto');
+const window = {}, downloads = [];
 class Node {
-  constructor(text) { this.textContent = text; this.children = []; this.events = {}; this.attributes = {}; }
-  setAttribute(key, value) { this.attributes[key] = value; }
+  constructor(text) { this.textContent = text; this.children = []; this.events = {}; }
+  setAttribute() {}
   append(...nodes) { this.children.push(...nodes); }
-  addEventListener(event, callback) { this.events[event] = callback; }
+  addEventListener(key, fn) { this.events[key] = fn; }
+  click() { downloads.push(this.download); }
   remove() {}
-  click() { order.push('download'); downloads.push(this.download); }
 }
-const window = {};
-const context = vm.createContext({window, AbortController, TextEncoder, URL: {
-  createObjectURL() { order.push('url'); return 'blob:owned'; },
-  revokeObjectURL() { order.push('revoke'); }
-}, ReportView: {element: (_, text) => new Node(text)}, ContextHelp: {
-  attach(target, help, passive = false) { target.help = help; target.passive = passive; }, dismiss() {}
-},
-  setTimeout: callback => { timers.set(1, callback); return 1; }, clearTimeout: key => timers.delete(key)});
-vm.runInContext(fs.readFileSync('src/web/assets/session-export.js', 'utf8') + '\nglobalThis.Action = SessionExport.Action;', context);
+const context = vm.createContext({window, document:{hidden:false}, crypto, AbortController, URL, Blob, Response,
+  setTimeout:(fn,ms) => {const timer=setTimeout(fn,ms); timer.unref(); return timer;}, clearTimeout,
+  ReportView:{element:(_, text)=>new Node(text)}, ContextHelp:{attach(){},dismiss(){}}});
+vm.runInContext(fs.readFileSync('src/web/assets/session-export.js','utf8')+'\nglobalThis.Action=SessionExport.Action;',context);
+
 async function main() {
-  const names = new context.Action(async () => {}, 'ses_test');
-  names.update('selected', true, 'Ångström.zip');
-  assert.equal(names.filename, 'Ångström.zip');
-  names.update('new-selection', true);
-  assert.equal(names.filename, 'session-ses_test.zip', 'new selection never inherits a title');
-  names.update('new-selection', false, 'Unverified source');
-  assert.equal(names.filename, 'session-ses_test.zip');
-  let calls = 0;
+  const calls = [], order = [];
+  let hold, badName = false, rejectWrite = false;
   const action = new context.Action(async (path, body, signal, attachment) => {
-    calls++; order.push('export'); assert.equal(path, '/api/detail/export'); assert.equal(body.token, 'selected');
-    assert.equal(attachment, true); assert.equal(signal.aborted, false);
-    return {blob: 'archive', filename: 'opencode-ses_test-analysis.zip'};
-  }, 'ses_test');
-  action.update('selected', true, 'FixAuthTests.zip');
-  assert.equal(action.button.textContent, 'Export Session Analysis ZIP');
-  assert.deepEqual(action.root.children, [action.button, action.spinner, action.notice]);
-  assert.equal(action.notice.attributes.role, 'status'); assert.equal(action.notice.textContent, '');
-  assert.equal(action.button.passive, false, 'the action itself owns non-pinning help');
-  action.update('refreshed', true); assert.equal(action.notice.textContent, '', 'refresh cannot restore passive advice');
-  action.update('selected', true, 'FixAuthTests.zip');
+    assert.equal(path,'/api/detail/export'); calls.push(body);
+    if (body.action==='start') return {state:'preparing'};
+    if (body.action==='status') {
+      if (hold) await new Promise(resolve => hold = resolve);
+      return {state:'ready',size:2};
+    }
+    if (body.action==='chunk') {
+      assert.equal(attachment,true); assert.equal(body.offset,0);
+      return {blob:new Blob(['PK']),filename:`opencode-ses_${badName?'other':'test'}-analysis.zip`};
+    }
+    assert.equal(body.action,'cancel');
+  },'ses_test');
+  const click = () => action.button.events.click();
+  const idle = () => { assert.equal(action.button.disabled,false); assert.equal(action.spinner.hidden,true); };
+  action.update('lease','ready','scope','Ångström.zip');
   window.showSaveFilePicker = async options => {
-    order.push('picker'); assert.equal(options.suggestedName, 'FixAuthTests.zip');
-    assert.deepEqual(Array.from(options.types[0].accept['application/zip']), ['.zip']);
-    throw Object.assign(new Error(), {name: 'AbortError'});
+    order.push('picker'); assert.equal(options.suggestedName,'Ångström.zip');
+    return {createWritable:async()=>({
+      async write(blob){ assert.equal(await blob.text(),'PK'); order.push('write'); if(rejectWrite) throw Error('destination failed'); },
+      async close(){order.push('close');}, async abort(){order.push('abort');}
+    })};
   };
-  const preparing = action.button.events.click();
-  assert.equal(action.button.disabled, true); assert.equal(action.spinner.hidden, false);
-  await action.button.events.click();
-  await preparing;
-  assert.deepEqual(order, ['export']); assert.equal(action.button.textContent, 'Save ZIP');
-  assert.equal(action.spinner.hidden, true); assert.equal(action.button.disabled, false);
-  const cancelled = action.button.events.click();
-  assert.deepEqual(order, ['export', 'picker'], 'second click invokes the picker synchronously');
-  await cancelled;
-  assert.equal(calls, 1); assert.match(action.notice.textContent, /cancelled/);
-  assert.equal(action.button.textContent, 'Export Session Analysis ZIP'); assert.equal(timers.size, 0);
-  order.length = 0;
-  window.showSaveFilePicker = async () => { order.push('picker'); return {createWritable: async () => ({
-    async write(blob) { order.push('write'); assert.equal(blob, 'archive'); },
-    async close() { order.push('commit'); }, async abort() { order.push('abort'); }
-  })}; };
-  await action.button.events.click(); await action.button.events.click();
-  assert.deepEqual(order, ['export', 'picker', 'write', 'commit']);
-  action.update('selected', true, 'Renamed å.zip'); assert.match(action.notice.textContent, /saved/, 'polling preserves action feedback');
-  delete window.showSaveFilePicker; order.length = 0;
-  await action.button.events.click(); await action.button.events.click();
-  assert.deepEqual(order, ['export', 'url', 'download']);
-  assert.deepEqual(downloads, ['Renamed å.zip'], 'fallback ignores trusted transport filename for its display name');
-  assert.match(action.notice.textContent, /browser controls/);
-  action.close(); assert.equal(order.at(-1), 'revoke'); assert.equal(timers.size, 0);
-  for (const [available, token] of [[false, 'selected'], [true, null]]) {
-    action.update(token, available); assert.equal(action.button.disabled, true);
-    assert.equal(action.notice.textContent, '', 'passive export availability is silent');
-  }
-  for (const code of ['detail_expired', 'export_too_large', 'export_source_unavailable']) {
-    const failed = new context.Action(async () => { throw new Error(code); }, 'ses_test');
-    failed.update('selected', true); await failed.button.events.click();
-    assert.equal(failed.spinner.hidden, true);
-    assert.equal(failed.button.textContent, 'Export Session Analysis ZIP');
-    assert.match(failed.notice.textContent, /expired|size limit|unavailable/); assert.equal(failed.button.disabled, false);
-  }
-  let finish;
-  window.showSaveFilePicker = () => new Promise(resolve => { finish = resolve; });
-  action.update('selected', true);
-  await action.button.events.click();
-  const pending = action.button.events.click(); action.close(); finish({}); await pending;
-  assert.equal(action.notice.textContent, '', 'late picker result after navigation is silent');
-  assert.equal(action.filename, 'session-ses_test.zip');
-  action.update('selected', true, 'Old title');
-  await action.button.events.click();
-  action.update('other-token', true, 'New title');
-  assert.equal(action.button.textContent, 'Export Session Analysis ZIP');
-  assert.equal(timers.size, 0, 'new token retires the ready payload and expiry timer');
-  action.update('selected', true);
-  await action.button.events.click();
-  const [expire] = timers.values(); expire();
-  assert.equal(action.button.textContent, 'Export Session Analysis ZIP'); assert.match(action.notice.textContent, /expired/);
-  window.showSaveFilePicker = async () => ({createWritable: async () => ({
-    write: async () => {throw new Error('synthetic write failure');}, abort: async () => order.push('abort')
-  })});
-  await action.button.events.click(); await action.button.events.click();
-  assert.equal(order.at(-1), 'abort'); assert.match(action.notice.textContent, /no completed export/);
+  hold=true;
+  const completed=click();
+  assert.deepEqual(order,['picker'],'original click opens the destination immediately');
+  assert.equal(action.button.disabled,true); assert.equal(action.button.children.at(-1),action.spinner);
+  assert.equal(action.spinner.hidden,false); await click();
+  await new Promise(setImmediate);
+  assert.equal(typeof hold,'function'); assert.deepEqual(order,['picker'],'no premature writes');
+  action.update('renewed','ready','scope','New title.zip'); hold(); await completed;
+  assert.deepEqual(order,['picker','write','close']); idle();
+  assert.deepEqual(calls.map(c=>c.action),['start','status','chunk','cancel']);
+  assert.equal(calls[0].token,'lease'); assert.equal(new Set(calls.map(c=>c.id)).size,1);
+  assert.match(action.notice.textContent,/ZIP saved/);
+
+  action.update('renewed','ready','scope','Ångström.zip'); hold=false; rejectWrite=true;
+  await click(); assert.equal(order.at(-1),'abort'); assert.match(action.notice.textContent,/no completed export/); idle();
+  const count=calls.length;
+  window.showSaveFilePicker=async()=>{throw Object.assign(Error(),{name:'AbortError'});};
+  await click(); assert.equal(calls.length,count); assert.match(action.notice.textContent,/cancelled/); idle();
   delete window.showSaveFilePicker;
-  let complete;
-  const late = new context.Action(() => new Promise(resolve => { complete = resolve; }), 'ses_other');
-  late.update('old-token', true, 'Old session');
-  const response = late.button.events.click();
-  late.update('new-token', true, 'New session');
-  complete({blob:'late', filename:'opencode-ses_other-analysis.zip'}); await response;
-  assert.equal(late.button.textContent, 'Export Session Analysis ZIP'); assert.equal(late.notice.textContent, '');
-  const wrong = new context.Action(async () => ({blob: 'other', filename:'opencode-ses_other-analysis.zip'}), 'ses_test');
-  wrong.update('selected', true); await wrong.button.events.click();
-  assert.match(wrong.notice.textContent,/invalid or incomplete/);
-  assert.deepEqual(downloads, ['Renamed å.zip'], 'a stale or foreign export never saves');
-  // Run the shipped attachment parser unchanged: a display name must not relax transport trust.
-  const app = fs.readFileSync('src/web/assets/app.js','utf8');
+  badName=true; await click(); assert.deepEqual(downloads,[]); assert.match(action.notice.textContent,/invalid or incomplete/);
+  badName=false; await click(); assert.deepEqual(downloads,['Ångström.zip']); assert.match(action.notice.textContent,/browser controls/); idle();
+  hold=true; const cancelled=click(); await new Promise(setImmediate);
+  action.cancel.events.click(); hold(); await cancelled;
+  assert.equal(downloads.length,1); assert.match(action.notice.textContent,/cancelled/); idle();
+
+  const app=fs.readFileSync('src/web/assets/app.js','utf8');
   Object.assign(context,{hostState:{terminal:false},hostInstance:'owned-host',csrf:'owned-csrf',current:null,
-    document:{hidden:false},connectionStatus(){},Response,fetch:async()=>context.response});
-  vm.runInContext(app.slice(app.indexOf('async function api('),app.indexOf('\nfunction show('))+'\nglobalThis.request = api;',context);
-  const headers = {'X-CG-Instance':'owned-host','Content-Type':'application/zip',
-    'Content-Length':'2','Content-Disposition':'attachment; filename="opencode-ses_test-analysis.zip"'};
-  context.response = new Response('PK',{headers});
-  assert.equal((await context.request('/api/detail/export',{token:'selected'},undefined,true)).filename,'opencode-ses_test-analysis.zip');
-  for (const invalid of [
-    {'Content-Disposition':'attachment; filename="Title.zip"'},
+    connectionStatus(){},fetch:async()=>context.response});
+  vm.runInContext(app.slice(app.indexOf('async function api('),app.indexOf('\nfunction show('))+'\nglobalThis.request=api;',context);
+  const headers={'X-CG-Instance':'owned-host','Content-Type':'application/zip','Content-Length':'2',
+    'Content-Disposition':'attachment; filename="opencode-ses_test-analysis.zip"'};
+  const chunk=()=>context.request('/api/detail/export',{action:'chunk',id:'c'.repeat(32),offset:0},undefined,true);
+  context.response=new Response('PK',{headers});
+  assert.equal((await chunk()).filename,'opencode-ses_test-analysis.zip');
+  for (const invalid of [{'Content-Disposition':'attachment; filename="Title.zip"'},
     {'Content-Disposition':'attachment; filename="../opencode-ses_test-analysis.zip"'},
-    {'Content-Length':'67108865'},{'Content-Length':'3'},{'Content-Type':'application/json'},
-    {'X-CG-Instance':''}
-  ]) {
-    context.response = new Response('PK',{headers:{...headers,...invalid}});
-    await assert.rejects(context.request('/api/detail/export',{token:'selected'},undefined,true),/export_invalid_response/);
+    {'Content-Length':'1048577'},{'Content-Length':'3'},{'Content-Type':'application/json'},{'X-CG-Instance':''}]) {
+    context.response=new Response('PK',{headers:{...headers,...invalid}});
+    await assert.rejects(chunk(),/export_invalid_response/);
   }
-  console.log('PASS ZIP attachment validation, picker order/cancel/commit, fallback/revoke, selection retirement');
+  console.log('PASS single click, refresh, destination cancellation/failure, fallback and protected chunks');
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+const deadline=setTimeout(()=>{throw Error('Export flow did not finish');},10000);
+main().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>clearTimeout(deadline));

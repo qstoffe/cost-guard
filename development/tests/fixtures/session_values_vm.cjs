@@ -84,7 +84,7 @@ module.exports = ({vm, context, Node, input, document}) => {
   view.invalidateValues();
   assert.equal(view.body.children.length,0);assert.equal(view.footer.children.length,0);
   assert.equal(view.values.mixes.size,0);assert.equal(view.values.totals.size,0);
-  assert.equal(view.scroll.hidden,true);
+  assert.equal(view.historySection.root.hidden,true);
   // Legacy DTOs lack detail authority: keep compatible source costs, never
   // reuse them across source/generation switches or unidentified observations.
   const legacy = JSON.parse(JSON.stringify(data));

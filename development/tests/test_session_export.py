@@ -139,7 +139,7 @@ class SessionArchiveTests(unittest.TestCase):
                     with self.assertRaisesRegex(SessionExportError, '^export_too_large$'):
                         export(source)
 
-    def test_source_restart_retired_selection_and_reader_deadline_discard_work(self):
+    def test_source_restart_explicit_cancellation_and_idle_reader_discard_work(self):
         with export_source() as (source, state, registration):
             def restart(member):
                 if member == LEAF:
@@ -151,9 +151,10 @@ class SessionArchiveTests(unittest.TestCase):
                 export(source)
         with export_source() as (source, state, _):
             details, token = selected_details(source)
-            state.before_export = lambda member: details.close(token) if member == CHILD else None
+            cancelled = Event()
+            state.before_export = lambda member: cancelled.set() if member == CHILD else None
             with self.assertRaisesRegex(SessionExportError, '^export_cancelled$'):
-                details.export(token, source, lambda: False)
+                details.export(token, source, cancelled.is_set)
             self.assertFalse(any(f'/{LEAF}/export' in url for url in state.requests))
         with export_source() as (source, state, _):
             state.hold = True
@@ -179,7 +180,8 @@ class SessionArchiveTests(unittest.TestCase):
 class ExportHttpTests(unittest.TestCase):
     def test_authenticated_complete_attachment_or_bounded_error_only(self):
         with export_source() as (source, state, _):
-            details, token = selected_details(source)
+            clock = 1000
+            details = SessionDetails(clock=lambda: clock)
             owner = SimpleNamespace(root=ROOT, nonce='export-host', observations=WebObservations(), stopping=Event(),
                 live=SimpleNamespace(details=details, driver=SimpleNamespace(coordinator=SimpleNamespace(
                     report_service=SimpleNamespace(source=source)))))
@@ -187,7 +189,7 @@ class ExportHttpTests(unittest.TestCase):
             thread = Thread(target=server.serve_forever, args=(.02,)); thread.start()
             cookie, csrf = server.session.exchange(server.session.bootstrap())
 
-            def request(body=None, *, method='POST', extra=None, authenticated=True):
+            def request(body=None, *, path='/api/detail/export', method='POST', extra=None, authenticated=True):
                 connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=15)
                 try:
                     headers = {'Origin': server.origin, 'Content-Type': 'application/json', 'X-CG-CSRF': csrf,
@@ -195,25 +197,70 @@ class ExportHttpTests(unittest.TestCase):
                     if authenticated:
                         headers['Cookie'] = server.session.cookie_name + '=' + cookie
                     headers.update(extra or {})
-                    connection.request(method, '/api/detail/export', json.dumps(body) if body is not None else None, headers)
+                    connection.request(method, path, json.dumps(body) if body is not None else None, headers)
                     response = connection.getresponse()
                     return response.status, dict(response.getheaders()), response.read()
                 finally:
                     connection.close()
 
+            def open_selection():
+                status, _, data = request({'action': 'open', 'session_id': SESSION, 'mode': 'live'}, path='/api/detail')
+                self.assertEqual(200, status)
+                selected = json.loads(data)
+                self.assertEqual('ready', selected['export_state'], 'cold selection, before any analysis')
+                return {'action': 'start', 'id': 'c' * 32, 'token': selected['token'], 'scope': selected['export_scope']}
+
+            def poll(job):
+                end = time.monotonic() + 15
+                while time.monotonic() < end:
+                    status, headers, data = request({**job, 'action': 'status'})
+                    value = json.loads(data)
+                    if value != {'state': 'preparing'}:
+                        return status, headers, value
+                    time.sleep(.05)
+                self.fail('Export did not settle')
+
+            release = Event()
             try:
+                start = open_selection()
+                token = start['token']
+                job = {'id': start['id']}
                 for extra, status in (({'Origin': 'https://foreign.invalid'}, 403), ({'Sec-Fetch-Site': 'cross-site'}, 403),
                         ({'X-CG-CSRF': 'wrong'}, 403), ({'Host': 'foreign.invalid'}, 403), ({'X-CG-Instance': 'retired'}, 409)):
-                    self.assertEqual(status, request({'token': token}, extra=extra)[0])
-                self.assertEqual(401, request({'token': token}, authenticated=False)[0])
+                    self.assertEqual(status, request(start, extra=extra)[0])
+                self.assertEqual(401, request(start, authenticated=False)[0])
                 self.assertEqual(404, request(method='GET')[0])
                 for body in ({'token': token, 'path': '../out'}, {'session_id': SESSION}, {'token': ['bad']}):
                     self.assertEqual(400, request(body)[0])
-                self.assertEqual(410, request({'token': 'a' * 32})[0])
+                self.assertEqual(410, request({**start, 'token': 'a' * 32})[0])
+                self.assertEqual({'error': 'export_source_changed'}, json.loads(request({**start, 'scope': 'b'*64})[2]))
                 self.assertEqual([], state.requests)
-                # The five valid native transfers together exceed an ordinary request's five seconds.
+                entered = Event()
+                def hold(member):
+                    entered.set()
+                    release.wait(10)
+
+                state.before_export = hold
+                self.assertEqual(202, request(start)[0])
+                self.assertTrue(entered.wait(3))
+                self.assertEqual({'error': 'export_busy'}, json.loads(request(start)[2]))
+                self.assertEqual(200, request({**job, 'action': 'cancel'})[0])
+                self.assertEqual({'error': 'export_retiring'}, json.loads(request(start)[2]))
+                release.set()
+                # The slot becomes reusable only after the cancelled producer exits.
                 state.before_export = lambda member: time.sleep(1.1)
-                status, headers, body = request({'token': token})
+                end = time.monotonic() + 5
+                while True:
+                    status, _, data = request(start)
+                    if status == 202:
+                        break
+                    self.assertEqual({'error': 'export_retiring'}, json.loads(data))
+                    self.assertLess(time.monotonic(), end)
+                    time.sleep(.05)
+                clock += 301
+                self.assertEqual(410, request(start)[0], 'expired view cannot admit a new export')
+                self.assertEqual('ready', poll(job)[2]['state'])
+                status, headers, body = request({**job, 'action': 'chunk', 'offset': 0})
                 state.before_export = None
                 self.assertEqual(200, status)
                 self.assertEqual('application/zip', headers['Content-Type'])
@@ -222,20 +269,19 @@ class ExportHttpTests(unittest.TestCase):
                     tuple(headers[key] for key in ('Cache-Control', 'X-Content-Type-Options', 'X-CG-Instance', 'Content-Length')))
                 with ZipFile(BytesIO(body)) as archive:
                     self.assertEqual(5, len(archive.infolist()))
-                # The HTTP body can reach the client before the handler's finally releases the slot.
-                self.assertTrue(server.exports.slot.acquire(timeout=2))
-                server.exports.slot.release()
+                self.assertEqual(200, request({**job, 'action': 'cancel'})[0])
                 del state.tree[LEAF]
-                status, headers, body = request({'token': token})
+                start = open_selection()
+                self.assertEqual(202, request(start)[0])
+                status, headers, error = poll(job)
                 self.assertEqual(409, status)
                 self.assertNotIn('Content-Disposition', headers)
-                self.assertEqual({'error': 'export_descendant_unavailable'}, json.loads(body))
-                self.assertTrue(server.exports.slot.acquire(timeout=2))
-                self.assertEqual(429, request({'token': token})[0])
-                server.exports.slot.release()
+                self.assertEqual({'error': 'export_descendant_unavailable'}, error)
+                self.assertEqual(200, request({**job, 'action': 'cancel'})[0])
                 owner.stopping.set()
-                self.assertEqual(503, request({'token': token})[0])
+                self.assertEqual(503, request(start)[0])
             finally:
+                release.set()
                 server.shutdown(); thread.join(3); server.server_close()
 
     @unittest.skipUnless(shutil.which('node'), 'optional JavaScript runtime unavailable')
