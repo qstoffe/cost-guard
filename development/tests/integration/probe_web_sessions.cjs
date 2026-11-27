@@ -170,7 +170,14 @@ async function main() {
                  personal_profile:false,desktop_effects:false};
                console.log(JSON.stringify(evidence));return;
              }
-            if (mode === '--sessions-return') {
+             if (mode === '--detail-history') {
+               await require('../fixtures/session_history_viewport.cjs')({evaluate, until, checks,
+                 command:(method, params) => command(method, params, sessionId)});
+               assert.deepEqual(errors, []);
+               evidence = {outcome:'PASS', browser:version.product, checks};
+               console.log(JSON.stringify(evidence)); return;
+             }
+             if (mode === '--sessions-return') {
              const newTab = async hash => {
                const {targetId:other} = await command('Target.createTarget',{url:new URL(launch.url).origin+'/'+hash});
                const {sessionId:otherSession} = await command('Target.attachToTarget',{targetId:other,flatten:true});
@@ -499,12 +506,12 @@ async function main() {
       await command('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false},sessionId);
       await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:theme==='dark'?'dark':'light'}]},sessionId);
       await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme==='classic'?'classic':'web')}`);
-      const layout=await evaluate(`(() => {const pan=document.querySelector('.sessions-table-pan'),row=pan.querySelector('tbody tr'),running=pan.querySelector('tr.session-running');return {
+       const layout=await evaluate(`(() => {const pan=current.detail.scroll,row=pan.querySelector('tbody tr'),running=pan.querySelector('tr.session-running');return {
         innerVertical:pan.scrollHeight>pan.clientHeight,rows:pan.querySelectorAll('tbody tr').length,
         numericFit:[...row.cells].slice(1).every(cell=>cell.scrollWidth<=cell.clientWidth+1),
         runningColors:[...running.cells].map(cell=>getComputedStyle(cell).color),foreground:getComputedStyle(row).color,
         columns:[...pan.querySelectorAll('th')].map(cell=>cell.textContent)};})()`);
-      assert.equal(layout.innerVertical,false); assert.equal(layout.numericFit,true); assert.equal(new Set(layout.runningColors).size,1);
+       assert.equal(layout.innerVertical,true); assert.equal(layout.numericFit,true); assert.equal(new Set(layout.runningColors).size,1);
       assert.notEqual(layout.runningColors[0],layout.foreground); layouts.push({route:'detail',theme,width,...layout});
     }
     checks.push('1001-unpaged-chronological-prompts-ten-columns-themes');
@@ -571,7 +578,7 @@ async function main() {
          const facts=await evaluate(`(() => {const tables=[...document.querySelectorAll('.watch-prompt-table,.sessions-table,.overview-model-table,.token-mix-table')];return {
            pageWidth:document.documentElement.scrollWidth,viewport:innerWidth,tables:tables.map(table=>{
              const pan=table.parentNode,th=table.querySelector('th'),cell=table.querySelector('td'),head=getComputedStyle(th),shell=getComputedStyle(pan),button=th.querySelector('button');
-             return {columns:table.querySelectorAll('th').length,padding:[head.paddingTop,head.paddingRight],headerHeight:th.getBoundingClientRect().height/Number(getComputedStyle(document.body).zoom),
+              return {history:table.matches('.session-history-table'),columns:table.querySelectorAll('th').length,padding:[head.paddingTop,head.paddingRight],headerHeight:th.getBoundingClientRect().height/Number(getComputedStyle(document.body).zoom),
                headerBackground:head.backgroundColor,position:head.position,border:shell.borderTopWidth,radius:shell.borderTopLeftRadius,
                divider:getComputedStyle(cell).borderRightWidth,innerVertical:pan.scrollHeight>pan.clientHeight,maxHeight:shell.maxHeight,
                buttonHeight:button.getBoundingClientRect().height/Number(getComputedStyle(document.body).zoom),
@@ -581,7 +588,7 @@ async function main() {
          for (const table of facts.tables) {
            assert.deepEqual(table.padding,['5.25px','9px']); assert.equal(table.radius,'6px');
            assert.ok(Math.abs(parseFloat(table.border)*zoom-1)<.01); assert.ok(Math.abs(parseFloat(table.divider)*zoom-1)<.01);
-           assert.equal(table.innerVertical,false); assert.equal(table.maxHeight,'none'); assert.equal(table.numericFit,true);
+            assert.equal(table.innerVertical,table.history); assert.equal(table.maxHeight==='none',!table.history); assert.equal(table.numericFit,true);
            assert.equal(table.position,['watch','models'].includes(route)?'static':'sticky');
            assert.ok(table.buttonHeight<25, 'compact visible-text header targets');
          }

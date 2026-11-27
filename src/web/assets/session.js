@@ -1,5 +1,5 @@
 'use strict';
-// Complete document-scrolling history, assembled from one pinned source revision.
+// Complete history in its own viewport, assembled from one pinned source revision.
 const SessionDetail = (() => {
   const el = (...args) => ReportView.element(...args);
   const columns = [
@@ -157,6 +157,48 @@ const SessionDetail = (() => {
     return {root, feedback};
   }
 
+  class HistoryViewport {
+    constructor(scroll, table) {
+      this.scroll = scroll;
+      this.table = table;
+      this.recordScroll = () => {
+        const {scrollTop, scrollHeight, clientHeight} = scroll;
+        if (!clientHeight || scrollTop === this.lastTop) return;
+        this.lastTop = scrollTop;
+        // CSSOM rounds the scroll extent but may report a fractional scrollTop.
+        this.followBottom = scrollHeight - clientHeight - scrollTop <= 1;
+      };
+      this.resize = new ResizeObserver(() => this.layout());
+    }
+    attach() {
+      this.followBottom = true;
+      this.layout();
+      this.scroll.addEventListener('scroll', this.recordScroll, {passive: true});
+      this.resize.observe(this.table);
+      this.resize.observe(this.scroll);
+    }
+    detach() {
+      this.resize.disconnect();
+      this.scroll.removeEventListener('scroll', this.recordScroll);
+    }
+    layout() {
+      const {scroll, table} = this;
+      if (!scroll.clientHeight) return;
+      const rows = table.tBodies[0].rows;
+      let limit = '';
+      if (rows.length > 10) {
+        const tenRowsAndHeader = rows[9].getBoundingClientRect().bottom - table.getBoundingClientRect().top;
+        const totals = table.tFoot.getBoundingClientRect().height;
+        const horizontalScrollbar = scroll.offsetHeight - scroll.clientHeight;
+        limit = `${tenRowsAndHeader + totals + horizontalScrollbar}px`;
+      }
+      if (scroll.style.getPropertyValue('--session-history-max') !== limit)
+        scroll.style.setProperty('--session-history-max', limit);
+      if (this.followBottom) scroll.scrollTop = scroll.scrollHeight;
+      this.lastTop = scroll.scrollTop;
+    }
+  }
+
   class View {
     constructor(api, id, live = () => null) {
       Object.assign(this, {api, id, live, token: null, data: null, busy: false, attached: false, generation: 0});
@@ -201,7 +243,7 @@ const SessionDetail = (() => {
       this.activityEmpty = el('p', '', 'detail');
       this.activitySection.root.append(this.invocations.root, this.activity.root, this.activityEmpty);
       this.historySection = section('Prompt history', 'session-detail-history');
-      const scroll = el('div', undefined, 'sessions-table-pan');
+      const scroll = el('div', undefined, 'sessions-table-pan session-history-pan');
       this.scroll = scroll;
       scroll.tabIndex = 0; scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Session prompt history');
       const table = el('table', undefined, 'sessions-table session-history-table');
@@ -211,6 +253,7 @@ const SessionDetail = (() => {
       this.activityFeedback = el('tbody');
       this.activityAnnouncement = el('span', '', 'sr-only'); this.activityAnnouncement.setAttribute('role', 'status');
       const foot = el('tfoot'); foot.append(this.footer); table.append(head, this.body, this.activityFeedback, foot); scroll.append(table);
+      this.historyViewport = new HistoryViewport(scroll, table);
       this.historySection.root.append(scroll);
       this.values = new Values();
       this.rowIndexes = new Map();
@@ -231,10 +274,12 @@ const SessionDetail = (() => {
       if (this.attached) return;
       this.initialFailed = false; this.readFailures = 0;
       if (!this.data) this.progress = {percent: 0, stage: 'Opening session…'};
+      this.historyViewport.attach();
       this.attached = true; this.poll();
     }
     detach() {
       this.exporter?.close();
+      this.historyViewport.detach();
       this.attached = false; this.generation++; clearTimeout(this.timer);
       this.flight?.controller.abort(); this.flight = null; this.busy = false;
       this.showActivityFeedback(null);
@@ -578,6 +623,8 @@ const SessionDetail = (() => {
       this.quotaUsage?.update(null);
     }
     update(data) {
+      // Read the old scroll extent before new rows can turn a pinned position into an offset.
+      this.historyViewport.recordScroll();
       ReportView.defaultUnit();
       const scope = data.value_authority?.scope;
       if (this.values.scope && scope !== this.values.scope) this.invalidateValues();
@@ -598,8 +645,6 @@ const SessionDetail = (() => {
       this.activity.update(data.activity, data.result.view.timezone_id);
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       this.rowIndexes = new Map(block.rows.map((row, index) => [row.id, index]));
-      const anchor = [...this.body.children].find(row => row.getBoundingClientRect().bottom > 0);
-      const top = anchor?.getBoundingClientRect().top;
       let deferOrder = false;
       for (const row of [...this.body.children]) if (!this.rowIndexes.has(row.dataset.id)) {
         if (protectedNode(row)) { this.pendingRender = true; deferOrder = true; }
@@ -644,15 +689,12 @@ const SessionDetail = (() => {
       });
       for (let offset = 0; offset < append.length; offset += 200) this.body.append(...append.slice(offset, offset + 200));
       this.updateFooter(block);
-      if (anchor?.isConnected && top != null) {
-        const delta = anchor.getBoundingClientRect().top - top;
-        if (delta) window.scrollBy(0, delta);
-      }
       if (!this.data) this.loader.update({percent: 100, stage: 'Session ready', stageLabel: 'Session ready'});
       this.data = data; this.loader.root.hidden = true; this.scroll.setAttribute('aria-busy', 'false');
       this.syncLiveActivity(data);
       this.freshness();
       this.loadingFeedback(data);
+      this.historyViewport.layout();
     }
     syncLiveActivity(data, rowScope = data.activity?.scope) {
       const proof = data.live_activity;

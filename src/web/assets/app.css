@@ -486,11 +486,15 @@ p.warning { border-left: 3px solid var(--warn); padding: .65rem .85rem; backgrou
 .session-catalog-table td:has(.metric-spinner) { text-align: center; }
 .session-history-table { grid-template-columns: minmax(32ch, 1fr) repeat(9, max-content);
   width: max-content; min-width: 0; max-width: 100%; }
-.session-detail .sessions-table-pan { width: fit-content; max-width: 100%; }
+.sessions-table-pan.session-history-pan { width: fit-content; max-width: 100%;
+  max-height: var(--session-history-max, none); overflow-y: auto; scrollbar-gutter: stable; overflow-anchor: none; }
 .sessions-table thead, .sessions-table tbody, .sessions-table tfoot,
 .sessions-table tr { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .sessions-table th, .sessions-table td { min-width: 0; white-space: nowrap; text-align: left; }
 .sessions-table th button { white-space: nowrap; }
+.session-history-table thead, .session-history-table tfoot { position: sticky; z-index: 1; }
+.session-history-table thead { top: 0; }
+.session-history-table tfoot { bottom: 0; }
 .session-history-table tfoot td:nth-child(4) > span,
 .session-history-table tfoot td:nth-child(6) > span { display: inline-block; min-inline-size: 8ch; }
 .session-history-table td:nth-child(10) > span { display: inline-block; min-inline-size: 11ch; }
