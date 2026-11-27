@@ -31,6 +31,7 @@ class ExportRuntime:
         self.catalog = SessionCatalog()
         self.driver = SimpleNamespace(coordinator=SimpleNamespace(report_service=service))
         self.stopping = Event()
+        self.history_ready = Event()
         self.service, self.publish = service, publish
         self.thread = Thread(target=self.run)
 
@@ -39,7 +40,8 @@ class ExportRuntime:
 
     def run(self):
         while not self.stopping.is_set():
-            self.details.tick(self.service)
+            if self.history_ready.is_set():
+                self.details.tick(self.service)
             self.publish('live', dict(state='running', source_observed_at_ms=self.service.now_ms,
                 view=project_live(summary_watch(), 'UTC').to_json()))
             self.stopping.wait(.1)
@@ -81,6 +83,12 @@ def main():
         source.source_id, source.source_instance = native.source_id, native.source_instance
         source.observation_epoch, source.export_session_tree = native.observation_epoch, native.export_session_tree
         source.refresh_observation_epoch = native.refresh_observation_epoch
+        title_ready = Event()
+        def observed_title(session_id, epoch):
+            if not title_ready.is_set() or session_id != SESSION or epoch != source.observation_epoch:
+                return 'pending', None
+            return 'ready', root.title
+        source.observed_session_title = observed_title
         state.tree[LEAF]['messages'] = [{'id': 'msg_error', 'type': 'assistant',
             'error': 'E_FIXTURE: password=synthetic-fixture-value; retry'}]
         expected = deepcopy(state.tree)
@@ -119,6 +127,10 @@ def main():
                     state.before_export = None
                 elif command == 'publish-quota':
                     quota_ready.set()
+                elif command == 'publish-title':
+                    title_ready.set()
+                elif command == 'publish-history':
+                    host.live.history_ready.set()
                 elif command == 'check-downloads':
                     files = sorted((config / 'downloads').glob('*.zip'))
                     for downloaded in files:

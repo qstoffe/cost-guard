@@ -19,7 +19,7 @@ from .detail_live_activity import current_activity, detail_activity, fresh_activ
 from .detail_snapshots import DetailSnapshots
 from .projection import identity, project
 from .session_activity import ActivityHistory, activity_page, activity_summary
-from .session_export_archive import analysis_filename, build_analysis_zip
+from .session_export_archive import build_analysis_zip
 from .session_values import INVALID_REASONS, value_authority
 from .session_quota import session_quota_evidence, session_quota_usage
 
@@ -667,9 +667,6 @@ class SessionDetails:
             response['quota_state'] = quota_state if runtime or quota_state != 'ready' else 'unavailable'
             response['running_unverified'] = bool(runtime and runtime['running'] and
                 self.clock() - runtime['validated'] > 300 and not response['live_activity'])
-        if response['export_available']:
-            block, = response['result']['view']['prompt_blocks']
-            response['export_name'] = analysis_filename(block.get('title'), key)
         return response
 
     def page(self, token, offset, revision=None, anchor=None, *, begin=False, chunk=False, size=None):
@@ -745,7 +742,6 @@ class SessionDetails:
             offset=offset, total=len(rows), pending=False, mode=lease["mode"],
             **(dict(acquisition=acquisition) if acquisition['phase'] == 'failed' and lease['frozen'] is None else {}),
              export_available=export_available,
-             **(dict(export_name=analysis_filename(block.title, block.session_id)) if export_available and not chunk else {}),
             result=dict(observed_at_ms=capture["observed_at_ms"], view=view,
                         source=dict(status="partial" if capture["state"] != "observed" else "acquired",
                                     atomicity="per_root_snapshot")))

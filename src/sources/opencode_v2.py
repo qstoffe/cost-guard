@@ -13,6 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from collections.abc import Iterator, Mapping, Sequence
+from types import MappingProxyType
 from typing import Any
 
 from src.domain import (
@@ -160,6 +161,7 @@ class OpenCodeV2Source:
         self._catalog_cache: tuple[_NativeSession, ...] | None = None
         self._database_counts: tuple[tuple[_NativeSession, ...], str, tuple[int, int]] | None = None
         self._catalog_before_hint = None
+        self._session_title_observation = None
         self._catalog_index: V2CatalogIndex | None = None
         self._message_lock = threading.Lock()
         self._continuation_lock = threading.Lock()
@@ -260,6 +262,18 @@ class OpenCodeV2Source:
     def export_session_tree(self, session_id, epoch, cancelled):
         from .opencode_v2_export import native_export_tree
         return native_export_tree(self, session_id, epoch, cancelled)
+
+    def observed_session_title(self, session_id, epoch):
+        """Reuse indexed native metadata, before normalization can substitute an ID."""
+        snapshot = self._session_title_observation
+        if snapshot is None or snapshot[0] != epoch:
+            return 'pending', None
+        _, sessions = snapshot
+        session = sessions.get(session_id)
+        if session is None:
+            return 'pending', None
+        title = session.data.get('title')
+        return 'ready', title if isinstance(title, str) and title != session_id else None
 
     def begin_card_read(self, origin: OpenCodeV2Source, *, use_live_catalog_hint=False) -> None:
         """Fresh job state on an exclusively borrowed reader, before validation."""
@@ -378,6 +392,7 @@ class OpenCodeV2Source:
             self._endpoint_marker = None
             self._catalog_cache = None
             self._catalog_index = None
+            self._session_title_observation = None
             self._catalog_listed_at = 0.0
             self._skill_origin_cache.clear()
             if timeout_seconds is not None:
@@ -516,7 +531,7 @@ class OpenCodeV2Source:
         self._diagnostics["raw_sessions"] = len(result)
         if since_ms is None:
             catalog = self._catalog_cache = tuple(result)
-            self._catalog_index = V2CatalogIndex(result)
+            index = self._catalog_index = V2CatalogIndex(result)
             self.metrics.add("catalog_index_builds")
             self._catalog_listed_at = time.monotonic()
             if epoch is not None and contract.startswith("global-"):
@@ -529,6 +544,7 @@ class OpenCodeV2Source:
                 # The listing's native values are read-only from this point.
                 # Publish atomically; the reader builds its own mutable index.
                 self._catalog_before_hint = (epoch, started, tuple(result))
+                self._session_title_observation = (epoch, MappingProxyType(index.by_id))
         return result
 
     def _normalize_session(self, native: _NativeSession) -> NormalizedSession:

@@ -22,7 +22,10 @@ class Node {
 }
 async function main() {
   let selected = null, offline = false, page = input.first;
+  let exportStatus = {export_state:'ready',export_scope:'scope',export_title:'Initial title',
+    export_name:'Initial title.zip',export_name_state:'ready'};
   const calls = [], scrolls = [], delays = [], timers = new Map(); let timerId = 0;
+  const fire = id => {const callback = timers.get(id); timers.delete(id); return callback();};
   const document = {createElement: tag => new Node(tag), createElementNS: (_, tag) => new Node(tag),
     createTextNode: text => Object.assign(new Node('#text'),{textContent:text}), activeElement: null, addEventListener(){}};
      const context = vm.createContext({document, console, Date, performance, URLSearchParams, AbortController, TextEncoder, location: {},
@@ -33,7 +36,8 @@ async function main() {
     api: async (path, value) => {
       assert.equal(path, '/api/detail'); calls.push(value);
       if (offline) throw new Error('offline');
-      if (value.action === 'open') return {token: 'owned'};
+      if (value.action === 'open') return {token:'owned',...exportStatus};
+      if (value.action === 'export-status') return exportStatus;
       if (value.action === 'close') return {};
       const result = JSON.parse(JSON.stringify(page));
       result.offset = value.offset;
@@ -51,6 +55,8 @@ async function main() {
        {id:'weekly',label:'weekly',contribution:'unknown',percent:'?',reason:'Account allocation unavailable'}]}]};
   new Node('main').append(view.root);
   await view.load();
+  assert.equal(view.heading.textContent,'Initial title');
+  assert.equal(view.exporter.filename,'Initial title.zip');
   assert.equal(view.root.children.at(-1),view.quotaUsage.root,'summary follows all existing activity');
   assert.ok(view.activitySection.root.contains(view.activity.root));
   const quotaCard=view.quotaUsage.grid.children[0],quotaRow=quotaCard.children[1];
@@ -150,16 +156,14 @@ async function main() {
    assert.equal(view.retry.hidden, true);
   assert.ok(calls.some(call => call.action === 'chunk' && call.offset === 100));
   assert.equal(scrolls.length, 0, 'stable document geometry never scrolls');
-  offline = false; page.export_state = 'ready'; page.export_scope = 'scope';
-  page.export_name = 'Observed title å.zip';
-  page.result.view.prompt_blocks[0].title = 'Observed: title å';
-  page.revision = 'renamed-session'; await view.load();
+  offline = false; exportStatus = {...exportStatus,export_title:'Observed: title å',export_name:'Observed title å.zip'};
+  await fire(view.exportTimer);
   assert.equal(view.heading.textContent,'Observed: title å');
   assert.equal(view.exporter.filename,'Observed title å.zip');
   view.heading.textContent = 'Editable DOM is not authority';
   await view.load();
   assert.equal(view.exporter.filename,'Observed title å.zip');
-  page.export_state = 'unavailable'; await view.load();
+  exportStatus = {export_state:'unavailable'}; await fire(view.exportTimer);
   assert.match(view.exporter.notice.textContent,/unavailable/);
   assert.equal(view.exporter.button.disabled,true);
   view.detach();
@@ -189,7 +193,7 @@ async function main() {
   assert.equal(pendingView.loader.bar, pendingBar, 'polls preserve the determinate DOM instance');
   assert.equal(pendingBar.value, 0, 'unmeasured source waits cannot advance');
   assert.equal(delays.at(-1), 500, 'bounded short pending status polls do not acquire source history');
-  assert.equal(timers.size, 1);
+  assert.deepEqual(new Set(timers.keys()), new Set([pendingView.timer,pendingView.exportTimer]));
   pendingState = 'source_unavailable'; await pendingView.load();
     assert.match(pendingView.status.textContent, /Could not load/);
    assert.ok(!pendingView.status.children.some(node => node.tag === 'progress'));
@@ -227,8 +231,7 @@ async function main() {
   await queuedRetry;
   assert.equal(retryCalls,2,'the original click is not discarded after the status read');
   pending = false;
-  const [pendingTimer, resume] = timers.entries().next().value;
-  timers.delete(pendingTimer); resume(); await new Promise(setImmediate);
+  await fire(pendingView.timer); await new Promise(setImmediate);
   assert.equal(pendingView.body.children.length, 100);
   assert.equal(pendingView.status.hidden, true);
   pendingView.detach(); assert.equal(timers.size, 0);
@@ -302,7 +305,7 @@ async function main() {
     raceCalls.push(value);
     if (value.action === 'open') {
       if (opening) { opening = false; return new Promise(resolve => { resolveOpen = resolve; }); }
-      return {token: 'new'};
+      return {token:'new',export_state:'ready',export_scope:'current',export_title:'Current',export_name:'Current.zip'};
     }
     if (value.action === 'close') return {};
     return {state: 'loading', result: null};
@@ -310,11 +313,13 @@ async function main() {
   vm.runInContext("globalThis.race = new SessionDetail.View(raceApi, 'root-0000')", context);
   const race = context.race, parent = new Node('main');
   race.attach(parent); race.detach(); race.attach(parent);
-  resolveOpen({token: 'late'});
+  resolveOpen({token:'late',export_state:'ready',export_scope:'retired',export_title:'Retired',export_name:'Retired.zip'});
   await new Promise(setImmediate);
   assert.ok(raceCalls.some(call => call.action === 'close' && call.token === 'late'));
   assert.equal(race.token, 'new');
-  assert.equal(timers.size, 1, 'reattach during open leaves one polling timer');
+  assert.equal(race.heading.textContent,'Current');
+  assert.equal(race.exporter.filename,'Current.zip','a superseded open cannot rename the active selection');
+  assert.deepEqual(new Set(timers.keys()),new Set([race.timer,race.exportTimer]));
   race.detach(); assert.equal(timers.size, 0);
   let resolveCatalog;
   const catalogCalls = [];

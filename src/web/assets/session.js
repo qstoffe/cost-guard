@@ -278,6 +278,7 @@ const SessionDetail = (() => {
       this.attached = true; this.poll();
     }
     detach() {
+      this.stopExportStatus();
       this.exporter?.close();
       this.historyViewport.detach();
       this.attached = false; this.generation++; clearTimeout(this.timer);
@@ -364,11 +365,13 @@ const SessionDetail = (() => {
         if (!this.token) {
           this.loading('Opening session…');
           // An issued token belongs to this flight, even if navigation retired it.
-          const {token, export_state, export_scope} = await this.api('/api/detail',
+          const opened = await this.api('/api/detail',
             {action: 'open', session_id: this.id, mode: 'live'});
+          const {token} = opened;
           if (!current()) { this.api('/api/detail', {action: 'close', token}).catch(() => {}); return; }
           this.token = token;
-          this.exporter?.update(token, export_state || 'pending', export_scope);
+          this.syncExport(opened);
+          this.watchExportStatus(token);
         }
         return read({action: 'begin', token: this.token, offset: 0});
       };
@@ -377,6 +380,8 @@ const SessionDetail = (() => {
         try { data = await begin(); }
         catch (error) {
           if (!current() || error.message !== 'detail_expired') throw error;
+          this.stopExportStatus();
+          this.syncExport({});
           this.token = null;
           data = await begin();
         }
@@ -388,7 +393,6 @@ const SessionDetail = (() => {
           this.invalidateValues();
         this.syncLiveActivity(data, this.data?.activity?.scope);
         this.updateInvocations(data);
-        this.exporter?.update(this.token, data.export_state || 'pending', data.export_scope, data.export_name);
         if (data.result || this.data) this.quotaUsage?.update(data.quota_usage,
           data.quota_state || (data.quota_usage ? 'ready' : 'unavailable'));
         if (!data.result) {
@@ -581,6 +585,57 @@ const SessionDetail = (() => {
       for (const part of [this.historySection, this.overview, this.activitySection]) part.root.hidden = !this.data;
       if (this.quotaUsage) this.quotaUsage.root.hidden = !this.data;
     }
+    syncExport(data) {
+      const {export_state, export_scope, export_title, export_name, export_name_state} = data;
+      if (export_title != null) {
+        this.exportTitle = export_title;
+        this.exportTitleScope = export_scope;
+        ReportView.text(this.heading, export_title);
+      } else if (export_scope && this.exportTitleScope && export_scope !== this.exportTitleScope) {
+        this.exportTitle = null;
+        this.exportTitleScope = null;
+        ReportView.text(this.heading, '');
+      }
+      this.exporter?.update(this.token, export_state || 'pending', export_scope, export_name, export_name_state);
+    }
+    stopExportStatus() {
+      clearTimeout(this.exportTimer);
+      this.exportRead?.abort();
+      this.exportRead = null;
+    }
+    watchExportStatus(token) {
+      if (!this.exporter) return;
+      this.stopExportStatus();
+      const read = this.exportRead = new AbortController();
+      const fastUntil = performance.now() + 10000;
+      // This lease's reader outlives superseded detail-page flights.
+      const current = () => this.attached && this.exportRead === read && this.token === token;
+      const schedule = () => {
+        if (!current()) return;
+        const pending = this.exporter.state === 'pending' || this.exporter.nameState === 'pending';
+        const fast = !document.hidden && pending && performance.now() < fastUntil;
+        this.exportTimer = setTimeout(refresh, fast ? 500 : 5000);
+      };
+      const refresh = async () => {
+        if (!current()) return;
+        if (!document.hidden) {
+          try {
+            const status = await this.api('/api/detail', {action: 'export-status', token}, read.signal);
+            if (current()) this.syncExport(status);
+          } catch (error) {
+            if (!current()) return;
+            if (error.message === 'detail_expired') {
+              this.syncExport({});
+              this.catchUp();
+              return;
+            }
+            this.syncExport({export_state: error.retryable ? 'pending' : 'unavailable'});
+          }
+        }
+        schedule();
+      };
+      schedule();
+    }
     loadingFeedback(data, failed = false) {
       const block = data?.result.view.prompt_blocks[0];
       if (!block) { ReportView.valueSlot(this.titleFeedback, ''); return; }
@@ -595,7 +650,7 @@ const SessionDetail = (() => {
         data.activity?.failures.length < Math.min(this.activityLimit, data.activity?.total || 0));
       const metrics = pending('metrics', this.footerBlock?.pendingTotals.length);
       const context = pending('context', block.session_context?.context_state === 'pending');
-      const exporting = pending('export', this.exporter?.state === 'pending');
+      const exporting = pending('export', this.exporter?.state === 'pending' || this.exporter?.nameState === 'pending');
       ReportView.valueSlot(this.historySection.feedback, '', {pending: history, field: 'prompt history'});
       ReportView.valueSlot(this.activitySection.feedback, '', {pending: activity, field: 'tools and skills'});
       ReportView.valueSlot(this.overview.feedback, '', {pending: context, field: 'session context'});
@@ -641,7 +696,8 @@ const SessionDetail = (() => {
       this.pendingPromptValues = block.rows.some(row => row.tokenMixPending);
       this.pendingRender = false;
       const protectedNode = protection();
-      ReportView.text(this.heading, block.title || 'Untitled session'); this.context.update(block.session_context);
+       ReportView.text(this.heading, this.exportTitle ?? (block.title || 'Untitled session'));
+       this.context.update(block.session_context);
       this.activity.update(data.activity, data.result.view.timezone_id);
       const old = new Map([...this.body.children].map(row => [row.dataset.id, row]));
       this.rowIndexes = new Map(block.rows.map((row, index) => [row.id, index]));

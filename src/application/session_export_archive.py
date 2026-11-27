@@ -15,19 +15,21 @@ _UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f\x7f-\x9f\u00ad\u061c\u200b\u200e\u20
                      r'\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]')
 _DEVICE = re.compile(r'^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)(?: *\.|$)', re.I)
 _SESSION_ID = re.compile(r'ses_[A-Za-z0-9_-]{1,160}\Z')
+UNTITLED_SESSION = 'Untitled session'
 
 
-def _safe_stem(title, session_id):
+def _safe_stem(title):
     clean = _UNSAFE.sub('', title) if isinstance(title, str) else ''
     # Leave room for a collision suffix and extension while preserving Unicode.
     stem = clean.encode('utf-8')[:200].decode('utf-8', errors='ignore').rstrip('. ')
     if stem.strip() and not _DEVICE.match(stem):
         return stem
-    return f'session-{session_id}' if _SESSION_ID.fullmatch(session_id) else 'session'
+    return None
 
 
-def analysis_filename(title, session_id):
-    return _safe_stem(mask_text(title) if isinstance(title, str) else '', session_id) + '.zip'
+def analysis_filename(title):
+    masked_title = mask_text(title) if isinstance(title, str) else None
+    return (_safe_stem(masked_title) or UNTITLED_SESSION) + '.zip'
 
 
 def _entry_name(stem, used, suffixes):
@@ -82,7 +84,10 @@ def build_analysis_zip(acquire, cancelled):
                 for data in sessions:
                     masked = mask_session(data, check)
                     info = masked['info']
-                    stem = _safe_stem(info.get('title'), info['id'])
+                    stem = _safe_stem(info.get('title'))
+                    if stem is None:
+                        session_id = info['id']
+                        stem = f'session-{session_id}' if _SESSION_ID.fullmatch(session_id) else 'session'
                     with archive.open(_entry_name(stem, used, suffixes), 'w') as entry:
                         remaining = _write_pretty(entry, masked, remaining, check)
                     del masked, data

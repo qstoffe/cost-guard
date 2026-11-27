@@ -18,7 +18,6 @@ const SessionExport = (() => {
     detail_expired: 'Session selection expired. Try again after the session has reconnected.'
   };
   const el = (...args) => ReportView.element(...args);
-  const fallbackName = id => /^ses_[A-Za-z0-9_-]{1,160}$/.test(id) ? `session-${id}.zip` : 'session.zip';
 
   function wait(ms, signal) {
     signal.throwIfAborted();
@@ -34,7 +33,7 @@ const SessionExport = (() => {
   class Action {
     constructor(api, id) {
       Object.assign(this, {api, id, token: null, state: 'pending', operation: null,
-        filename: fallbackName(id)});
+        filename: null, feedback: 'Checking export availability…'});
       this.root = el('div', undefined, 'session-export');
       this.button = el('button', 'Export Session Analysis ZIP');
       this.button.type = 'button'; this.button.disabled = true;
@@ -43,22 +42,30 @@ const SessionExport = (() => {
       this.spinner.setAttribute('aria-hidden', 'true');
       this.button.append(this.spinner);
       this.cancel = el('button', 'Cancel export'); this.cancel.type = 'button'; this.cancel.hidden = true;
-      this.notice = el('span', '');
+      this.notice = el('span', this.feedback);
       this.notice.setAttribute('role', 'status');
       this.root.append(this.button, this.cancel, this.notice);
       ContextHelp.attach(this.button, help);
       this.button.addEventListener('click', () => this.activate());
       this.cancel.addEventListener('click', () => this.operation?.controller.abort());
     }
-    update(token, state, scope, exportName) {
-      const changed = this.state !== state;
+    update(token, state, scope, exportName, nameState) {
       this.token = token;
       this.state = state;
       this.scope = scope;
-      if (typeof exportName === 'string' && exportName.endsWith('.zip')) this.filename = exportName;
-      if (changed && !this.operation) this.notice.textContent = state === 'pending' ? 'Checking export availability…' :
-        state === 'unavailable' ? messages.export_unavailable : '';
+      this.filename = state === 'ready' && typeof exportName === 'string' && exportName.endsWith('.zip')
+        ? exportName : null;
+      this.nameState = state === 'ready' && !this.filename ? nameState || 'pending' : null;
+      const feedback = this.availabilityFeedback();
+      if (this.feedback !== feedback && !this.operation) this.notice.textContent = feedback;
+      this.feedback = feedback;
       this.renderButton();
+    }
+    availabilityFeedback() {
+      if (this.state === 'pending') return 'Checking export availability…';
+      if (this.state === 'unavailable') return messages.export_unavailable;
+      if (this.nameState === 'unavailable') return 'Could not resolve the session title for export.';
+      return this.nameState === 'pending' ? 'Waiting for the session title before export…' : '';
     }
     close() {
       this.operation?.controller.abort();
@@ -66,7 +73,7 @@ const SessionExport = (() => {
       this.update(null, 'pending');
     }
     renderButton() {
-      this.button.disabled = !this.token || this.state !== 'ready' || !this.scope || !!this.operation;
+      this.button.disabled = !this.token || this.state !== 'ready' || !this.scope || !this.filename || !!this.operation;
       this.spinner.hidden = !this.operation;
     }
     async activate() {
@@ -109,6 +116,7 @@ const SessionExport = (() => {
         this.cancel.hidden = true;
         if (requested) await this.request(operation, 'cancel').catch(() => {});
         this.operation = null;
+        if (!operation.detached && this.feedback) this.notice.textContent = this.feedback;
         this.renderButton();
         if (focused && !operation.detached && document.activeElement === document.body && !this.button.disabled) {
           this.button.focus({preventScroll: true});

@@ -6,8 +6,9 @@ import re
 from threading import Event, Lock
 import time
 
-from src.sources.errors import SessionExportError, SourceError
 from src.application.projection import identity as fingerprint
+from src.application.session_export_archive import UNTITLED_SESSION, analysis_filename
+from src.sources.errors import SessionExportError, SourceError
 
 
 CHUNK_BYTES = 1024 * 1024
@@ -64,7 +65,19 @@ def selection(handler, token):
 
 def export_status(handler, token):
     state, request = selection(handler, token)
-    return {'export_state': state, **({'export_scope': fingerprint(request[2])} if request else {})}
+    status = {'export_state': state}
+    if request is None:
+        handler.server.lifecycle.live.details.export_selection(token, ())
+        return status
+    _, source, identity = request
+    status['export_scope'] = fingerprint(identity)
+    read_title = getattr(source, 'observed_session_title', None)
+    name_state, title = read_title(identity[3], identity[2]) if callable(read_title) else ('unavailable', None)
+    status['export_name_state'] = name_state
+    if name_state == 'ready':
+        status['export_title'] = title if title and title.strip() else UNTITLED_SESSION
+        status['export_name'] = analysis_filename(title)
+    return status
 
 
 class SessionExports:

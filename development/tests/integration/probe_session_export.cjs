@@ -100,10 +100,27 @@ async function main() {
         await configure(theme,width,zoom,coarse);
         layouts.push({theme,width,zoom,coarse,models:await measure('[data-model-control=refresh]')});
       }
-    await evaluate(`location.hash='#/sessions/${launch.session}'`);
-    await until(()=>evaluate('!!current?.detail?.data && !current.detail.exporter.button.disabled'), 'observed selection');
+    await configure('classic',1280,1,false);
+    await evaluate(`window.showSaveFilePicker=options => {
+      window.firstPick={name:options.suggestedName,active:navigator.userActivation.isActive,rows:current.detail.body.children.length};
+      return Promise.reject(new DOMException('Cancelled','AbortError'));
+    }; location.hash='#/sessions/${launch.session}'`);
+    await until(()=>evaluate('current?.detail?.exporter.notice.textContent.includes("Waiting for the session title")'), 'cold selected title');
+    assert.equal(await evaluate('current.detail.exporter.button.disabled'),true);
     const filename = 'Synthetic LIVE-style å 日本語 🚀.zip';
-    assert.equal(await evaluate('current.detail.exporter.filename'),filename,'observed detail title, not native payload title');
+    await fixture('publish-title');
+    await until(()=>evaluate('current.detail.heading.textContent === "Synthetic: LIVE-style å 日本語 🚀?"'), 'first title');
+    assert.equal(await evaluate('current.detail.exporter.button.disabled'),false,'first visible title is already actionable');
+    await click();
+    assert.deepEqual(await evaluate('firstPick'),{name:filename,active:true,rows:0},'first action before history');
+    await fixture('publish-history');
+    await until(()=>evaluate('current.detail.body.children.length===3 && !current.detail.exporter.button.disabled'), 'history available');
+    await evaluate('window.showSaveFilePicker=undefined');
+    // Clear the intentional cancellation notice by starting a fresh view for the layout checks.
+    await evaluate('location.hash="#/models"');
+    await until(()=>evaluate('current.section==="models"'),'leave the early selection');
+    await evaluate(`location.hash='#/sessions/${launch.session}'`);
+    await until(()=>evaluate('current?.detail?.body.children.length===3 && !current.detail.exporter.button.disabled'),'settled selection');
     for (const value of layouts) {
       await configure(value.theme,value.width,value.zoom,value.coarse);
       value.export=await measure('.session-export > button');
@@ -210,7 +227,8 @@ async function main() {
     await evaluate('location.hash="#/settings"');
     await until(()=>evaluate('current.section === "settings"'), 'navigation');
     evidence = {outcome:'PASS',browser:version.product,layouts,activations,slowTree:{elapsedMs,bytes:original.length,archive},
-      checks:['canonical selected detail','original click activates picker double; cancellation performs no source work',
+      checks:['cold direct selection auto-enables; trusted first click suggests observed title before history',
+        'original click activates picker double; cancellation performs no source work',
         'quiet one-action idle layout','computed Models parity across themes/width/zoom/coarse pointer',
         'pointer/Tab/Enter/Space/touch/pending-hover dismissal and stationary suppression','Escape and intentional re-entry',
         'handle-double commit and picker-focus suppression',
