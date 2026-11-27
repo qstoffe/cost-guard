@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from src.domain.progress import observe_work
 
 from src.domain import (
-    BackgroundActivity, CostDisposition, EventKind, MessageRole, NormalizedEvent, NormalizedMessage, NormalizedPart,
+    CostDisposition, EventKind, MessageRole, NormalizedEvent, NormalizedMessage, NormalizedPart,
     SessionSnapshot, TerminalOutcome,
 )
 
@@ -18,7 +18,7 @@ from .models import PromptRecord, PromptReference, TraceEntry
 from .duration import prompt_duration
 from .prompt_index import PromptIndex, prompt_owners
 from .child_links import ChildLinkIndex, part_time as _part_time, scoped_entries
-from .child_activity import descendant_activity
+from .child_activity import descendant_activity, outstanding_background
 from .coverage import child_coverage, coverage_complete, unrepresented_usage
 
 TRACKED_PROVIDER_DEFAULT = "github-copilot"
@@ -225,22 +225,6 @@ def _synthetic_parent_ids(snapshot: SessionSnapshot, ref: PromptReference, timel
     return timeline.index.windows.get(ref.prompt_id, {ref.prompt_id})
 
 
-def _outstanding_background(
-    snapshot: SessionSnapshot, messages: Sequence[NormalizedMessage], *, superseded: bool,
-) -> tuple[BackgroundActivity, ...]:
-    """Running background work the current prompt is still waiting on.
-
-    Completion resumes the conversation inside the newest prompt, so work an
-    earlier prompt started hands its wait over to that prompt; a superseded
-    prompt never waits on background work.
-    """
-    if superseded:
-        return ()
-    owners = {message.message_id for message in messages}
-    return tuple(item for item in snapshot.background if item.running and (
-        item.session_id == snapshot.root.session_id or item.owner_message_id in owners))
-
-
 def _is_aborted_message(message: NormalizedMessage) -> bool:
     return message.error_name in {"AbortedError", "AbortError", "MessageAbortedError"}
 
@@ -420,7 +404,8 @@ def build_prompt_record(
         snapshot, attempt_messages, continuation_superseded=superseded,
     )
     child_active, child_unverified = descendant_activity(snapshot, timeline.children, verified_scopes)
-    background = _outstanding_background(snapshot, child_messages, superseded=superseded)
+    # Completion resumes the current prompt even if an earlier prompt launched the root job.
+    background = () if superseded else outstanding_background(snapshot, child_messages, carry_root=True)
 
     def running(active_work: bool) -> bool:
         return (not explicitly_aborted or bool(evidence and active_work)) and not bool(

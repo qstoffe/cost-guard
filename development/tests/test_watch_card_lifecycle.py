@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from development.tests.fixtures.opencode_v2_service import source_with_current_service
 from development.tests.fixtures.watch_runtime import make_service
+from development.tests.test_opencode_terminal import idle, notice, resumed, waiting
 from src.application.live_projection import project_live
 from src.reports import ReportKind, ReportRequest
 from src.reports.session_history import SessionHistory
@@ -85,6 +86,78 @@ class WebTerminalLifecycleTests(unittest.TestCase):
         self.native.version = "2.4.2"
         registration = json.loads(self.registration.read_text(encoding="utf-8"))
         self.registration.write_text(json.dumps({**registration, "version": "2.4.2"}), encoding="utf-8")
+
+    def start_turn(self, at):
+        sid = self.root.session_id
+        answer = resumed(f"answer_{at}", at=at + 100)
+        del answer["finish"], answer["time"]["completed"]
+        self.native.messages[sid].extend([
+            {"id": f"user_{at}", "type": "user", "text": "status", "time": {"created": at}}, answer])
+        self.native.active = {sid: {"type": "running"}}
+        return answer
+
+    def finish_turn(self, answer, at):
+        answer["finish"] = "stop"
+        answer["time"]["completed"] = at - 10
+        self.native.messages[self.root.session_id].append(idle(at=at, outcome="succeeded", identity=f"idle_{at}"))
+        self.native.active = {}
+
+    def captured_card(self, at):
+        self.capture(at)
+        card, = self.cards.project(at)[0]
+        return card
+
+    def test_manual_turn_temporarily_preempts_earlier_shell_then_job_end_reveals_event_wait(self):
+        self.enable_automations()
+        sid = self.root.session_id
+        self.native.automation_response = {"data": [{"id": "event", "sessionID": sid, "time": {"created": 3800},
+            "action": {"type": "prompt", "to": {"session": sid}}, "status": "active", "runCount": 0,
+            "trigger": {"type": "event"}}]}
+        waiting(self.native, "sh_original")
+        self.assertEqual("background", self.captured_card(4500).ongoing.phase)
+
+        answer = self.start_turn(5000)
+        self.assertEqual("running", self.captured_card(5200).ongoing.phase)
+        self.finish_turn(answer, 5700)
+        status = self.captured_card(6000).ongoing
+        self.assertEqual(("background", "A background shell"), (status.phase, status.awaits))
+
+        self.native.messages[sid].extend([notice("sh_original", at=6500),
+            resumed("acknowledge_shell_end", at=6550), idle(at=7100, outcome="succeeded", identity="idle_resume")])
+        self.native.shells = []
+        status = self.captured_card(7500).ongoing
+        self.assertEqual(("waiting", None, "An automatic event"), (status.phase, status.wake_at_ms, status.awaits))
+        self.native.automation_response = {"data": []}
+        self.assertEqual("completed", self.captured_card(8000).terminal_status)
+
+    def test_older_timer_survives_manual_turns_but_not_its_delivered_turn(self):
+        self.enable_automations()
+        sid = self.root.session_id
+        timer = {"id": "later", "sessionID": sid, "time": {"created": 3800}, "nextDueAt": 20_000,
+            "action": {"type": "prompt", "to": {"session": sid}}, "status": "active", "runCount": 0,
+            "trigger": {"type": "at"}}
+        earlier = {**timer, "id": "earlier", "nextDueAt": 15_000}
+        self.native.automation_response = {"data": [timer, earlier]}
+        self.assertEqual(15_000, self.captured_card(4500).ongoing.wake_at_ms)
+        for start, expected_wake in [(5000, 15_000), (7000, 20_000)]:
+            answer = self.start_turn(start)
+            self.assertEqual("running", self.captured_card(start + 200).ongoing.phase)
+            self.finish_turn(answer, start + 700)
+            card = self.captured_card(start + 800)
+            self.assertEqual(("waiting", expected_wake), (card.ongoing.phase, card.ongoing.wake_at_ms))
+            self.assertTrue(card.rows[-1].prompt.completed_successfully)
+            earlier["status"] = "paused"
+
+        timer.update(status="done", runCount=1, lastRunAt=20_000, lastOutcome="fired")
+        with patch("src.sources.opencode_v2_continuation.time.time_ns", return_value=21_000_000_000):
+            bridge = self.captured_card(20_050).ongoing
+            self.assertEqual(("waiting", None), (bridge.phase, bridge.wake_at_ms))
+            answer = self.start_turn(20_100)
+            self.assertEqual("running", self.captured_card(20_400).ongoing.phase)
+            self.finish_turn(answer, 20_800)
+            end = self.captured_card(21_000)
+        self.assertEqual(("completed", 51_000), (end.terminal_status, end.terminal_until_ms))
+        self.assertFalse(self.cards.project(51_000)[0])
 
     def test_owned_first_fire_timer_keeps_idle_card_without_billing_dormant_time(self):
         sid = self.root.session_id

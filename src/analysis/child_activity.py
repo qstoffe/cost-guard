@@ -5,6 +5,14 @@ from src.domain import EventKind, MessageRole
 from .child_links import OPEN_END, part_time
 
 
+def outstanding_background(snapshot, messages, *, carry_root=False):
+    """Root jobs can keep the current prompt live without moving their launch ownership."""
+    owners = {(message.session_id, message.message_id) for message in messages}
+    return tuple(job for job in snapshot.background if job.running and (
+        (carry_root and job.session_id == snapshot.root.session_id)
+        or (job.session_id, job.owner_message_id) in owners))
+
+
 def running_tool(message, terminal_at=0, *, foreground_only=False):
     terminal = max(terminal_at, message.termination.completed_at_ms if message.termination else
         message.completed_at_ms if message.error_name else 0)
