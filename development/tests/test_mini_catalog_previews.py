@@ -111,7 +111,7 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         self.assertEqual((), published.history_cards)
         self.assertEqual((20, 3217), (cards.history.checked, cards.history.total))
         self.assertEqual(counts, (source.load_count, source.catalog_count, source.batch_count))
-        self.assertEqual(1, len(catalog.leases), "Mini never creates another browser lease")
+        self.assertEqual(1, len(catalog.lease_pages.leases), "Mini never creates another browser lease")
         preview = wire["earlier_previews"][0]
         self.assertFalse({"prompt", "rows", "event_id", "context_tokens", "watch_next_context_tokens"} & preview.keys())
 
@@ -130,7 +130,7 @@ class MiniCatalogPreviewTests(unittest.TestCase):
         self.assertEqual("catalog", previews[0]["activity_origin"])
         self.assertIsNone(previews[0]["total_ccost"])
         self.assertNotEqual("Loading…", previews[0]["display"]["activity_clock"])
-        self.assertEqual({}, catalog.leases)
+        self.assertEqual({}, catalog.lease_pages.leases)
         self.assertEqual(counts, (source.load_count, source.catalog_count, source.batch_count))
 
     def test_invalidations_and_unknowns_do_not_revive_old_scalar_facts(self):

@@ -26,4 +26,4 @@ def configure(runtime, command):
     elif command != 'catalog-idle-observe':
         raise ValueError('unknown_idle_command')
     return dict(ok=True, roots=len(runtime.catalog.roots), history_reads=runtime.service.source.load_count,
-        metrics=dict(runtime.catalog.metrics), leases=len(runtime.catalog.leases))
+        metrics=dict(runtime.catalog.metrics), leases=len(runtime.catalog.lease_pages.leases))

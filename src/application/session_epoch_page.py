@@ -6,38 +6,16 @@ from uuid import uuid4
 from src.analysis.metric_evidence import EMPTY_HISTORY
 
 from .session_archive import session_view
+from .session_arrivals import ARRIVAL_SECONDS, recent_live_roots
 from .session_catalog_scope import (
-    CatalogEpoch, PAGE_SIZE, activity_time, catalog_window, event_members, in_window,
+    CatalogEpoch, PAGE_SIZE, catalog_window, event_members, in_window,
     live_activity_order, provisional_order, retained_positions,
 )
 from .session_navigation import Navigation
+from .session_row_sort import sort_value
 
 
 ARRIVAL_SLOTS = 5
-ARRIVAL_SECONDS = 120
-
-
-def recent_live_roots(arrivals, activity, now, latest):
-    # Old roots discovered in bulk must not jump the recency queue.
-    cutoff = latest - ARRIVAL_SECONDS * 1000
-    return {key for key, discovered in arrivals.items()
-            if now - discovered < ARRIVAL_SECONDS and cutoff <= activity.get(key, 0) <= latest}
-
-
-def effort_sort(key):
-    if key is None:
-        return None
-    levels = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "default", "multiple")
-    return (levels.index(key) if key in levels else len(levels), key)
-
-
-def sort_value(row, key):
-    return {"activity": activity_time(row),
-        "name": row.title.casefold(),
-        "model": (row.model if row.model != "N/A" else row.selected_display_model).casefold() or None,
-        "effort": effort_sort(row.effort_key),
-        "ccost": row.ccost if row.complete else None, "prompts": row.prompt_count,
-        "duration": row.duration_ms, "ctx": row.context_tokens if row.context_qualified else None}[key]
 
 
 def ordered(rows, key, direction, recent_finishes=None):
@@ -84,20 +62,20 @@ def _progress(catalog, sort, pending, selected, indexed, pinned, candidates, *, 
                 work=work)
 
 
-def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigation,
+def epoch_page(self, pages, *, token, offset, sort, direction, epoch, period, navigation,
                applied, cancelled, passive):
     # An epoch names an order independently of the slice, including
     # page one. Passive page-one reads use it only as a fallback.
     pinned = bool(offset or epoch and not passive)
-    self._expire()
+    pages.expire(self.clock)
     if token is None:
         if pinned:
             raise KeyError('catalog_expired')
-        if len(self.leases) >= 32:
+        if len(pages.leases) >= 32:
             raise RuntimeError("catalog_busy")
         token = uuid4().hex
-        self.leases[token] = dict(touched=self.clock(), epochs=OrderedDict())
-    lease = self.leases.get(token)
+        pages.leases[token] = dict(touched=self.clock(), epochs=OrderedDict())
+    lease = pages.leases.get(token)
     if lease is None:
         raise KeyError("catalog_expired")
     lease["touched"] = self.clock()
@@ -140,7 +118,7 @@ def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigatio
         and self.state == 'source_unavailable')
     reuse = reuse or retained_page
     if not pinned:
-        window, candidates = self._population(period)
+        window, candidates = pages.population(self, period)
     if navigation is not None:
         intent = sort, direction, period, offset, epoch if pinned else None
         if nav is None or nav.sequence != navigation:
@@ -220,7 +198,7 @@ def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigatio
         signature = (tuple((key, metadata.get(key), display_rows[key], event_current(key))
                             for key in (*members, *positions, *arrivals)), tuple(positions.items()), arrivals,
                      tuple(recent.items()))
-        cached = self.orders.get(cache_key)
+        cached = pages.orders.get(cache_key)
         if nav is not None and navigation is not None and not pending:
             rows = ordered(self._with_lifecycle(nav.rows, display_rows), sort, direction, recent)
         elif cached and cached[0] == signature:
@@ -235,10 +213,10 @@ def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigatio
             elif positions:
                 tail = retained_positions(tail, positions, display_rows)
             rows = front + tuple(display_rows[key] for key in arrivals) + tail
-        self.orders[cache_key] = signature, rows
-        self.orders.move_to_end(cache_key)
-        while len(self.orders) > 32:
-            self.orders.popitem(last=False)
+        pages.orders[cache_key] = signature, rows
+        pages.orders.move_to_end(cache_key)
+        while len(pages.orders) > 32:
+            pages.orders.popitem(last=False)
         if (previous is not None and (previous.sort, previous.direction) == (applied, order)
                 and previous.provisional == pending
                 and previous.browsable_candidates == (live_page and pending)
@@ -271,7 +249,7 @@ def epoch_page(self, *, token, offset, sort, direction, epoch, period, navigatio
     lease["visible"] = tuple(row.session_id for row in selected)
     lease["nearby"] = tuple(row.session_id for row in rows[
         offset + PAGE_SIZE:offset + PAGE_SIZE * 3]) if snapshot.browsable_candidates else ()
-    self.last_page = lease['visible']
+    pages.last_page = lease['visible']
     # Older pages retain membership/order; only independently observed
     # values may change. Deleted rows retain their epoch evidence.
     if not frozen:

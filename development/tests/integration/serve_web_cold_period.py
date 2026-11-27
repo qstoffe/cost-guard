@@ -67,7 +67,7 @@ def main():
             with host.live.catalog.lock:
                 counts = dict(host.live.catalog.metrics)
                 released = any(lease.get('released') and not lease.get('navigation')
-                               for lease in host.live.catalog.leases.values())
+                               for lease in host.live.catalog.lease_pages.leases.values())
             print(json.dumps(dict(catalog_reads=catalog_reads, metrics=counts, acknowledged=released)), flush=True)
     finally:
         host.close()

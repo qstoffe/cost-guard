@@ -18,6 +18,7 @@ from src.reports.session_summary import decode_summary, encode_summary
 from . import detail_archive
 from .projection import project
 from .session_catalog_scope import PAGE_SIZE, catalog_window
+from .session_row_sort import sort_values
 
 
 LOG = logging.getLogger(__name__)
@@ -25,6 +26,13 @@ DOMAIN = SESSIONS_DOMAIN
 EFFORT_EVIDENCE = 'model_effort_evidence'
 CURRENT_EFFORT_EVIDENCE = 2
 REQUIRES_SOURCE_EFFORT_EVIDENCE = 1
+
+
+def prepare_archive_facts(service, capture):
+    """Build the usage and detail facts outside the catalog lock."""
+    usage = web_history_evidence.acquired_usage(service, capture)
+    detail = detail_archive.acquired_detail(service, capture) if usage is not None else None
+    return (usage, detail) if detail is not None else None
 
 
 class SessionArchive:
@@ -156,8 +164,6 @@ class SessionArchive:
             LOG.warning('live_prompt_range_write_unavailable')
 
     def save(self, partition, key, revision, row, observed_ms, dependencies, models, usage, detail):
-        from .session_epoch_page import sort_value
-
         try:
             return self.storage.publish_session(partition, {
                 DOMAIN: {key: ArchiveFact(revision, observed_ms, dict(
@@ -165,7 +171,7 @@ class SessionArchive:
                     model_effort_evidence=CURRENT_EFFORT_EVIDENCE))},
                 web_history_evidence.DOMAIN: {key: usage},
                 detail_archive.DOMAIN: {key: detail},
-            }, key, {sort: sort_value(row, sort) for sort in SORT_COLUMNS},
+            }, key, sort_values(row),
                 row.last_activity_ms, row.activity_latest_ms, run=self.run)
         except (sqlite3.Error, OSError, ValueError):
             LOG.warning('session_archive_write_unavailable')

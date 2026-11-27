@@ -1,12 +1,7 @@
-"""Shared live catalog, bounded scalar indexing and stable server-side page epochs.
-
-HTTP reads never acquire history. Metric ordering is admitted only with keys for
-every period-eligible root; an unindexed root is not a canonically unknown metric.
-"""
+"""Own Live and historical session acquisition and serve committed Sessions pages."""
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from heapq import nsmallest
 from threading import Event, Lock
 import time
 from uuid import uuid4
@@ -18,22 +13,20 @@ from src.domain.session_tree import root_activity
 from src.pricing.base import PricingUnavailableError
 from src.reports.models import SessionUsageRow
 from src.reports.session_summary import session_summary
-from src.reports import web_history_evidence
 from src.sources.errors import SourceError
 
-from .detail_archive import acquired_detail
 from .history_queue import HistoryQueue
 from .session_active_snapshots import ActiveSnapshotOffers
-from .session_archive import SessionArchive, cached_page, retain_pending_metrics, retain_readable_fields
+from .session_archive import (
+    SessionArchive, cached_page, prepare_archive_facts, retain_pending_metrics, retain_readable_fields,
+)
 from .session_archive_maintenance import advance_archive_maintenance
-from .session_epoch_page import ARRIVAL_SECONDS, epoch_page, recent_live_roots, sort_value
+from .session_arrivals import ARRIVAL_SECONDS, recent_live_roots, retain_live_arrivals
+from .session_catalog_scope import PERIODS, in_window
 from .session_previews import archived_previews, live_previews
 from .session_prompt_lifecycle import PROMPT_FRESHNESS_MS, PromptEvidence, observe_prompt_ends, record_prompt
 from .session_quota import source_scope
 from .session_report_runtime import publish_report_runtime
-from .session_catalog_scope import (
-    PAGE_SIZE, PERIODS, activity_time, catalog_window, candidate_population, in_window, retain_live_arrivals,
-)
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
 
@@ -67,7 +60,6 @@ class SessionCatalog:
         self.work = None
         self.work_sequence = 0
         self.activity = {}
-        self.activity_index = ()
         self.activity_valid = {}
         self.changed_roots = set()
         self.active = frozenset()
@@ -78,33 +70,30 @@ class SessionCatalog:
         self.terminal_handoffs = {}
         self.interrupted = False
         self.lifecycle_cutoff_ms = 0
-        self.leases = OrderedDict()
         self.state = "loading"
         self.dependencies = None
         self.model_dependencies = {}
         self.timezone_id = timezone_id
         self.unit = "credits"
-        self.turn = 0
         self.checked_at = -100
         self.index_unavailable = False
         self.index_failure = None
         self.index_terminal = False
-        self.warm = False
-        self.last_page = ()
-        self.background_due = 0
         self.observed = None
         self.observed_ms = None
         self.last_observation = None
-        self.orders = OrderedDict()
-        self.discovery = {}
         self.recent_arrivals = {}
         self.live_owned = set()
         self.continuous_since_ms = None
-        self.discovery_sequence = 0
         self.preview_totals = {}
         self.wake_identity = uuid4().hex
         self.wake_revision = 0
         self.archive = SessionArchive(archive) if archive is not None else None
+        self.lease_pages = None
+        if self.archive is None:
+            from .session_lease_pages import SessionLeasePages
+
+            self.lease_pages = SessionLeasePages()
         self.history_pending = {}
         self.history_queue = HistoryQueue()
         self.history_turn = False
@@ -145,7 +134,6 @@ class SessionCatalog:
                 self.report_live_costs.clear()
                 self.rows.clear()
                 self.valid.clear()
-                self.orders.clear()
                 self.state = 'loading'
                 self.wake_revision += 1
                 self._publish_report_runtime()
@@ -165,7 +153,6 @@ class SessionCatalog:
 
     def _archive_publication(self):
         self._record_history_pending()
-        self.orders.clear()
         self.generation += 1
         self.wake_revision += 1
 
@@ -197,66 +184,28 @@ class SessionCatalog:
             return f"{self.wake_identity}:{self.wake_revision}"
 
     def enable_warm(self, enabled=True):
-        with self.lock:
-            self.warm = enabled
+        if self.lease_pages is not None:
+            with self.lock:
+                self.lease_pages.warm = enabled
 
     def interest(self, token, visible):
-        if self.archive is not None:
-            return  # Cache pages are independent of browser leases and acquisition.
-        with self.lock:
-            lease = self.leases.get(token)
-            if lease is None:
-                raise KeyError('catalog_expired')
-            lease['interest_until'] = self.clock() + 90 if visible else self.clock()
+        if self.lease_pages is not None:
+            with self.lock:
+                self.lease_pages.interest(self, token, visible)
 
-    def _browsing(self, lease):
-        return (self.clock() < lease['interest_until'] if 'interest_until' in lease
-                else self.clock() - lease['touched'] <= 300)
+    def has_browsing_leases(self):
+        if self.lease_pages is None:
+            return False
+        with self.lock:
+            return self.lease_pages.has_browsing_leases(self)
+
+    def reset_browsing_leases(self):
+        if self.lease_pages is not None:
+            with self.lock:
+                self.lease_pages.reset_leases()
 
     def _targets(self):
-        if self.archive is not None:
-            return self.roots.keys()
-        browsing = [lease for lease in self.leases.values() if self._browsing(lease)]
-        selected = set()
-        for lease in browsing:
-            # A verified pinned page has complete cohort coverage. A provisional
-            # page does not prove that offscreen live candidates are absent.
-            if not lease.get('pinned') or not lease.get('cohort_verified'):
-                selected.update(self.active)
-                selected.update(self.running_roots)
-                selected.update(key for key, proof in self.prompt_activity.items()
-                    if proof.ended and proof.finish_ms is None and not self._activity_current(key))
-            navigation = lease.get('navigation')
-            if navigation is not None:
-                if navigation.invalid:
-                    continue
-                selected.update(navigation.pending)
-                # A previously released live lane stays eligible under repeated
-                # clicks, but never admits arrivals before the first application.
-                if lease.get('released'):
-                    lease['candidates'] = self._population(lease['period'])[1]
-                    selected.update(lease['candidates'])
-                continue
-            selected.update(lease.get('visible', ()))
-            selected.update(lease.get('nearby', ()))
-            if not lease.get('pinned') and (lease.get('sort') not in (None, 'name')
-                                          or lease.get('period') != 'all'):
-                lease['candidates'] = self._population(lease['period'])[1]
-                selected.update(lease['candidates'])
-        if browsing:
-            return selected & self.roots.keys()
-        if not self.warm or self.clock() < self.background_due:
-            return set()
-        now = self.clock_ms()
-        return set(nsmallest(PAGE_SIZE, self.roots,
-            key=lambda key: (-(self.activity.get(key) or 0) if (self.activity.get(key) or 0) <= now else 0, key)))
-
-    def _population(self, period):
-        window = catalog_window(period, self.timezone_id, self.clock_ms())
-        lifecycle = self.running_roots | self.recent_finishes.keys() | {key for key, proof in self.prompt_activity.items()
-            if in_window(proof.finish_ms or proof.start_ms, window)}
-        return window, candidate_population(self.roots, self.activity, self.activity_index,
-            self.rows, self.changed_roots | self.active | lifecycle, window)
+        return self.roots.keys() if self.lease_pages is None else self.lease_pages.targets(self)
 
     def _finish_known(self, key):
         proof = self.prompt_activity.get(key)
@@ -267,24 +216,15 @@ class SessionCatalog:
         return (key in self.rows and self.rows[key].activity_qualified
                 and self.activity_valid.get(key, self.valid.get(key, (None,))[0]) == self.revisions.get(key))
 
-    def _invalidate_navigation(self, keys=None):
-        for lease in self.leases.values():
-            navigation = lease.get('navigation')
-            if navigation is not None and (keys is None or navigation.roots.keys() & set(keys)):
-                navigation.invalid = True
-
-    def _clear_epochs(self):
-        for lease in self.leases.values():
-            lease['epochs'].clear()
-
     def observe(self, observation, *, unavailable=False, source_interrupted=True, timezone_id=None):
         with self.lock:
+            pages = self.lease_pages
             if timezone_id is not None:
                 if timezone_id != self.timezone_id:
-                    self._invalidate_navigation()
-                    self._clear_epochs()
+                    if pages is not None:
+                        pages.invalidate()
+                        pages.orders.clear()
                     self.valid.clear()
-                    self.orders.clear()
                     self.generation += 1
                 self.timezone_id = timezone_id
             if unavailable or observation is None:
@@ -311,13 +251,14 @@ class SessionCatalog:
             source_changed = bool(self.last_observation
                 and self.last_observation.source_epoch != observation.source_epoch)
             if source_changed:
-                self._invalidate_navigation()
+                if pages is not None:
+                    pages.invalidate()
+                    pages.orders.clear()
                 for name in ('rows', 'valid', 'activity_valid', 'attempted', 'failures', 'failure_counts',
                              'failure_reasons', 'prompt_activity', 'running_roots', 'recent_finishes', 'terminal_handoffs',
-                              'model_dependencies', 'orders',
-                              'archive_rejections', 'active_snapshots', 'finalize_roots', 'report_live_costs'):
+                               'model_dependencies',
+                               'archive_rejections', 'active_snapshots', 'finalize_roots', 'report_live_costs'):
                     getattr(self, name).clear()
-                self._clear_epochs()
                 self.index_terminal = False
             self.last_observation = observation
             previous_roots = self.roots
@@ -336,39 +277,23 @@ class SessionCatalog:
             self.recent_arrivals = {} if source_changed else {key: at for key, at in self.recent_arrivals.items()
                 if key in self.roots and self.roots[key].provenance == previous_roots[key].provenance
                 and now - at < ARRIVAL_SECONDS}
+            added = (self.roots.keys() - previous_roots.keys()
+                     if self.observed is not None and not source_changed else set())
             if self.observed is not None and not source_changed:
-                added = self.roots.keys() - previous_roots.keys()
                 self.recent_arrivals.update((key, now) for key in added)
                 self.live_owned = retain_live_arrivals(
                     self.live_owned, self.roots, previous_roots, added, self.continuous_since_ms, now_ms)
-                if added:
-                    self.background_due = min(self.background_due, now + 15)
             elif source_changed:
-                self.background_due = now
                 self.live_owned.clear()
                 self.continuous_since_ms = None
             if self.archive is not None and self.continuous_since_ms is None:
                 self.continuous_since_ms = now_ms
-            self.discovery = {key: age for key, age in self.discovery.items() if key in self.roots}
-            for key in self.roots:
-                if key not in self.discovery:
-                    self.discovery_sequence += 1
-                    self.discovery[key] = self.discovery_sequence
-            if any(previous_roots[key].provenance != root.provenance
-                   for key, root in self.roots.items() if key in previous_roots):
-                self._invalidate_navigation()
-                self._clear_epochs()
-                self.last_page = ()
-            removed = previous_roots.keys() - self.roots.keys()
-            if removed:
-                for lease in self.leases.values():
-                    epochs = lease['epochs']
-                    for epoch, snapshot in tuple(epochs.items()):
-                        if any(row.session_id in removed for row in snapshot.rows):
-                            del epochs[epoch]
             self.activity = {key: at for key, at in root_activity(observation.sessions).items() if at > 0}
-            self.activity_index = tuple(sorted((at, key) for key, at in self.activity.items()
-                if key in self.roots and type(at) is int and at > 0))
+            if pages is not None:
+                replaced = any(previous_roots[key].provenance != root.provenance
+                               for key, root in self.roots.items() if key in previous_roots)
+                pages.observe_roster(self.roots, self.activity, added=added, replaced=replaced,
+                    removed=previous_roots.keys() - self.roots.keys(), source_changed=source_changed, now=now)
             previous_active, self.active = self.active, observation.live_candidates
             self.urgent_takeover.intersection_update(self.active | self.running_roots | self.finalize_roots)
             previous_revisions = self.revisions
@@ -381,15 +306,15 @@ class SessionCatalog:
                 self.changed_roots.intersection_update(self.roots)
                 self.changed_roots.update(key for key in self.roots
                     if key in previous_revisions and previous_revisions[key] != self.revisions.get(key))
-                if self.observed is not None:
-                    self.changed_roots.update(self.roots.keys() - previous_roots.keys())
+                self.changed_roots.update(added)
             if (source_changed or self.state != "observed" or previous_active != self.active
                     or tuple(previous_roots) != tuple(self.roots) or any(
                     key not in previous_roots or previous_roots[key] != root
                     for key, root in self.roots.items()) or previous_revisions != self.revisions):
                 self.generation += 1
                 self.wake_revision += 1
-            self.rows = {key: row for key, row in self.rows.items() if key in self.roots}
+            self.rows = {key: row for key, row in self.rows.items() if key in self.roots
+                         and previous_roots[key].provenance == self.roots[key].provenance}
             self.valid = {key: value for key, value in self.valid.items()
                            if key in self.roots and value[0] == self.revisions.get(key)
                              and previous_roots[key].provenance == self.roots[key].provenance}
@@ -397,8 +322,6 @@ class SessionCatalog:
             # navigation and failed observations never renew this proof.
             self.valid = {key: (value[0], self.clock()) if key not in self.active and key not in self.running_roots
                           else value for key, value in self.valid.items()}
-            self.rows = {key: row for key, row in self.rows.items()
-                           if previous_roots[key].provenance == self.roots[key].provenance}
             self.activity_valid = {key: value for key, value in self.activity_valid.items()
                 if key in self.rows and value == self.revisions.get(key)}
             self.model_dependencies = {key: value for key, value in self.model_dependencies.items()
@@ -663,27 +586,13 @@ class SessionCatalog:
                 return False
             return (self._archive_live_candidate(key) or not self._archive_unavailable(key) and (
                 key in self.recent_finishes or self._archive_needs_capture(key)))
-        navigation_pending = any(self._browsing(lease) and lease.get('navigation') is not None
-            and not lease['navigation'].invalid
-            and key in lease['navigation'].roots and key not in lease['navigation'].facts
-            for lease in self.leases.values())
-        return (navigation_pending or not self._current(key) or (key in self.active or key in self.running_roots)
-                      or not self.rows[key].context_qualified and self._requested(key, 'ctx')
-                      or not self.rows[key].effort_qualified and self._requested(key, 'effort')
-                      or not self._activity_current(key) and any(self._browsing(lease)
-                          and key in lease.get('candidates', ()) and (
-                              lease.get('sort') == 'activity' or lease.get('period') != 'all')
-                           for lease in self.leases.values()))
+        return self.lease_pages.eligible(self, key)
 
     def _unchanged_watch_scalar(self, key):
         if not self._running(key) or not self._current(key):
             return False
         return self.active_snapshots.has_unchanged_scalar(
             self.rows[key], self.prompt_activity[key], self.revisions.get(key), self.clock_ms())
-
-    def _requested(self, key, sort):
-        return any(lease.get('sort') == sort and self._browsing(lease)
-                   and key in lease.get('candidates', ()) for lease in self.leases.values())
 
     def _archive_urgent(self):
         return ({key for key in self.active if self._archive_live_candidate(key)} |
@@ -697,54 +606,25 @@ class SessionCatalog:
         return key in self.active and (prompt is None or not prompt.ended or prompt.revision != self.revisions.get(key))
 
     def _candidate(self, *, extension=False):
-        if self.archive is not None:
-            if extension:
-                return None
-            eligible = [key for key in self._archive_urgent() & self.roots.keys() if self._eligible(key)]
-            first = min(eligible, default=None, key=lambda key: (
-                key not in self.urgent_takeover, not self._running(key), self.attempted.get(key, -100),
-                -self.activity.get(key, 0), key))
-            if self.history_turn and first not in self.urgent_takeover:
-                historical = self._next_history(take=True)
-                if historical is not None:
-                    self.history_turn = False
-                    return historical
-            if first is not None:
-                self.history_turn = True
-                self.urgent_takeover.discard(first)
-                return first
-            return self._next_history(take=True)
-        # Only requested rows, or scoped scalar keys required by a requested
-        # metric/activity sort or final period membership. Pinned navigation
-        # acquires only visible rows; HTTP reads never acquire history.
-        candidates = [key for key in self._targets() if self._eligible(key)]
-        if not candidates:
-            return None
-        navigations = [lease['navigation'] for lease in self.leases.values() if self._browsing(lease)
-            and lease.get('navigation') is not None and not lease['navigation'].invalid]
-        if extension and not any(nav.expanded_period and any(
-                key in nav.roots and key not in nav.facts for key in candidates) for nav in navigations):
-            return None
-        self.turn += 1
-        pending = {key for nav in navigations for key in nav.pending}
-        priority = pending.intersection(candidates)
-        if self.turn % 8 and priority:
-            return min(priority,
-                       key=lambda key: (self.attempted.get(key, -100), self.discovery[key]))
-        visible = dict.fromkeys(key for lease in sorted(self.leases.values(), key=lambda item: -item["touched"])
-                                if self._browsing(lease) for key in lease.get("visible", ()))
-        priority = [key for key in visible if key in candidates]
-        if self.turn % 8 and priority:
-            return min(priority, key=lambda key: (self._current(key), self.attempted.get(key, -100)))
-        if self.turn % 4:
-            nearby = dict.fromkeys(key for lease in self.leases.values() if self._browsing(lease)
-                                   for key in lease.get("nearby", ()))
-            priority = [key for key in nearby if key in candidates]
-            if priority:
-                return min(priority, key=lambda key: self.attempted.get(key, -100))
-        return min(candidates, key=lambda key: (self.attempted.get(key, -100), self.discovery[key]))
+        if self.lease_pages is not None:
+            return self.lease_pages.candidate(self, extension=extension)
+        eligible = [key for key in self._archive_urgent() & self.roots.keys() if self._eligible(key)]
+        first = min(eligible, default=None, key=lambda key: (
+            key not in self.urgent_takeover, not self._running(key), self.attempted.get(key, -100),
+            -self.activity.get(key, 0), key))
+        if self.history_turn and first not in self.urgent_takeover:
+            historical = self._next_history(take=True)
+            if historical is not None:
+                self.history_turn = False
+                return historical
+        if first is not None:
+            self.history_turn = True
+            self.urgent_takeover.discard(first)
+            return first
+        return self._next_history(take=True)
 
     def tick(self, service, *, fresh_snapshots=False, cancelled=None):
+        pages = self.lease_pages
         scope = source_scope(service.source) if self.archive is not None else None
         dependencies = dependency_signature((service._dependencies(service._load_catalog()),
                                               service._load_comparison_catalog().diagnostic_signature))
@@ -756,10 +636,9 @@ class SessionCatalog:
             self.index_failure = None
             self.index_terminal = False
             if dependencies != self.dependencies:
-                if self.dependencies is not None:
-                    self._invalidate_navigation()
-                    self._clear_epochs()
-                    self.orders.clear()
+                if pages is not None and self.dependencies is not None:
+                    pages.invalidate()
+                    pages.orders.clear()
                 self.valid.clear()
                 self.failures.clear()
                 self.failure_counts.clear()
@@ -774,8 +653,8 @@ class SessionCatalog:
             self.unit = service.config.get("ccostDisplayUnit", "credits")
         start = self.clock()
         with self.lock:
-            targets = self._targets()
-            identity_targets = (self.active | self.running_roots if self.archive is not None else targets)
+            targets = pages.targets(self) if pages is not None else ()
+            identity_targets = (self.active | self.running_roots if pages is None else targets)
             identities = {key: self.model_dependencies[key] for key in identity_targets
                           if key in self.valid and key in self.model_dependencies}
         # Native model/default observations can change without a history revision.
@@ -791,10 +670,10 @@ class SessionCatalog:
                 if self.archive is not None and key not in self.active and not self._running(key):
                     self._schedule_history(key)
             if changed:
-                self._invalidate_navigation(changed)
-                self._clear_epochs()
+                if pages is not None:
+                    pages.invalidate(set(changed))
                 self.generation += 1
-        for number in range(INTERACTIVE_ATTEMPTS):
+        for number in range(INTERACTIVE_ATTEMPTS if pages is not None else PASSIVE_ATTEMPTS):
             if cancelled is not None and cancelled():
                 break
             extension = number >= PASSIVE_ATTEMPTS
@@ -828,10 +707,8 @@ class SessionCatalog:
                 self.metrics['attempts'] += 1
                 self.metrics['retries'] += int(key in self.failures)
                 retrying = key in self.failures
-                navigations = [lease['navigation'] for lease in self.leases.values()
-                    if self._browsing(lease) and lease.get('navigation') is not None
-                    and not lease['navigation'].invalid
-                    and key in lease['navigation'].roots and key not in lease['navigation'].facts]
+                navigations = (() if pages is None else
+                    tuple(nav for nav in pages.navigations(self) if key in nav.roots and key not in nav.facts))
                 memberships = {}
                 windows = {nav.window for nav in navigations if nav.window.period != 'all'}
             try:
@@ -860,29 +737,18 @@ class SessionCatalog:
                         and not row.model_pending and (not finalizing or handoff is None
                                                        or handoff.identity in ended_prompts)):
                     item, = evidence
-                    usage = web_history_evidence.acquired_usage(service, item)
-                    detail = acquired_detail(service, item) if usage is not None else None
-                    if detail is not None:
+                    facts = prepare_archive_facts(service, item)
+                    if facts is not None:
                         unqualified = False
-                    if detail is not None and fresh_snapshots:
-                        # The isolated V2 reader already checked the tree
-                        # after messages. Refresh service identity without
-                        # repeating global discovery for this one root.
-                        service.source.refresh_observation_epoch()
-                    if (detail is not None and (fresh_snapshots or service.source.get_session_tree_revision(key) == actual)
-                            and source_scope(service.source) == scope):
-                        with self.lock:
-                            current = (key in self.roots and self.archive.partition == partition
-                                       and self.revisions.get(key) == actual
-                                       and self.last_observation.source_epoch == epoch
-                                       and self.roots[key].provenance == root.provenance
-                                        and not self._running(key)
-                                        and (not self._archive_live_candidate(key)
-                                             or finalizing and key in self.finalize_roots))
-                            current_handoff = self.terminal_handoffs.get(key)
-                            if current and (current_handoff.transition if current_handoff else None) == transition:
-                                saved = self.archive.save(partition, key, actual, row, captured_at,
-                                                           dependencies, identity_values, usage, detail)
+                        if fresh_snapshots:
+                            # The isolated V2 reader already checked the tree
+                            # after messages. Recheck identity without global discovery.
+                            service.source.refresh_observation_epoch()
+                        if ((fresh_snapshots or service.source.get_session_tree_revision(key) == actual)
+                                and source_scope(service.source) == scope):
+                            with self.lock:
+                                saved = self._commit_archive_capture(root, actual, partition, epoch,
+                                    finalizing, transition, row, captured_at, dependencies, identity_values, facts)
             except Exception as error:
                 with self.lock:
                     if (key in self.roots and root.provenance == self.roots[key].provenance
@@ -921,9 +787,7 @@ class SessionCatalog:
                                 self.activity_valid.pop(key, None)
                             self._record_summary_prompt(key, row, prompt_observed_at, historical=not active,
                                                         ended_prompts=ended_prompts)
-                            partial = None if row.running else (
-                                'context' if not row.context_qualified and self._requested(key, 'ctx') else
-                                'effort' if not row.effort_qualified and self._requested(key, 'effort') else None)
+                            partial = pages.missing_requested_scalar(self, key, row) if pages is not None else None
                             if partial:
                                 self.failures[key] = revision, False
                                 self.failure_counts[key] = self.failure_counts.get(key, 0) + 1
@@ -976,20 +840,29 @@ class SessionCatalog:
             # work is admitted after the slice budget. Details have their own lane.
             if self.clock() - start >= 2:
                 break
-        with self.lock:
-            finalizing = [lease['navigation'] for lease in self.leases.values()
-                if lease.get('navigation') is not None and not lease['navigation'].pending
-                and not lease['navigation'].invalid]
-        # No extra history pass. Recheck dependency authority of the accepted
-        # facts at the publication boundary, not only the remaining live targets.
-        for nav in finalizing:
-            if any(not payload_current(service.source, values) for values in nav.authorities.values()):
-                with self.lock:
-                    nav.invalid = True
-        with self.lock:
-            if self.archive is None and not any(self._browsing(lease) for lease in self.leases.values()):
-                self.background_due = self.clock() + (15 if any(
-                    not self._current(key) for key in targets if key in self.roots) else 900)
+        if pages is not None:
+            with self.lock:
+                finalizing = pages.ready_navigations()
+            # Recheck dependency authority at publication, without another source pass.
+            for nav in finalizing:
+                if any(not payload_current(service.source, values) for values in nav.authorities.values()):
+                    with self.lock:
+                        nav.invalid = True
+            with self.lock:
+                pages.defer_warm_work(self, targets)
+
+    def _commit_archive_capture(self, root, revision, partition, epoch, finalizing, transition,
+                                row, captured_at, dependencies, models, facts):
+        """Recheck authority and write in one caller-held catalog lock."""
+        key = root.session_id
+        handoff = self.terminal_handoffs.get(key)
+        if (key not in self.roots or self.archive.partition != partition
+                or self.revisions.get(key) != revision or self.last_observation.source_epoch != epoch
+                or self.roots[key].provenance != root.provenance or self._running(key)
+                or (self._archive_live_candidate(key) and not (finalizing and key in self.finalize_roots))
+                or (handoff.transition if handoff else None) != transition):
+            return False
+        return self.archive.save(partition, key, revision, row, captured_at, dependencies, models, *facts)
 
     def _stage(self, stage, retrying):
         # One scalar lane owns these actual call boundaries, never a browser clock.
@@ -1079,14 +952,9 @@ class SessionCatalog:
             raise ValueError('catalog_search_unavailable')
         with self.lock:
             self._expire_recent_finishes()
-            return epoch_page(self, token=token, offset=offset, sort=sort, direction=direction,
-                              epoch=epoch, period=period, navigation=navigation, applied=applied,
-                              cancelled=cancelled, passive=passive)
-
-    def _expire(self):
-        for token, lease in tuple(self.leases.items()):
-            if self.clock() - lease["touched"] > 300:
-                del self.leases[token]
+            return self.lease_pages.page(self, token=token, offset=offset, sort=sort, direction=direction,
+                                         epoch=epoch, period=period, navigation=navigation, applied=applied,
+                                         cancelled=cancelled, passive=passive)
 
     def previews(self, excluded=(), *, limit=5):
         with self.lock:

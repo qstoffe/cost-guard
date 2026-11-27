@@ -22,10 +22,15 @@ class HostIdleTimeline:
         catalog = self.catalog
         if catalog is None or not hasattr(catalog, '_targets'):
             return None
+        # Pre-extraction comparison arms kept these fields on the catalog.
+        pages = getattr(catalog, 'lease_pages', catalog)
+        if pages is None:
+            return None
         with catalog.lock:
-            keys = {key for lease in catalog.leases.values() if catalog._browsing(lease) for key in lease.get('visible', ())}
-            if not keys and catalog.warm:
-                keys = set(catalog.last_page or sorted(catalog.roots,
+            browsing = catalog._browsing if pages is catalog else lambda lease: pages.browsing(catalog, lease)
+            keys = {key for lease in pages.leases.values() if browsing(lease) for key in lease.get('visible', ())}
+            if not keys and pages.warm:
+                keys = set(pages.last_page or sorted(catalog.roots,
                     key=lambda key: (-(catalog.activity.get(key) or 0), key))[:50])
             return sum(not catalog._current(key) for key in keys if key in catalog.roots)
 

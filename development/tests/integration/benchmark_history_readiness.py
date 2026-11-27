@@ -181,7 +181,7 @@ def preview_measure(baseline_type, count, running, warm):
     assert not history
     assert len(previews) == 5-running
     assert before == (source.load_count, source.catalog_count, source.batch_count)
-    assert not catalog.leases
+    assert not catalog.lease_pages.leases
     return dict(roots=count, running=running, warm=warm, baseline_named_earlier_rows=len(history),
         candidate_named_earlier_rows=len(previews), blocked_worker_interval_seconds=600,
         baseline_publication_ms=round(baseline_seconds * 1000, 3),

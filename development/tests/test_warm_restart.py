@@ -447,6 +447,8 @@ class DisplayHistoryTests(unittest.TestCase):
             self.assertTrue(writer.result(timeout=2))
         self.assertEqual(1, len(notices))
         current = catalog.page(period='all')
+        catalog.interest(current['token'], True)
+        self.assertFalse(catalog.has_browsing_leases(), 'committed pages do not create source browsing demand')
         row, = current['view']['session_usage']
         self.assertTrue(current['history_progress']['complete'])
         self.assertEqual((1, 'busy', True, 2), (current['total'], row['session_id'], row['running'], row['prompt_count']))

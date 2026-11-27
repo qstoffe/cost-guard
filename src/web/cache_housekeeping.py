@@ -107,10 +107,7 @@ class CacheHousekeeping:
                 return True
         if host.live.details.has_leases():
             return True
-        with host.live.catalog.lock:
-            if any(host.live.catalog._browsing(lease) for lease in host.live.catalog.leases.values()):
-                return True
-        return False
+        return host.live.catalog.has_browsing_leases()
 
     def use_watch(self, host, *, history=False):
         driver = host.live.driver if host.live else None

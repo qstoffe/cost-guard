@@ -150,7 +150,7 @@ def measure(size, sort, cadence, warm_cache, cache_dir):
         if not result['pending_sort']:
             break
         next_tick = started + cadence
-    final_epoch = catalog.leases[token]['epochs'][result['epoch']]
+    final_epoch = catalog.lease_pages.leases[token]['epochs'][result['epoch']]
     assert result['total'] == 300 and result['size'] == 25
     assert result['progress']['completed'] == result['progress']['total'] == 302
     ids = [row.session_id for row in final_epoch.rows]
@@ -175,7 +175,7 @@ def measure(size, sort, cadence, warm_cache, cache_dir):
     revisit = catalog_page(catalog, dict(options, navigation=4, applied=3))
     assert not back['pending_sort'] and not revisit['pending_sort'] and revisit['total'] == result['total']
     assert source.load_count == reads
-    assert ids == [row.session_id for row in catalog.leases[token]['epochs'][revisit['epoch']].rows]
+    assert ids == [row.session_id for row in catalog.lease_pages.leases[token]['epochs'][revisit['epoch']].rows]
     digest = hashlib.sha256(json.dumps([asdict(row) for row in final_epoch.rows],
         ensure_ascii=True, sort_keys=True, default=str).encode()).hexdigest()
     return dict(size=size, sort=sort, cadence_s=cadence, disk_cache_preseeded=warm_cache,
