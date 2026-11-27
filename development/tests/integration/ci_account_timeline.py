@@ -119,9 +119,17 @@ def assert_geometry(plot, series_count):
 
 def assert_legend_geometry(selected, *, compact=False, wraps=False):
     layout = selected.evaluate('''list => {
-        const plot = list.parentElement.querySelector('.account-timeline-scroll').getBoundingClientRect();
+        const chart = list.closest('.account-timeline');
+        const plot = chart.querySelector('.account-timeline-scroll').getBoundingClientRect();
         const bounds = list.getBoundingClientRect();
         const range = document.createRange();
+        const textBox = node => {
+            range.selectNodeContents(node);
+            return range.getBoundingClientRect();
+        };
+        const nameHeading = textBox(chart.querySelector('.account-timeline-legend-name-heading'));
+        const costHeading = textBox(chart.querySelector('.account-timeline-legend-cost-heading'));
+        const caption = textBox(chart.querySelector('.account-timeline-range'));
         const rows = [...list.children].map(row => {
             const value = row.querySelector('.account-timeline-legend-value');
             const name = value.previousElementSibling;
@@ -129,7 +137,10 @@ def assert_legend_geometry(selected, *, compact=False, wraps=False):
             const lines = [...range.getClientRects()];
             range.selectNodeContents(value);
             const [cost, ...extra] = range.getClientRects();
-            return {wrapped: lines.length > 1, right: cost.right,
+            return {wrapped: lines.length > 1,
+                headed: Math.abs(cost.right - costHeading.right) <= 1 &&
+                    Math.abs(lines[0].left - nameHeading.left) <= 1 &&
+                    Math.min(cost.top, lines[0].top) >= Math.max(nameHeading.bottom, costHeading.bottom),
                 sameRow: Math.abs(cost.top - lines[0].top) <= 1 && lines.every(line => line.right < cost.left),
                 fit: !extra.length && [...lines, cost].every(line =>
                     line.left >= plot.left - 1 && line.right <= plot.right + 1) && cost.width > 0 &&
@@ -137,7 +148,9 @@ def assert_legend_geometry(selected, *, compact=False, wraps=False):
         });
         return {
             fit: bounds.right <= plot.right + 1 && rows.every(row => row.fit),
-            aligned: rows.every(row => row.sameRow && Math.abs(row.right - rows[0].right) <= 1),
+            aligned: caption.bottom <= Math.min(nameHeading.top, costHeading.top) &&
+                rows.every(row => row.sameRow && row.headed),
+            amountOffset: costHeading.right - plot.left,
             room: plot.right - bounds.right,
             wrapped: rows.some(row => row.wrapped),
         };
@@ -147,6 +160,7 @@ def assert_legend_geometry(selected, *, compact=False, wraps=False):
         assert layout['room'] >= 32, layout
     if wraps:
         assert layout['wrapped'], layout
+    return layout['amountOffset']
 
 
 def check_week_rollover(page, chart, source):
@@ -308,6 +322,11 @@ def stress_plot(page, chart, screenshots, *, sample):
             expect(selected).not_to_be_visible()
         assert slots.evaluate_all("cells => cells.map(cell => cell.getAttribute('x'))") == x_positions
     expect(chooser).to_contain_text('20 selected')
+    # Remove only the longest name; other rows still have the widest amount.
+    long_name_offset = assert_legend_geometry(selected)
+    inputs.last.uncheck()
+    assert assert_legend_geometry(selected) < long_name_offset - 32
+    inputs.last.check()
     page.keyboard.press('Escape')
     expect(legend).not_to_be_visible()
     chooser.tap()
@@ -574,6 +593,8 @@ def check(browser, root, screenshots=None):
         expect(bars).to_have_count(1, timeout=20_000)
         assert not source.timeline_reads, 'Today painted before even the first chart root could be acquired'
         expect(bars.first).to_have_attribute('data-bucket', '4')
+        row_names = selected.locator('li > .account-timeline-swatch + span')
+        expect(row_names.first).to_have_text(today_label)
         expect(shades).to_have_count(4)
         page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
         first_paint = time.monotonic()
@@ -618,6 +639,7 @@ def check(browser, root, screenshots=None):
         expect(rings).to_have_count(0)
         expect(chart.get_by_text('Loading usage…', exact=True)).to_have_count(0)
         expect(bars).to_have_count(7)
+        expect(row_names).to_have_text([high_label, low_label, today_label])
         assert page.evaluate('''name => {
             const cards = liveValue.view.accounts.accounts;
             const card = cards.find(row => row.observation.label === name);
@@ -646,6 +668,8 @@ def check(browser, root, screenshots=None):
         total = selected.locator('.account-timeline-legend-value')
         range_line = chart.locator('.account-timeline-range')
         expect(range_line).to_have_text('Range: 2026-11-01 – 2026-11-05 05:00')
+        for heading in ('Account Name', 'CCost'):
+            expect(chart.locator('.account-timeline-frame').get_by_text(heading, exact=True)).to_be_visible()
         assert rows.evaluate_all('''rows => rows.every((row, i) => row.getBoundingClientRect().top >=
             (i ? rows[i - 1] : row.parentElement.previousElementSibling).getBoundingClientRect().bottom)''')
         expect(rows.filter(has_text=low_label).locator('.account-timeline-legend-value')).to_have_text('$601.00')
@@ -693,6 +717,7 @@ def check(browser, root, screenshots=None):
         page.keyboard.press('Home')
         expect(status).to_contain_text(f'{high_label}: $1000.00')
         expect(status).to_contain_text(f'{low_label}: $600.00')
+        expect(tip.locator('.account-timeline-tip-name')).to_have_text(names)
         assert 'Usage by time' in chart.aria_snapshot()
         page.keyboard.press('ArrowRight')
         expect(status).to_contain_text(f'{low_label}: $0.00')
@@ -813,6 +838,9 @@ def check_range_totals(browser, root):
         card = page.locator('.watch-account-grid .account-card').filter(has=page.get_by_role('heading', name=name))
         card_month = card.locator('.watch-quota-summary').filter(has_text='Monthly').locator('.watch-period-cost')
         total = chart.get_by_role('listitem').filter(has_text=name).locator('.account-timeline-legend-value')
+        names = chart.get_by_role('listitem').locator('.account-timeline-swatch + span')
+        copilot = [name, 'GitHub Copilot Plus · account 2']
+        claude = ['Claude Code Plus']
         for period, label, unit, mode, card_amount, bucket_sum in [
             ('month', 'This month', 'usd', 'used', '$7.95', '$1000.10'),
             ('today', 'Today', 'credits', 'used', '795', '0'),
@@ -839,6 +867,7 @@ def check_range_totals(browser, root):
             assert sum(Decimal(p['amount']) for p in points if p) == (0 if period == 'today' else 100010), period
             partial = any(p is None or p['display'][unit].startswith('~') for p in points)
             expect(total).to_have_text(('~' if partial else '') + bucket_sum)
+            expect(names).to_have_text(claude + copilot if period == 'today' else copilot + claude)
         print('Accounts range totals PASS: four periods, units and independent card used/remaining')
         check_week_rollover(page, chart, source)
         print('Accounts 7 days axis PASS: configured-zone year-end live rollover, narrow and wide label geometry')
