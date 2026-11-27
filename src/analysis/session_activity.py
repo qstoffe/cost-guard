@@ -1,5 +1,6 @@
 """Prompt-event clocks over one acquired tree, independent of modification clocks."""
 from collections import defaultdict
+from dataclasses import dataclass
 
 from src.domain import EventKind, MessageRole
 from src.domain.models import OngoingStatus
@@ -48,9 +49,16 @@ def _observed_ends(snapshot, children, events, attempts, owners, unsettled, ende
             yield event.created_at_ms, event.event_id
 
 
-def _terminal_outcomes(prompts, root_id):
-    return {(record.prompt_time_ms, record.prompt_id):
-            ('aborted' if record.aborted else 'completed' if record.completed_successfully else None)
+@dataclass(frozen=True, slots=True)
+class PromptEnd:
+    outcome: str | None = None
+    watch_finish_ms: int | None = None
+
+
+def _terminal_prompts(prompts, root_id):
+    return {(record.prompt_time_ms, record.prompt_id): PromptEnd(
+                'aborted' if record.aborted else 'completed' if record.completed_successfully else None,
+                record.terminal_time_ms or None)
             for record in prompts if record.session_id == root_id and not record.execution_unverified
             and not record.in_progress}
 
@@ -185,12 +193,13 @@ def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
         ongoing = _waiting_status(snapshot, children, scopes)
         if ongoing is not None:
             live = root_events[0]
-    outcomes = (_terminal_outcomes(item.bundle.prompts, snapshot.root.session_id)
-                if snapshot.continuations is None or on_prompt_ends is not None else {})
+    terminal_prompts = (_terminal_prompts(item.bundle.prompts, snapshot.root.session_id)
+                        if snapshot.continuations is None or on_prompt_ends is not None else {})
     if on_prompt_ends is not None and snapshot.complete and live is None:
-        on_prompt_ends({key: outcomes.get(key) for key in
+        on_prompt_ends({key: terminal_prompts.get(key, PromptEnd()) for key in
                         _observed_ends(snapshot, children, root_events, attempts, owners, unsettled, ended_attempts)
-                        if snapshot.continuations is not None or outcomes.get(key) == 'aborted'})
+                        if snapshot.continuations is not None
+                        or (key in terminal_prompts and terminal_prompts[key].outcome == 'aborted')})
     focal = live or (root_events[0] if root_events else None)
     start = focal.created_at_ms if focal is not None else None
     if type(start) is not int or start <= 0:
@@ -206,7 +215,8 @@ def activity_fields(item, *, on_activity=None, on_prompt_ends=None):
     child_keys = _prompt_keys(focal_children, owners)
     terminal = terminals.get(key)
     if (terminal is not None and not is_running and not (child_keys & unsettled)
-            and (snapshot.continuations is not None or outcomes.get((start, focal.event_id)) == 'aborted')):
+            and (snapshot.continuations is not None
+                 or terminal_prompts.get((start, focal.event_id), PromptEnd()).outcome == 'aborted')):
         message_ids = {(message.session_id, message.message_id) for message in (*attempts[key], *focal_children)}
         background = [work for work in snapshot.background
                       if (work.session_id, work.owner_message_id) in message_ids]

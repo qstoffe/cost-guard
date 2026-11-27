@@ -17,6 +17,25 @@ module.exports = function sessionTable(vm, context, controller, view, input, hel
   };
   const rows = () => view.body.children.filter(row=>row.dataset.id);
   const ids = () => rows().map(row=>row.dataset.id);
+  {
+    const older=card('older',100,true), tied=card('a',200,true), newer=card('newer',300,true);
+    tied.ongoing={phase:'background',awaits:'A background shell'};
+    const ended=card('Z',50);
+    Object.assign(ended,{focal_id:'Z',terminal_status:'completed',terminal_until_ms:31_000,
+      ordered_activity:{activity_ms:200,activity_origin:'events',
+        display:{activity_clock:'14:21',activity_date_time:'2026-10-25 14:21'}}});
+    const ordinary=card('history',80);
+    show([newer,tied,ended,older],[ordinary]);
+    // The finish at 50 selects the filler; qualified session activity at 200
+    // presents it between the Running rows. SQLite's binary tie is Z before a here.
+    assert.deepEqual(ids(),['history','older','Z','a','newer']);
+    const row=view.promptRows.get('Z');
+    assert.equal(row.time.textContent,'14:21');
+    assert.equal(helpText(row.time),activityHelp('Session activity · 2026-10-25 14:21'));
+    controller.settings({miniWatchRows:4});
+    assert.deepEqual(ids(),['history','older','a','newer'],'ordered clock must not win a filler slot');
+    controller.settings({miniWatchRows:5});
+  }
   const history = Array.from({length:5},(_,i)=>card('h'+i,100+i));
   assert.equal(view.root.querySelectorAll('table').length,1);
   assert.equal(view.earlierToggle,undefined);assert.equal(view.historyBody,undefined);

@@ -64,7 +64,7 @@ const MiniWatch = (() => {
       const prompts = view.cards_state === 'observed';
       const oldCards = new Map((previous?.active_cards || []).map(card =>
         [JSON.stringify([card.session_id, card.focal_id]),
-          {...card, ongoing: null, terminal_status: null, terminal_until_ms: null}]));
+          {...card, ongoing: null, terminal_status: null, terminal_until_ms: null, ordered_activity: undefined}]));
       const cards = (view.active_cards || []).map(card => {
         const key = JSON.stringify([card.session_id, card.focal_id]);
         if (!this.clocks.has('prompt:' + key)) this.clocks.set('prompt:' + key, {token: null, at: now});
@@ -72,7 +72,8 @@ const MiniWatch = (() => {
         const old = oldCards.get(key);
         const value = card.state === 'observed' ? card :
           old ? {...old, state: card.state, session_summary: card.session_summary, ongoing: card.ongoing,
-            terminal_status: card.terminal_status, terminal_until_ms: card.terminal_until_ms} : card;
+            terminal_status: card.terminal_status, terminal_until_ms: card.terminal_until_ms,
+            ordered_activity: card.ordered_activity} : card;
         const qualified = this.context(value);
         oldCards.set(key, qualified); return qualified;
       });
@@ -130,14 +131,18 @@ const MiniWatch = (() => {
   // Select presentation representatives from canonical, already-acquired facts.
   // Never infer completion, revalue costs or resolve identity from display names.
   const knownTime = at => Number.isSafeInteger(at) && at >= 0;
+  function activityFromClock(value, generic = true) {
+    return {at: value.activity_ms, clock: value.display?.activity_clock,
+      full: value.display?.activity_date_time, generic,
+      estimated: value.activity_origin === 'catalog'};
+  }
   function sessionActivity(prompt, catalog, {usesStart = false, running = false} = {}) {
     const display = prompt?.display;
     const at = usesStart ? prompt?.at_ms : prompt?.completed_at_ms;
     const activity = catalog?.activity_ms;
     if (!running && knownTime(activity) &&
         (!knownTime(at) || (catalog.activity_origin === 'events' && activity > at))) {
-      return {at: activity, clock: catalog.display?.activity_clock, full: catalog.display?.activity_date_time,
-        generic: true, estimated: catalog.activity_origin === 'catalog'};
+      return activityFromClock(catalog);
     }
     if (!knownTime(at)) return {at: null};
     return {at,
@@ -145,7 +150,15 @@ const MiniWatch = (() => {
       full: usesStart ? display?.mini_start_date_time ?? display?.start_date_time :
         display?.mini_finished_date_time ?? display?.finished_date_time};
   }
-  function sessions(view, rowTarget) {
+  function compareSessionIds(a, b) {
+    // Unicode scalar order agrees with SQLite's binary UTF-8 order.
+    const left = [...a.card.session_id], right = [...b.card.session_id];
+    for (let i = 0; i < Math.min(left.length, right.length); i++) {
+      if (left[i] !== right[i]) return left[i].codePointAt(0) - right[i].codePointAt(0);
+    }
+    return left.length - right.length;
+  }
+  function sessions(view, rowTarget, now) {
     const active = new Map(), unverified = new Map(), finished = new Map();
     const catalog = new Map();
     const previewRank = card => !knownTime(card?.activity_ms) ? 0 : card.activity_origin === 'events' ? 2 : 1;
@@ -193,8 +206,23 @@ const MiniWatch = (() => {
     for (const id of active.keys()) finished.delete(id);
     const slots = Math.max(0, rowTarget - active.size);
     const fillers = [...finished.values()].sort(newestFirst).slice(0, slots);
-    const rows = [...active.values(), ...fillers].sort((a, b) =>
-      compareActivity(a, b) || compareIdentity(a, b));
+    const rows = [...active.values(), ...fillers];
+    const prioritized = row => row.running || (!row.historical && !row.usesStart &&
+      row.card.terminal_status && row.card.terminal_until_ms > now);
+    for (const row of rows) {
+      const ordered = row.card.ordered_activity;
+      row.displayActivity = prioritized(row) && knownTime(ordered?.activity_ms) ?
+        activityFromClock(ordered, Boolean(ordered.activity_origin)) : row.activity;
+    }
+    const compareOrder = (a, b) => (a.displayActivity.at ?? -Infinity) - (b.displayActivity.at ?? -Infinity);
+    rows.sort((a, b) => compareOrder(a, b) || compareIdentity(a, b));
+    // Reverse the Sessions ID tie break only in lifecycle slots. Ordinary
+    // fillers keep their original selection and relative order, even in a tie.
+    const priority = rows.filter(prioritized).sort((a, b) => compareOrder(a, b) || compareSessionIds(a, b));
+    let next = 0;
+    for (let i = 0; i < rows.length; i++) {
+      if (prioritized(rows[i])) rows[i] = priority[next++];
+    }
     return {rows, fillers, slots};
   }
   function activityLabel({at, clock = '—', full}, now, today) {
@@ -567,13 +595,13 @@ const MiniWatch = (() => {
       const localNow = ReportView.formatDateTime(now, ReportView.DateTimeMode.DATE,
         view?.timezone_id ?? ReportView.configuredTimezone());
       const today = localNow === 'N/A' ? null : localNow;
-      const {rows, fillers, slots} = sessions(view, this.rowTarget);
+      const {rows, fillers, slots} = sessions(view, this.rowTarget, now);
       // A metadata preview can fill space before prompt history settles.
       const needsHistory = fillers
         .filter(value => !value.preview || value.card.metric_absences?.prompt_ccost === 'complete_empty_history')
         .length < slots;
       if (this.needsHistory !== needsHistory) { this.needsHistory = needsHistory; this.historyChanged?.(); }
-      for (const {card, item, running, usesStart, historical, preview, catalog, activity} of rows) {
+      for (const {card, item, running, usesStart, historical, preview, catalog, displayActivity: activity} of rows) {
         const prompt = item?.prompt, key = card.session_id;
         seen.add(key);
         let row = this.promptRows.get(key);
@@ -597,7 +625,8 @@ const MiniWatch = (() => {
         row.activityHelp = activity.generic ? activityHelp(activity) :
           activity.full || (usesStart ? 'Unknown start time' : 'Unknown finish time');
         ReportView.valueSlot(row.time, activityLabel(activity, now, today));
-        if (!usesStart && !knownTime(prompt?.completed_at_ms) && knownTime(prompt?.at_ms))
+        if (!usesStart && !knownTime(prompt?.completed_at_ms) && knownTime(prompt?.at_ms) &&
+            !(card.ordered_activity && (status?.row === 'completed' || status?.row === 'aborted')))
           row.activityHelp += '\nStarted: ' + (prompt.display?.date_time || 'N/A') + '\nCompletion unverified.';
         if (prompt?.model_display_help) row.activityHelp += '\n\n' + prompt.model_display_help;
         this.drawMetrics(row, card, prompt, catalog, source);

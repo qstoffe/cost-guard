@@ -26,7 +26,7 @@ from .session_catalog_scope import PERIODS, in_window
 from .session_previews import archived_previews, live_previews
 from .session_prompt_lifecycle import PROMPT_FRESHNESS_MS, PromptEvidence, observe_prompt_ends, record_prompt
 from .session_quota import source_scope
-from .session_report_runtime import publish_report_runtime
+from .session_report_runtime import order_watch_cards, publish_report_runtime
 
 SORTS = ("activity", "name", "model", "ccost", "prompts", "duration", "ctx")
 
@@ -41,6 +41,7 @@ FINISH_PLACEMENT_MS = 120_000
 class SessionCatalog:
     _record_prompt = record_prompt
     observe_prompt_ends = observe_prompt_ends
+    order_watch_cards = order_watch_cards
 
     def __init__(self, *, clock=time.monotonic, clock_ms=lambda: int(time.time() * 1000),
                  timezone_id="UTC", archive=None):
@@ -881,12 +882,16 @@ class SessionCatalog:
         elif row.activity_qualified and (not historical or not self._running(key)):
             previous = self.prompt_activity.get(key)
             if self._running(key) and previous.identity != prompt:
-                if previous.identity not in ended_prompts:
+                previous_end = ended_prompts.get(previous.identity)
+                if previous_end is None:
                     return
                 self._record_prompt(key, PromptEvidence(captured_at, previous.prompt_id, previous.start_ms,
-                    False, None, ended=True, revision=revision, outcome=ended_prompts[previous.identity]))
+                    False, None, ended=True, revision=revision, outcome=previous_end.outcome,
+                    watch_finish_ms=previous_end.watch_finish_ms))
+            terminal = ended_prompts.get(prompt)
             self._record_prompt(key, PromptEvidence(captured_at, prompt[1], prompt[0], False, row.last_activity_ms,
-                ended=prompt in ended_prompts, revision=revision, outcome=ended_prompts.get(prompt)))
+                ended=terminal is not None, revision=revision, outcome=terminal.outcome if terminal else None,
+                watch_finish_ms=terminal.watch_finish_ms if terminal else None))
 
     def _with_lifecycle(self, rows, lifecycle=None):
         if lifecycle is None:

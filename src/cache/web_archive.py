@@ -13,7 +13,7 @@ from .signature import dependency_signature
 
 
 APPLICATION_ID = 0x43475231  # CGR1
-SCHEMA = 5
+SCHEMA = 6
 EVIDENCE_ENVELOPE = 'web-fact-envelope/1'
 REPORT_CHECKPOINTS = 'shared-history'
 WEB_ARCHIVE_FILENAME = 'cost-guard-report-v1.sqlite3'
@@ -184,7 +184,7 @@ class WebArchive:
                 if db.execute('PRAGMA journal_mode').fetchone()[0] != 'wal':
                     raise sqlite3.DatabaseError('report cache requires WAL')
                 return
-            if current_id == APPLICATION_ID and current_version in (1, 2, 3, 4):
+            if current_id == APPLICATION_ID and current_version in (1, 2, 3, 4, 5):
                 db.execute('BEGIN IMMEDIATE')
                 current_version = db.execute('PRAGMA user_version').fetchone()[0]
                 if current_version == 1:
@@ -195,6 +195,8 @@ class WebArchive:
                     prompt_range.create_schema(db, upgrade=True)
                 if current_version in (2, 3, 4):
                     session_projection.upgrade_runtime_schema(db)
+                if current_version in (2, 3, 4, 5):
+                    session_projection.add_runtime_activity_order(db)
                 if current_version < SCHEMA:
                     db.execute(f'PRAGMA user_version={SCHEMA}')
                 return

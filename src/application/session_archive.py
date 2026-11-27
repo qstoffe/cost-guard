@@ -1,5 +1,5 @@
 """Session display persistence and pagination over the ready subset."""
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from decimal import Decimal, InvalidOperation
 import json
 import logging
@@ -195,18 +195,30 @@ class SessionArchive:
                 LOG.warning('session_runtime_close_unavailable')
 
 
+@dataclass(frozen=True, slots=True)
+class TerminalOverlay:
+    identity: tuple[int, str]
+    observed_ms: int
+    outcome: str | None
+    finalization: str | None
+    activity_ms: int | None
+    activity_origin: str | None
+
+
 def _encode_live(entry):
     row, start, terminal = entry
     payload = encode_summary(row)
     if start is not None and row.ongoing is not None:
         payload['ongoing'] = asdict(row.ongoing)
-    finish, outcome, finalization = terminal or (None, None, None)
-    if outcome is not None:
-        payload['terminal_outcome'] = outcome
-    if finalization is not None:
-        payload['finalization'] = finalization
-    return (start, finish, row.last_activity_ms, row.activity_latest_ms,
-            json.dumps(payload, separators=(',', ':')), finalization is not None)
+    observed, activity, finalization = None, None, None
+    if terminal is not None:
+        observed, activity, finalization = terminal.observed_ms, terminal.activity_ms, terminal.finalization
+        if terminal.outcome is not None:
+            payload['terminal_outcome'] = terminal.outcome
+        if finalization is not None:
+            payload['finalization'] = finalization
+    return (start, observed, row.last_activity_ms, row.activity_latest_ms,
+            json.dumps(payload, separators=(',', ':')), finalization is not None, activity)
 
 
 def historical_amount(value):

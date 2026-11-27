@@ -17,6 +17,7 @@ class PromptEvidence:
     revision: str | None = None
     outcome: str | None = None
     ongoing: OngoingStatus | None = None
+    watch_finish_ms: int | None = None
 
     @property
     def identity(self):
@@ -28,6 +29,7 @@ class PromptHandoff:
     identity: tuple[int, str]
     observed_ms: int
     outcome: str | None
+    watch_finish_ms: int | None = None
 
     @property
     def transition(self):
@@ -41,14 +43,16 @@ def _record_handoff(catalog, key, evidence, previous, was_running):
         if previous is None or previous.identity != evidence.identity:
             catalog.report_live_costs.pop(key, None)
     elif was_running and previous.identity == evidence.identity:
-        catalog.terminal_handoffs[key] = PromptHandoff(evidence.identity, evidence.observed_ms, evidence.outcome)
+        catalog.terminal_handoffs[key] = PromptHandoff(
+            evidence.identity, evidence.observed_ms, evidence.outcome, evidence.watch_finish_ms)
     elif (handoff := catalog.terminal_handoffs.get(key)) is not None:
-        if handoff.identity == evidence.identity and handoff.outcome is None and evidence.outcome is not None:
-            catalog.terminal_handoffs[key] = replace(handoff, outcome=evidence.outcome)
+        if handoff.identity == evidence.identity:
+            catalog.terminal_handoffs[key] = replace(handoff, outcome=handoff.outcome or evidence.outcome,
+                watch_finish_ms=evidence.watch_finish_ms or handoff.watch_finish_ms)
 
 
 def observe_prompt_ends(catalog, observations):
-    """A current Watch capture can stop the accepted prompt, not pick its finish clock."""
+    """Accept the end and Watch order clock for the same prompt and source."""
     with catalog.lock:
         if catalog.state != 'observed':
             return
@@ -64,8 +68,10 @@ def observe_prompt_ends(catalog, observations):
                 continue
             if key not in catalog.running_roots and key not in catalog.terminal_handoffs:
                 continue
+            terminal = ended[previous.identity]
             record_prompt(catalog, key, PromptEvidence(at, previous.prompt_id, previous.start_ms,
-                False, None, ended=True, revision=revision, outcome=ended[previous.identity]), wake=True)
+                False, None, ended=True, revision=revision, outcome=terminal.outcome,
+                watch_finish_ms=terminal.watch_finish_ms), wake=True)
             changed.add(key)
         if catalog.archive is not None and changed:
             catalog._publish_report_runtime(changed)
@@ -83,6 +89,9 @@ def record_prompt(catalog, key, evidence, *, wake=False):
     was_running = catalog._running(key)
     if evidence.finish_ms is not None:
         evidence = replace(evidence, ended=True)
+    if (evidence.watch_finish_ms is not None
+            and not evidence.start_ms <= evidence.watch_finish_ms <= now):
+        evidence = replace(evidence, watch_finish_ms=None)
     if not evidence.running and not evidence.ended:
         return
     if previous is None:
@@ -102,6 +111,8 @@ def record_prompt(catalog, key, evidence, *, wake=False):
                 return
             if evidence.ended and evidence.finish_ms is None and previous.finish_ms is not None:
                 evidence = replace(evidence, finish_ms=previous.finish_ms, revision=previous.revision)
+            if evidence.ended and evidence.watch_finish_ms is None:
+                evidence = replace(evidence, watch_finish_ms=previous.watch_finish_ms)
     previous_finish = catalog.recent_finishes.get(key)
     if evidence.running or evidence.finish_ms is not None:
         catalog.recent_finishes.pop(key, None)
