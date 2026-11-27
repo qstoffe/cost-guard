@@ -512,7 +512,8 @@ class SessionDetails:
         if self.quota_context is not None and not unavailable and reason not in INVALID_REASONS:
             accounts, source, now, stale = self.quota_context
             quota = session_quota_usage(entry.get('quota_evidence'), accounts, source, now,
-                stale=stale or status['phase'] == 'failed', capacity_cache=self.quota_capacities)
+                stale=stale or status['phase'] == 'failed', capacity_cache=self.quota_capacities,
+                ccost_display_unit=entry.get('ccost_display_unit', 'credits'))
         running_ids = sorted(key for key, value in entry.get('prompt_activity', {}).items() if value[0] and not value[1])
         frame = dict(revision=entry['revision'], generation=entry['generation'], observed=entry['observed_at_ms'],
             partition=self.partition, state=entry['state'], validated=entry.get('validated'),
@@ -720,7 +721,8 @@ class SessionDetails:
             accounts, source, now_ms, quota_stale = quota_context
             with self.lock:
                 usage = session_quota_usage(capture.get("quota_evidence"), accounts, source, now_ms,
-                    stale=quota_stale or acquisition['phase'] == 'failed', capacity_cache=self.quota_capacities)
+                     stale=quota_stale or acquisition['phase'] == 'failed', capacity_cache=self.quota_capacities,
+                     ccost_display_unit=capture["ccost_display_unit"])
         return dict(state=capture["state"], revision=capture["revision"], stale_cursor=stale,
              **(dict(activity_refresh=activity_refresh, activity_revision=capture['activity_revision']) if begin else {}),
             **(dict(quota_usage=usage) if not chunk else {}),
